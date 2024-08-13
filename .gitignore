@@ -5,6 +5,8 @@
 # Next.js build output
 /.next
 /out
+.next/
+apps/web/.next/  # Specific to your project structure
 
 # Production build
 /build
@@ -22,6 +24,8 @@ yarn-error.log*
 .env
 .env.development
 .env.production
+.env.local  # Common local environment file
+.env.*.local  # Other possible local environment files
 
 # Vercel
 .vercel
@@ -35,6 +39,30 @@ logs
 
 # Docker
 docker-compose.override.yml
+docker-compose.local.yml  # Commonly used for local overrides
+
+# Ignore the cache directory
+.cache/
+apps/web/.next/cache/  # Specific cache directory in your project
 
 # Other
-packages/*/dist
+packages/*/dist  # Distribution files in packages
+packages/*/build  # If any packages produce a build directory
+packages/*/.next/  # If Next.js is used in any other packages
+apps/api/.next/  # If there is a Next.js build in your api folder
+
+# IDE specific files
+.vscode/
+*.swp
+*.sublime*
+
+# Coverage reports
+coverage/
+*.lcov
+
+# Ignore temporary files created by your editor
+*.swp
+*.swo
+
+# Ignore .eslintcache if using ESLint caching
+.eslintcache

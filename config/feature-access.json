@@ -1,0 +1,13 @@
+{
+    "marketing-strategy-generator": "paid",
+    "blog-post-generator": "user",
+    "user-persona-generator": "public",
+    "business-ideas-generator": "public",
+    "value-proposition-generator": "user",
+    "marketing-problem-solver": "paid",
+    "slogan-generator": "public",
+    "idea-validator": "user",
+    "business-plan-generator": "paid",
+    "content-ideas-generator": "user",
+    "swot-analysis-generator": "paid"
+  }

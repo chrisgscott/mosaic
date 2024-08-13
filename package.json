@@ -1,0 +1,31 @@
+{
+    "name": "mosaic",
+    "version": "1.0.0",
+    "description": "AI-powered business management platform",
+    "scripts": {
+      "dev": "next dev",
+      "build": "next build",
+      "start": "next start",
+      "test": "jest",
+      "lint": "eslint .",
+      "build:dev": "env-cmd -f .env.development next build",
+      "build:prod": "env-cmd -f .env.production next build",
+      "start:dev": "env-cmd -f .env.development next start",
+      "start:prod": "env-cmd -f .env.production next start"
+    },
+    "dependencies": {
+      "next": "^11.0.0",
+      "react": "^17.0.2",
+      "react-dom": "^17.0.2"
+    },
+    "devDependencies": {
+      "@types/react": "^17.0.11",
+      "@typescript-eslint/eslint-plugin": "^4.28.0",
+      "@typescript-eslint/parser": "^4.28.0",
+      "env-cmd": "^10.1.0",
+      "eslint": "^7.29.0",
+      "eslint-config-next": "^11.0.0",
+      "jest": "^27.0.4",
+      "typescript": "^4.3.4"
+    }
+  }

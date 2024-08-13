@@ -1,0 +1,18 @@
+{
+    "name": "@mosaic/core",
+    "version": "1.0.0",
+    "description": "Core functionality for Mosaic project",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "test": "jest"
+    },
+    "dependencies": {
+        "dotenv": "^10.0.0"
+    },
+    "devDependencies": {
+        "@types/dotenv": "^8.2.0",
+        "typescript": "^4.3.5"
+    }
+}

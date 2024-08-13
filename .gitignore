@@ -5,11 +5,12 @@
 # Next.js build output
 /.next
 /out
-.next/
-apps/web/.next/  # Specific to your project structure
+apps/web/.next/
 
 # Production build
 /build
+packages/*/build/
+packages/*/dist/
 
 # Misc
 .DS_Store
@@ -24,8 +25,8 @@ yarn-error.log*
 .env
 .env.development
 .env.production
-.env.local  # Common local environment file
-.env.*.local  # Other possible local environment files
+.env.local
+.env.*.local
 
 # Vercel
 .vercel
@@ -39,17 +40,11 @@ logs
 
 # Docker
 docker-compose.override.yml
-docker-compose.local.yml  # Commonly used for local overrides
+docker-compose.local.yml
 
 # Ignore the cache directory
 .cache/
-apps/web/.next/cache/  # Specific cache directory in your project
-
-# Other
-packages/*/dist  # Distribution files in packages
-packages/*/build  # If any packages produce a build directory
-packages/*/.next/  # If Next.js is used in any other packages
-apps/api/.next/  # If there is a Next.js build in your api folder
+apps/web/.next/cache/
 
 # IDE specific files
 .vscode/
@@ -60,9 +55,9 @@ apps/api/.next/  # If there is a Next.js build in your api folder
 coverage/
 *.lcov
 
-# Ignore temporary files created by your editor
-*.swp
-*.swo
-
 # Ignore .eslintcache if using ESLint caching
 .eslintcache
+
+# Lock files (optional)
+**/yarn.lock
+**/package-lock.json

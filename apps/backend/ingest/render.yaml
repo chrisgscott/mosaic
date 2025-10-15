@@ -1,12 +1,11 @@
 services:
   - type: worker
     name: mosaic-document-processor
-    env: python
+    env: docker
     region: oregon
     plan: starter  # $7/mo - upgrade to standard ($25/mo) for better performance
-    rootDir: apps/backend/ingest
-    buildCommand: ./build.sh
-    startCommand: python main.py
+    dockerfilePath: ./apps/backend/ingest/Dockerfile
+    dockerContext: ./apps/backend/ingest
     autoDeploy: true
     branch: main  # or your default branch
     envVars:

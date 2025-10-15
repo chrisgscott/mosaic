@@ -1,7 +1,7 @@
 # Mosaic RAG Platform - Build Plan
 
 **Last Updated:** October 15, 2025  
-**Status:** Phase 1-3 & 7 Complete - Full document processing pipeline with rich metadata + document details page live
+**Status:** Phase 1-3 & 7 Complete - Full document processing pipeline with shared corpus + error tracking + Docker deployment
 
 ---
 
@@ -195,6 +195,10 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 
 #### Service Architecture
 - **Background Worker**: Python service deployed on Render.com (2GB RAM, $21/mo)
+  - **Environment**: Docker (for system package support)
+  - **System Dependencies**: Tesseract OCR, OpenGL (OpenCV), Poppler, Pandoc
+  - **Retry Logic**: Max 3 attempts with exponential backoff
+  - **Error Tracking**: Stores error messages, retry counts, timestamps
 - **Queue**: pgmq (Postgres-based message queue)
 - **Processing Flow**:
   1. Server action adds job to pgmq queue
@@ -504,6 +508,74 @@ WHERE id = $1;
 
 ---
 
+## Phase 7.3: Shared Corpus & Access Control ✅ COMPLETE
+
+### Goals
+- Enable admin users to share documents across organization
+- Implement public/private document controls
+- Support bulk operations for sharing
+
+### Completed Tasks
+
+#### 🌍 Public/Private Documents
+- [x] Add `is_admin` flag to profiles table
+- [x] Add `is_public` flag to documents table
+- [x] Update RLS policies for public document access
+- [x] Admin-only permissions for making documents public
+- [x] Helper function `is_admin()` for policy checks
+
+#### 🎨 Frontend Controls
+- [x] `useIsAdmin()` hook to check admin status
+- [x] Document list: Globe icon for public docs
+- [x] Document list: Public/Private toggle in dropdown (admin only)
+- [x] Document details: Public/Private button in header (admin only)
+- [x] Bulk actions: "Make Public" and "Make Private" buttons
+- [x] Toast notifications for status changes
+
+#### 🔒 Security
+- [x] Only admins can toggle public status
+- [x] Regular users can view public docs but not modify them
+- [x] Chunks from public docs accessible to all users
+- [x] RLS enforced at database level
+
+### Use Cases
+- **Intelligence Platform**: Share industry reports, competitor analysis
+- **Research Team**: Share published papers, shared datasets
+- **Enterprise**: Share company policies, onboarding docs
+
+---
+
+## Phase 7.4: Error Tracking & Retry Logic ✅ COMPLETE
+
+### Goals
+- Track processing failures with detailed error messages
+- Implement retry limits to prevent infinite loops
+- Surface error information to users
+
+### Completed Tasks
+
+#### 📊 Error Tracking
+- [x] Add `error_message` column to documents table
+- [x] Add `retry_count` column to track attempts
+- [x] Add `last_error_at` timestamp
+- [x] Worker updates error details on each failure
+
+#### 🔁 Retry Logic
+- [x] Max 3 automatic retries (configurable via MAX_RETRIES)
+- [x] pgmq's `read_ct` field tracks retry attempts
+- [x] Jobs deleted from queue after max retries
+- [x] Attempt number shown in logs: "Error (attempt 2/3)"
+
+#### 🎨 Frontend Display
+- [x] Error badge shows retry count: "Error (2/3)"
+- [x] Hover tooltip shows full error message
+- [x] Document type includes error tracking fields
+
+### Future Enhancement
+- [ ] Manual retry button (creates new job with fresh retry count)
+
+---
+
 ## Phase 7.5: Document Management Actions
 
 ### Goals
@@ -512,6 +584,12 @@ WHERE id = $1;
 - Enable bulk operations with auditability
 
 ### Tasks
+
+#### 🔁 Manual Retry
+- [ ] Add "Retry" button for failed documents
+- [ ] Creates new job with fresh retry count
+- [ ] Resets document status to 'uploaded'
+- [ ] Works independently of automatic retries
 
 #### 🗄️ Archive & Restore
 - [ ] Add `archived` boolean + `archived_at` timestamp to `documents` table

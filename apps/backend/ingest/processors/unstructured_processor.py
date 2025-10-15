@@ -56,7 +56,9 @@ class UnstructuredProcessor:
             logger.info("Starting partition() call...")
             elements = partition(
                 filename=tmp_path,
-                strategy="auto",  # Smart detection - uses fast for digital docs, OCR for scanned
+                strategy="auto",  # Auto-select best strategy (we have 2GB RAM now)
+                include_page_breaks=True,  # Track page boundaries for citations
+                infer_table_structure=True,  # Extract tables as structured HTML
             )
             logger.info(f"Partition complete, got {len(elements)} elements")
             

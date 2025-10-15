@@ -49,15 +49,17 @@ class UnstructuredProcessor:
         
         try:
             logger.info(f"Processing file with extension {ext}")
+            logger.info(f"File size: {len(file_data)} bytes")
             
             # Use Unstructured to partition the document
             # partition() automatically detects the file type and uses the appropriate parser
+            logger.info("Starting partition() call...")
             elements = partition(
                 filename=tmp_path,
-                strategy="auto",  # Can be "fast", "hi_res", or "auto"
-                # For PDFs, "hi_res" gives better layout detection but is slower
-                # For production, you might want to make this configurable
+                strategy="fast",  # Use "fast" for Starter plan - less memory intensive
+                # "auto" and "hi_res" use more memory and can timeout on small instances
             )
+            logger.info(f"Partition complete, got {len(elements)} elements")
             
             # Combine all text elements
             # Elements include paragraphs, titles, lists, tables, etc.

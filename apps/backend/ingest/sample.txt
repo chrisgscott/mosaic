@@ -1,0 +1,95 @@
+Sample Document for Testing
+
+Introduction
+
+This is a sample document to test the document processing pipeline. It contains multiple sections with different types of content to verify that the extraction and chunking works correctly.
+
+Section 1: Background
+
+Document processing is a critical component of any RAG (Retrieval-Augmented Generation) system. The quality of text extraction directly impacts the quality of search results and generated responses.
+
+Key challenges in document processing include:
+- Handling multiple file formats (PDF, DOCX, TXT, etc.)
+- Preserving document structure and formatting
+- Extracting tables and complex layouts
+- Dealing with scanned documents (OCR)
+- Chunking text appropriately for embedding
+
+Section 2: Technical Approach
+
+Our system uses a tiered approach to document processing:
+
+Tier 1: Unstructured.io
+- Handles most common document formats
+- Good balance of speed and accuracy
+- Supports OCR for scanned documents
+- Extracts tables and maintains structure
+
+Tier 2: Docling (IBM)
+- Specialized for complex PDFs
+- Superior table extraction
+- Better handling of multi-column layouts
+- Ideal for academic papers and technical documents
+
+Tier 3: Multimodal LLMs
+- GPT-4 Vision or Claude 3 Vision
+- Handles complex diagrams and images
+- Most expensive but most capable
+- Used as last resort for difficult cases
+
+Section 3: Chunking Strategy
+
+We use semantic chunking with the following parameters:
+- Chunk size: 512 tokens
+- Overlap: 50 tokens
+- Splitting on natural boundaries (paragraphs, sentences)
+
+This approach ensures:
+1. Chunks are small enough for efficient embedding
+2. Overlap preserves context across boundaries
+3. Natural splits maintain semantic coherence
+4. Metadata is preserved for better retrieval
+
+Section 4: Implementation Details
+
+The processing pipeline consists of several stages:
+
+Stage 1: Upload
+- User uploads document via web interface
+- File stored in Supabase Storage
+- Job added to pgmq queue
+
+Stage 2: Extraction
+- Background worker polls queue
+- Downloads file from storage
+- Extracts text using Unstructured
+- Preserves metadata (page numbers, sections)
+
+Stage 3: Chunking
+- Text split into 512-token chunks
+- Overlap added between chunks
+- Metadata attached to each chunk
+- Token counts calculated
+
+Stage 4: Storage
+- Chunks stored in Postgres database
+- Indexed for efficient retrieval
+- RLS policies ensure user isolation
+- Document status updated to "ready"
+
+Section 5: Future Enhancements
+
+Planned improvements include:
+- Vector embeddings for semantic search
+- Graph extraction for knowledge graphs
+- Multi-modal support (images, audio)
+- Advanced reranking strategies
+- Hybrid search (semantic + keyword + graph)
+
+Conclusion
+
+This document processing system provides a robust foundation for building RAG applications. By using a tiered approach with multiple extraction strategies, we can handle a wide variety of document types while maintaining high quality and reasonable costs.
+
+The modular architecture allows for easy extension and improvement as new techniques and tools become available. The use of open-source tools like Unstructured.io keeps costs low while maintaining flexibility.
+
+Next steps include deploying the service to production, testing with real-world documents, and implementing the embedding and search layers.

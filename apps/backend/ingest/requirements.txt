@@ -1,0 +1,23 @@
+# Core dependencies
+supabase==2.3.4
+gotrue==2.4.2
+httpx==0.25.2
+realtime==1.0.6
+storage3==0.7.7
+postgrest==0.15.1
+python-dotenv==1.0.0
+
+# Document processing - using latest version compatible with Python 3.12
+unstructured==0.18.15
+unstructured[pdf]==0.18.15
+unstructured[docx]==0.18.15
+
+# Text processing
+langchain-text-splitters==0.3.4
+tiktoken==0.8.0
+
+# Database
+psycopg2-binary==2.9.10
+
+# Utilities
+requests==2.32.3

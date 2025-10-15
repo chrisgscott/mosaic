@@ -138,30 +138,37 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 ### Tasks
 
 #### 📄 Text Extraction
-- [ ] Integrate Unstructured.io OSS or Docling
-- [ ] Support PDF text extraction
-- [ ] Support DOCX text extraction
-- [ ] Support TXT/MD direct reading
-- [ ] Preserve document structure (headers, sections)
-- [ ] Extract tables and maintain formatting
-- [ ] Handle multi-column layouts
+- [x] Integrate Unstructured.io OSS
+- [x] Support PDF text extraction
+- [x] Support DOCX text extraction
+- [x] Support TXT/MD direct reading
+- [x] Preserve document structure (headers, sections)
+- [x] Extract tables and maintain formatting
+- [x] Handle multi-column layouts
+- [x] Create Python background worker service
+- [ ] Deploy to Render.com
+- [ ] Test with real documents
+- [ ] Add Docling as Tier 2 fallback (future)
 
 #### ✂️ Text Chunking
-- [ ] Implement semantic chunking (sentence boundaries)
-- [ ] Implement fixed-size chunking with overlap
-- [ ] Implement recursive chunking for long documents
-- [ ] Add metadata to chunks (page numbers, section headers)
-- [ ] Configurable chunk size (default: 512-1024 tokens)
-- [ ] Configurable overlap (default: 50-100 tokens)
+- [x] Implement semantic chunking (sentence boundaries)
+- [x] Implement fixed-size chunking with overlap
+- [x] Implement recursive chunking for long documents
+- [x] Add metadata to chunks (page numbers, section headers)
+- [x] Configurable chunk size (default: 512 tokens)
+- [x] Configurable overlap (default: 50 tokens)
+- [x] Token counting with tiktoken
 
 #### 🗄️ Chunks Database
-- [ ] Create `chunks` table
+- [x] Create `chunks` table migration
   - `id`, `document_id`, `user_id`
   - `content`, `chunk_index`, `token_count`
   - `metadata` (JSONB: page, section, etc.)
   - `created_at`
-- [ ] Add RLS policies for user isolation
-- [ ] Create indexes for efficient querying
+- [x] Add RLS policies for user isolation
+- [x] Create indexes for efficient querying
+- [ ] Apply migration to Supabase
+- [ ] Verify chunks are being stored
 
 ### Technical Decisions
 
@@ -181,9 +188,23 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
   - Use when: Both Unstructured and Docling fail on specific pages/documents
   - Note: Most expensive option, use sparingly
 
+#### Service Architecture
+- **Background Worker**: Python service deployed on Render.com
+- **Queue**: pgmq (Postgres-based message queue)
+- **Processing Flow**:
+  1. Edge Function adds job to pgmq queue
+  2. Python worker polls queue every 5 seconds
+  3. Downloads file from Supabase Storage
+  4. Extracts text with Unstructured
+  5. Chunks text with LangChain RecursiveCharacterTextSplitter
+  6. Stores chunks in Postgres
+  7. Updates document status
+  8. Real-time UI update via Supabase Realtime
+
 #### Other Decisions
 - **Chunking strategy**: Semantic chunking with overlap for better context preservation
 - **Chunk size**: 512 tokens (balance between context and precision)
+- **Deployment**: Render.com Background Worker ($7/mo starter plan)
 
 ---
 

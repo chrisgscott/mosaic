@@ -1,0 +1,25 @@
+services:
+  - type: worker
+    name: mosaic-document-processor
+    env: python
+    region: oregon
+    plan: starter  # $7/mo - upgrade to standard ($25/mo) for better performance
+    rootDir: apps/backend/ingest
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    autoDeploy: true
+    branch: main  # or your default branch
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+      - key: POLL_INTERVAL
+        value: 5
+      - key: BATCH_SIZE
+        value: 1
+      - key: MAX_RETRIES
+        value: 3
+      # Add these in Render dashboard (they're secrets):
+      # - SUPABASE_URL
+      # - SUPABASE_SERVICE_ROLE_KEY
+      # - DATABASE_URL
+      # - OPENAI_API_KEY (optional, for future use)

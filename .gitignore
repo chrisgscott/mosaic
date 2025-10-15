@@ -59,3 +59,24 @@ next-env.d.ts
 .cache/
 .parcel-cache/
 .eslintcache
+
+# Test files and uploads (root level only)
+/*.pdf
+/*.docx
+/*.doc
+/*.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/

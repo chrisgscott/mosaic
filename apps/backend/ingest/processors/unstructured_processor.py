@@ -7,6 +7,7 @@ Handles extraction of text from various document formats using the Unstructured 
 import logging
 import tempfile
 import os
+import shutil
 from typing import Optional, List, Any
 from unstructured.partition.auto import partition
 
@@ -77,6 +78,10 @@ class UnstructuredProcessor:
                 os.unlink(tmp_path)
             except Exception as e:
                 logger.warning(f"Could not delete temp file {tmp_path}: {e}")
+            
+            # Clean up any Unstructured temp directories
+            # Unstructured creates temp dirs for image extraction, etc.
+            self.cleanup_temp_dirs()
     
     def extract_with_metadata(self, file_data: bytes, file_path: str) -> Optional[dict]:
         """
@@ -134,3 +139,39 @@ class UnstructuredProcessor:
                 os.unlink(tmp_path)
             except:
                 pass
+    
+    def cleanup_temp_dirs(self):
+        """Clean up temporary directories created by Unstructured."""
+        try:
+            tmp_dir = tempfile.gettempdir()
+            import time
+            current_time = time.time()
+            
+            cleaned_count = 0
+            for item in os.listdir(tmp_dir):
+                item_path = os.path.join(tmp_dir, item)
+                try:
+                    # Clean up Unstructured-related temp dirs immediately after processing
+                    # Also clean up any temp dirs older than 5 minutes
+                    if os.path.isdir(item_path):
+                        age_seconds = current_time - os.path.getmtime(item_path)
+                        
+                        # Aggressive cleanup: remove Unstructured dirs immediately
+                        # Remove other temp dirs after 5 minutes
+                        should_remove = (
+                            'unstructured' in item.lower() or
+                            item.startswith('tmp') and age_seconds > 300
+                        )
+                        
+                        if should_remove:
+                            shutil.rmtree(item_path, ignore_errors=True)
+                            cleaned_count += 1
+                except Exception:
+                    # Ignore errors for individual items
+                    pass
+            
+            if cleaned_count > 0:
+                logger.info(f"Cleaned up {cleaned_count} temp directories")
+                
+        except Exception as e:
+            logger.warning(f"Error during temp cleanup: {e}")

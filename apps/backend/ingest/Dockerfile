@@ -21,6 +21,9 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     # Document conversion
     pandoc \
+    # OpenCV dependencies (for image processing)
+    libgl1 \
+    libglib2.0-0 \
     # Cleanup to reduce image size
     && rm -rf /var/lib/apt/lists/*
 

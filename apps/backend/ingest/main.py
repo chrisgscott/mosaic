@@ -112,11 +112,13 @@ class DocumentWorker:
         except Exception as e:
             logger.error(f"Error updating document status: {e}")
     
-    def process_document(self, job: Dict[str, Any]) -> bool:
+    def process_document(self, job: Dict[str, Any]) -> tuple[bool, bool]:
         """
         Process a single document job.
         
-        Returns True if successful, False otherwise.
+        Returns (success, should_delete) tuple:
+        - success: True if processing succeeded
+        - should_delete: True if message should be deleted from queue (even on failure)
         """
         document_id = job["message"]["document_id"]
         file_path = job["message"]["file_path"]
@@ -127,7 +129,9 @@ class DocumentWorker:
             # Get document to find user_id
             doc_result = supabase.table("documents").select("user_id").eq("id", document_id).execute()
             if not doc_result.data:
-                raise ValueError(f"Document {document_id} not found")
+                logger.warning(f"Document {document_id} not found - was likely deleted")
+                # Document was deleted, don't retry this job
+                return (False, True)
             user_id = doc_result.data[0]["user_id"]
             
             # Update status to processing
@@ -160,12 +164,13 @@ class DocumentWorker:
             self.update_document_status(document_id, "ready")
             
             logger.info(f"Successfully processed document {document_id}")
-            return True
+            return (True, True)
             
         except Exception as e:
             logger.error(f"Error processing document {document_id}: {e}")
             self.update_document_status(document_id, "error")
-            return False
+            # Retry on general errors (False, False)
+            return (False, False)
     
     def run(self):
         """Main worker loop."""
@@ -182,11 +187,13 @@ class DocumentWorker:
                     logger.info(f"Received job {msg_id}")
                     
                     # Process the document
-                    success = self.process_document(job)
+                    success, should_delete = self.process_document(job)
                     
-                    # Delete message from queue if successful
-                    if success:
+                    # Delete message from queue if successful or if it should be removed
+                    if should_delete:
                         self.delete_message(msg_id)
+                        if not success:
+                            logger.info(f"Job {msg_id} removed from queue (document was deleted)")
                     else:
                         logger.warning(f"Job {msg_id} failed, will retry after visibility timeout")
                 else:

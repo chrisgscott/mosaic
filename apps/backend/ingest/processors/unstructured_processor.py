@@ -56,8 +56,7 @@ class UnstructuredProcessor:
             logger.info("Starting partition() call...")
             elements = partition(
                 filename=tmp_path,
-                strategy="fast",  # Use "fast" for Starter plan - less memory intensive
-                # "auto" and "hi_res" use more memory and can timeout on small instances
+                strategy="auto",  # Smart detection - uses fast for digital docs, OCR for scanned
             )
             logger.info(f"Partition complete, got {len(elements)} elements")
             

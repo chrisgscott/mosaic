@@ -84,7 +84,7 @@ class TextChunker:
                 new_after_n_chars=self.new_after_n_chars,
                 overlap=self.overlap,
                 multipage_sections=True,  # Allow sections to span pages
-                combine_text_under_n_chars=self.max_characters,  # Combine small sections
+                combine_text_under_n_chars=self.new_after_n_chars,  # Combine small sections up to soft max
             )
             
             # Build chunk records for database

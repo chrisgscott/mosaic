@@ -18,7 +18,7 @@ class TextChunker:
     def __init__(
         self,
         max_characters: int = 2000,  # Hard maximum (characters, not tokens)
-        new_after_n_chars: int = 1500,  # Soft maximum - preferred chunk size
+        new_after_n_chars: int = 1200,  # Soft maximum - start new chunk earlier to avoid splits
         overlap: int = 100,  # Character overlap between chunks
         encoding_name: str = "cl100k_base"  # OpenAI's encoding for token counting
     ):
@@ -84,7 +84,7 @@ class TextChunker:
                 new_after_n_chars=self.new_after_n_chars,
                 overlap=self.overlap,
                 multipage_sections=True,  # Allow sections to span pages
-                combine_text_under_n_chars=self.max_characters,  # Combine small sections
+                combine_text_under_n_chars=self.new_after_n_chars,  # Combine small sections up to soft max
             )
             
             # Build chunk records for database

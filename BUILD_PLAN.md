@@ -814,6 +814,392 @@ CREATE TABLE document_collaborators (
 
 ---
 
+## Phase 10: Platform Migration & Enterprise Scaling
+
+### Overview
+Strategic plan for migrating from Render to enterprise-grade infrastructure when scaling demands it. This phase is triggered by growth milestones, not time-based.
+
+### Migration Triggers (When to Execute)
+
+**Trigger 1: Revenue Threshold**
+- Monthly Recurring Revenue (MRR) > $5-10K
+- Infrastructure costs justify migration investment
+
+**Trigger 2: Scale Constraints**
+- Processing > 1000 documents/day consistently
+- Queue depth consistently > 20
+- Multiple worker crashes per week
+
+**Trigger 3: Customer Requirements**
+- Enterprise customers demanding SLAs (99.9% uptime)
+- Need for auto-scaling
+- Compliance requirements (SOC2, HIPAA)
+
+**Trigger 4: Cost Efficiency**
+- Render costs > $300/mo
+- Cloud platform would be cheaper at current scale
+
+### Current Architecture (Render-based)
+
+```
+Frontend: Vercel (Next.js)
+    ↓
+Database: Supabase (Postgres + Storage + Auth)
+    ↓
+Queue: pgmq (Postgres-based)
+    ↓
+Workers: Render Background Workers (Docker)
+    - 1-5 workers @ $25-125/mo
+    - Manual scaling
+    - 2GB /tmp limit
+    - Basic monitoring
+```
+
+**Limitations:**
+- ❌ No auto-scaling
+- ❌ Fixed /tmp disk (2GB all plans)
+- ❌ Manual worker management
+- ❌ Limited observability
+- ❌ No SLA guarantees (lower tiers)
+
+### Target Architecture (Enterprise)
+
+```
+Frontend: Vercel (Next.js) [No change]
+    ↓
+Database: Supabase (Postgres + Storage + Auth) [No change]
+    ↓
+Queue: Hatchet (Postgres or RabbitMQ-based)
+    - Workflow orchestration
+    - Built-in monitoring GUI
+    - Retry management
+    - Rate limiting per tenant
+    ↓
+Workers: AWS ECS Fargate or GCP Cloud Run
+    - Auto-scaling (1-50 workers)
+    - No /tmp limits
+    - Full observability
+    - 99.9% SLA
+```
+
+**Benefits:**
+- ✅ Auto-scaling based on queue depth
+- ✅ Better cost efficiency at scale
+- ✅ Full monitoring & tracing
+- ✅ Enterprise SLAs
+- ✅ No infrastructure limitations
+
+### Migration Strategy
+
+#### Phase 10.1: Preparation (Pre-Migration)
+
+**1. Abstract Queue Interface**
+```python
+# Create queue abstraction layer
+class QueueInterface:
+    def enqueue(self, job): pass
+    def dequeue(self): pass
+    def delete(self, job_id): pass
+
+# Implementations:
+- PgmqQueue (current)
+- HatchetQueue (future)
+- SqsQueue (AWS option)
+```
+
+**2. Add Comprehensive Monitoring**
+```python
+# Track metrics for migration planning
+- Queue depth over time
+- Processing time per document
+- Memory usage patterns
+- Success/failure rates
+- Worker health
+- Cost per document processed
+
+# Tools: Sentry, DataDog, or custom Postgres logging
+```
+
+**3. Document Everything**
+- Architecture diagrams
+- Deployment procedures
+- Configuration management
+- Environment variables
+- Dependencies
+
+**4. Implement Feature Flags**
+```typescript
+// Easy rollback if migration issues
+const USE_NEW_QUEUE = process.env.FEATURE_NEW_QUEUE === 'true'
+```
+
+#### Phase 10.2: Hatchet Integration (Can Do on Render First)
+
+**1. Deploy Hatchet**
+```yaml
+# Option A: Hatchet with Postgres (simpler)
+services:
+  hatchet-engine:
+    environment:
+      SERVER_MSGQUEUE_KIND: postgres
+      DATABASE_URL: $SUPABASE_URL
+
+# Option B: Hatchet with RabbitMQ (faster)
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+  hatchet-engine:
+    environment:
+      SERVER_MSGQUEUE_RABBITMQ_URL: amqp://rabbitmq:5672/
+```
+
+**2. Rewrite Worker for Hatchet**
+```python
+from hatchet_sdk import Hatchet
+
+hatchet = Hatchet()
+
+@hatchet.workflow()
+class DocumentProcessing:
+    @hatchet.step()
+    def download_file(self, context):
+        # Download from Supabase
+        return {"file_data": file_data}
+    
+    @hatchet.step()
+    def extract_text(self, context):
+        # Unstructured processing
+        return {"elements": elements}
+    
+    @hatchet.step()
+    def chunk_text(self, context):
+        # Chunking
+        return {"chunks": chunks}
+    
+    @hatchet.step()
+    def generate_embeddings(self, context):
+        # OpenAI embeddings
+        return {"embeddings": embeddings}
+    
+    @hatchet.step()
+    def extract_graph(self, context):
+        # Entity/relationship extraction
+        return {"entities": entities}
+    
+    @hatchet.step()
+    def store_results(self, context):
+        # Save to database
+        return {"success": True}
+```
+
+**3. Parallel Run (Dual Queue)**
+```
+- Keep pgmq running (primary)
+- Run Hatchet in parallel (testing)
+- Compare results, performance, reliability
+- Gradual cutover (10% → 50% → 100%)
+```
+
+**Benefits of Hatchet:**
+- ✅ Can deploy on Render initially
+- ✅ Get monitoring/observability immediately
+- ✅ Easier to migrate workers later
+- ✅ Workflow orchestration for multi-step processing
+
+#### Phase 10.3: Worker Migration to Cloud
+
+**Option A: AWS ECS Fargate**
+
+```yaml
+# ECS Task Definition
+{
+  "family": "mosaic-worker",
+  "containerDefinitions": [{
+    "name": "worker",
+    "image": "your-registry/mosaic-worker:latest",
+    "memory": 2048,
+    "cpu": 1024,
+    "environment": [
+      {"name": "DATABASE_URL", "value": "$SUPABASE_URL"},
+      {"name": "HATCHET_URL", "value": "$HATCHET_URL"}
+    ]
+  }]
+}
+
+# Auto-scaling
+- Min workers: 1
+- Max workers: 20
+- Scale up: Queue depth > 10
+- Scale down: Queue depth < 2
+```
+
+**Cost:** ~$0.04/hour per worker = $30/mo for 1 worker running 24/7
+- But scales to 0 during off-hours!
+- Actual cost: $50-200/mo depending on usage
+
+**Option B: GCP Cloud Run**
+
+```yaml
+# Cloud Run Service
+service: mosaic-worker
+image: gcr.io/project/mosaic-worker
+resources:
+  limits:
+    memory: 2Gi
+    cpu: 1
+scaling:
+  minInstances: 0  # Scale to zero!
+  maxInstances: 20
+```
+
+**Cost:** Pay per request + compute time
+- Idle: $0/mo (scales to zero)
+- Active: ~$0.05/hour per worker
+- Actual cost: $30-150/mo depending on usage
+
+**Option C: Kubernetes (Advanced)**
+- Full control, most complex
+- Best for very high scale (1000+ docs/day)
+- Cost: $100-500/mo
+
+#### Phase 10.4: Monitoring & Observability
+
+**1. Distributed Tracing**
+```python
+# OpenTelemetry integration
+from opentelemetry import trace
+
+tracer = trace.get_tracer(__name__)
+
+with tracer.start_as_current_span("process_document"):
+    # Track entire workflow
+    with tracer.start_as_current_span("download"):
+        download_file()
+    with tracer.start_as_current_span("extract"):
+        extract_text()
+```
+
+**2. Metrics Dashboard**
+```
+- Queue depth (real-time)
+- Processing time (p50, p95, p99)
+- Success/failure rates
+- Worker health
+- Cost per document
+- Throughput (docs/hour)
+```
+
+**3. Alerting**
+```
+- Queue depth > 50 for 10 minutes
+- Worker failure rate > 5%
+- Processing time > 5 minutes
+- Memory usage > 90%
+```
+
+**Tools:**
+- DataDog ($15-50/mo)
+- New Relic ($25-100/mo)
+- Sentry ($26/mo)
+- Grafana + Prometheus (self-hosted, free)
+
+### Migration Timeline
+
+**Week 1-2: Preparation**
+- Abstract queue interface
+- Add monitoring
+- Document architecture
+- Load test current system
+
+**Week 3-4: Hatchet Integration**
+- Deploy Hatchet (on Render)
+- Rewrite worker for Hatchet
+- Parallel run with pgmq
+- Verify functionality
+
+**Week 5-6: Cloud Migration**
+- Setup AWS/GCP account
+- Deploy workers to cloud
+- Configure auto-scaling
+- Cutover traffic (10% → 100%)
+
+**Week 7-8: Optimization**
+- Fine-tune auto-scaling
+- Optimize costs
+- Setup monitoring/alerting
+- Document new architecture
+
+**Total:** 6-8 weeks part-time
+
+### Cost Comparison
+
+**Current (Render):**
+```
+1 worker:  $25/mo
+3 workers: $75/mo
+5 workers: $125/mo
+```
+
+**After Migration (AWS ECS):**
+```
+Low traffic:    $30-50/mo (1-2 workers avg)
+Medium traffic: $100-150/mo (3-5 workers avg)
+High traffic:   $200-300/mo (5-10 workers avg)
+Peak handling:  Auto-scales to 20+ workers
+```
+
+**Break-even:** ~3-5 workers constant = $75-125/mo
+
+**Savings at scale:** 
+- 10 workers on Render: $250/mo
+- 10 workers on AWS (avg): $150/mo
+- Savings: $100/mo + better reliability
+
+### Rollback Plan
+
+**If migration fails:**
+1. Keep Render workers running during migration
+2. Feature flag to switch back to pgmq
+3. DNS/routing can revert instantly
+4. No data loss (Supabase unchanged)
+5. Maximum downtime: < 5 minutes
+
+### Success Criteria
+
+**Migration is successful when:**
+- ✅ 99.9% uptime for 1 month
+- ✅ Auto-scaling working (scales up/down correctly)
+- ✅ Cost per document < Render baseline
+- ✅ Processing time same or better
+- ✅ Zero data loss
+- ✅ Monitoring/alerting operational
+- ✅ Team comfortable with new platform
+
+### Future Enhancements (Post-Migration)
+
+**Multi-Region Deployment**
+- Deploy workers in multiple regions
+- Route to nearest worker
+- Disaster recovery
+
+**Advanced Auto-Scaling**
+- Predictive scaling (ML-based)
+- Time-of-day patterns
+- Customer-specific scaling
+
+**Cost Optimization**
+- Spot instances (AWS) for 70% savings
+- Preemptible VMs (GCP) for 80% savings
+- Reserved capacity for baseline
+
+**Enterprise Features**
+- Multi-tenancy isolation
+- Per-customer rate limiting
+- Priority queues (VIP customers)
+- SLA monitoring & reporting
+
+---
+
 ## Technology Stack
 
 ### Frontend

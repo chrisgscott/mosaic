@@ -11,6 +11,8 @@ python-dotenv==1.0.0
 unstructured==0.18.15
 unstructured[pdf]==0.18.15
 unstructured[docx]==0.18.15
+unstructured[xlsx]==0.18.15
+unstructured[pptx]==0.18.15
 
 # Text processing
 langchain-text-splitters==0.3.4

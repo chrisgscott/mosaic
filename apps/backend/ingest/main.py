@@ -122,8 +122,15 @@ class DocumentWorker:
         """
         document_id = job["message"]["document_id"]
         file_path = job["message"]["file_path"]
+        read_ct = job.get("read_ct", 0)  # pgmq tracks how many times message was read
         
         logger.info(f"Processing document {document_id}: {file_path}")
+        
+        # Check if we've exceeded max retries
+        if read_ct >= MAX_RETRIES:
+            logger.error(f"Document {document_id} exceeded max retries ({MAX_RETRIES}), giving up")
+            self.update_document_status(document_id, "error")
+            return (False, True)  # Delete from queue, stop retrying
         
         try:
             # Get document to find user_id
@@ -167,9 +174,10 @@ class DocumentWorker:
             return (True, True)
             
         except Exception as e:
-            logger.error(f"Error processing document {document_id}: {e}")
+            attempt_num = read_ct + 1
+            logger.error(f"Error processing document {document_id} (attempt {attempt_num}/{MAX_RETRIES}): {e}")
             self.update_document_status(document_id, "error")
-            # Retry on general errors (False, False)
+            # Retry on general errors - will be retried up to MAX_RETRIES times
             return (False, False)
     
     def run(self):

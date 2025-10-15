@@ -7,7 +7,7 @@ Handles extraction of text from various document formats using the Unstructured 
 import logging
 import tempfile
 import os
-from typing import Optional
+from typing import Optional, List, Any
 from unstructured.partition.auto import partition
 
 logger = logging.getLogger(__name__)
@@ -23,16 +23,16 @@ class UnstructuredProcessor:
             '.html', '.xml', '.csv', '.xlsx', '.pptx'
         }
     
-    def extract_text(self, file_data: bytes, file_path: str) -> Optional[str]:
+    def extract_elements(self, file_data: bytes, file_path: str) -> Optional[List[Any]]:
         """
-        Extract text from a document.
+        Extract document elements for chunking.
         
         Args:
             file_data: Raw file bytes
             file_path: Original file path (used to determine file type)
             
         Returns:
-            Extracted text as a string, or None if extraction fails
+            List of Unstructured document elements, or None if extraction fails
         """
         # Get file extension
         _, ext = os.path.splitext(file_path)
@@ -61,21 +61,10 @@ class UnstructuredProcessor:
             )
             logger.info(f"Partition complete, got {len(elements)} elements")
             
-            # Combine all text elements
+            # Return elements for chunking
             # Elements include paragraphs, titles, lists, tables, etc.
-            text_parts = []
-            for element in elements:
-                # Get text from element
-                text = str(element)
-                if text.strip():
-                    text_parts.append(text)
-            
-            # Join with double newlines to preserve some structure
-            full_text = "\n\n".join(text_parts)
-            
-            logger.info(f"Extracted {len(full_text)} characters from {len(elements)} elements")
-            
-            return full_text
+            # The chunker will use these to respect semantic boundaries
+            return elements
             
         except Exception as e:
             logger.error(f"Error extracting text from {file_path}: {e}")

@@ -141,18 +141,18 @@ class DocumentWorker:
             logger.info(f"Downloading file from storage: {file_path}")
             file_data = supabase.storage.from_("documents").download(file_path)
             
-            # Extract text using Unstructured
-            logger.info("Extracting text with Unstructured")
-            extracted_text = processor.extract_text(file_data, file_path)
+            # Extract elements using Unstructured
+            logger.info("Extracting elements with Unstructured")
+            elements = processor.extract_elements(file_data, file_path)
             
-            if not extracted_text:
-                raise ValueError("No text extracted from document")
+            if not elements:
+                raise ValueError("No elements extracted from document")
             
-            logger.info(f"Extracted {len(extracted_text)} characters")
+            logger.info(f"Extracted {len(elements)} elements")
             
-            # Chunk the text
-            logger.info("Chunking text")
-            chunks = chunker.chunk_text(extracted_text, document_id, user_id)
+            # Chunk the elements using by_title strategy
+            logger.info("Chunking elements (respecting section boundaries)")
+            chunks = chunker.chunk_elements(elements, document_id, user_id)
             
             logger.info(f"Created {len(chunks)} chunks")
             

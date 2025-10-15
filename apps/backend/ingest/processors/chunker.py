@@ -1,51 +1,46 @@
 """
-Text chunking processor.
+Text chunking processor using Unstructured's native chunking strategies.
 
-Splits extracted text into chunks suitable for embedding and retrieval.
+Chunks document elements while respecting semantic boundaries like section headings.
 """
 
 import logging
 from typing import List, Dict, Any, Optional
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from unstructured.chunking.title import chunk_by_title
 import tiktoken
 
 logger = logging.getLogger(__name__)
 
 
 class TextChunker:
-    """Chunk text into smaller pieces for embedding."""
+    """Chunk document elements using Unstructured's by_title strategy."""
     
     def __init__(
         self,
-        chunk_size: int = 512,
-        chunk_overlap: int = 50,
-        encoding_name: str = "cl100k_base"  # OpenAI's encoding
+        max_characters: int = 2000,  # Hard maximum (characters, not tokens)
+        new_after_n_chars: int = 1500,  # Soft maximum - preferred chunk size
+        overlap: int = 100,  # Character overlap between chunks
+        encoding_name: str = "cl100k_base"  # OpenAI's encoding for token counting
     ):
         """
         Initialize the text chunker.
         
         Args:
-            chunk_size: Target size of each chunk in tokens
-            chunk_overlap: Number of tokens to overlap between chunks
-            encoding_name: Tokenizer encoding to use
+            max_characters: Hard maximum chunk size in characters
+            new_after_n_chars: Soft maximum - start new chunk after this size
+            overlap: Number of characters to overlap between chunks
+            encoding_name: Tokenizer encoding for token counting
         """
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
+        self.max_characters = max_characters
+        self.new_after_n_chars = new_after_n_chars
+        self.overlap = overlap
         
-        # Initialize tokenizer
+        # Initialize tokenizer for token counting
         try:
             self.encoding = tiktoken.get_encoding(encoding_name)
         except Exception as e:
             logger.warning(f"Could not load encoding {encoding_name}: {e}")
             self.encoding = None
-        
-        # Initialize LangChain text splitter
-        self.splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-            length_function=self._token_length,
-            separators=["\n\n", "\n", ". ", " ", ""],  # Try to split on natural boundaries
-        )
     
     def _token_length(self, text: str) -> int:
         """Calculate the token length of text."""
@@ -55,18 +50,20 @@ class TextChunker:
             # Fallback: rough estimate (1 token ≈ 4 characters)
             return len(text) // 4
     
-    def chunk_text(
+    def chunk_elements(
         self,
-        text: str,
+        elements: List[Any],
         document_id: str,
         user_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
-        Chunk text into smaller pieces.
+        Chunk document elements using Unstructured's by_title strategy.
+        
+        This respects section boundaries and semantic structure.
         
         Args:
-            text: The text to chunk
+            elements: List of Unstructured document elements
             document_id: ID of the source document
             user_id: Optional user ID for the document
             metadata: Optional metadata to attach to chunks
@@ -74,25 +71,50 @@ class TextChunker:
         Returns:
             List of chunk dictionaries ready for database insertion
         """
-        if not text or not text.strip():
-            logger.warning("Empty text provided for chunking")
+        if not elements:
+            logger.warning("Empty elements list provided for chunking")
             return []
         
         try:
-            # Split text into chunks
-            chunks = self.splitter.split_text(text)
+            # Use Unstructured's by_title chunking strategy
+            # This preserves section boundaries and respects document structure
+            chunks = chunk_by_title(
+                elements=elements,
+                max_characters=self.max_characters,
+                new_after_n_chars=self.new_after_n_chars,
+                overlap=self.overlap,
+                multipage_sections=True,  # Allow sections to span pages
+                combine_text_under_n_chars=self.max_characters,  # Combine small sections
+            )
             
             # Build chunk records for database
             chunk_records = []
-            for idx, chunk_text in enumerate(chunks):
+            for idx, chunk in enumerate(chunks):
+                chunk_text = str(chunk)
                 token_count = self._token_length(chunk_text)
+                
+                # Extract metadata from original elements if available
+                chunk_metadata = metadata.copy() if metadata else {}
+                if hasattr(chunk, 'metadata') and hasattr(chunk.metadata, 'orig_elements'):
+                    # Store info about original elements
+                    orig_elements = chunk.metadata.orig_elements
+                    if orig_elements:
+                        chunk_metadata['element_count'] = len(orig_elements)
+                        # Get page numbers if available
+                        page_numbers = {
+                            e.metadata.page_number 
+                            for e in orig_elements 
+                            if hasattr(e, 'metadata') and hasattr(e.metadata, 'page_number') and e.metadata.page_number
+                        }
+                        if page_numbers:
+                            chunk_metadata['page_numbers'] = sorted(list(page_numbers))
                 
                 chunk_record = {
                     "document_id": document_id,
                     "content": chunk_text,
                     "chunk_index": idx,
                     "token_count": token_count,
-                    "metadata": metadata or {}
+                    "metadata": chunk_metadata
                 }
                 
                 if user_id:
@@ -100,47 +122,10 @@ class TextChunker:
                 
                 chunk_records.append(chunk_record)
             
-            logger.info(f"Created {len(chunk_records)} chunks from {len(text)} characters")
+            logger.info(f"Created {len(chunk_records)} chunks from {len(elements)} elements")
             return chunk_records
             
         except Exception as e:
-            logger.error(f"Error chunking text: {e}")
+            logger.error(f"Error chunking elements: {e}")
             return []
     
-    def chunk_with_metadata(
-        self,
-        structured_content: Dict[str, Any],
-        document_id: str,
-        user_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Chunk text while preserving metadata from structured extraction.
-        
-        This is more advanced and can be used when you have structured
-        content from the Unstructured processor.
-        
-        Args:
-            structured_content: Output from UnstructuredProcessor.extract_with_metadata()
-            document_id: ID of the source document
-            user_id: Optional user ID
-            
-        Returns:
-            List of chunk dictionaries with preserved metadata
-        """
-        if "elements" not in structured_content:
-            # Fallback to simple chunking
-            return self.chunk_text(
-                structured_content.get("text", ""),
-                document_id,
-                user_id
-            )
-        
-        # Group elements by page or section
-        # This is a simplified version - you can make this more sophisticated
-        elements = structured_content["elements"]
-        
-        # For now, just chunk the full text but we could do smarter grouping
-        # based on page numbers, sections, etc.
-        text = structured_content["text"]
-        
-        return self.chunk_text(text, document_id, user_id)

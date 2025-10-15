@@ -8,7 +8,13 @@ services:
     dockerContext: ./apps/backend/ingest
     autoDeploy: true
     branch: main  # or your default branch
+    disk:
+      name: temp-storage
+      mountPath: /app/tmp
+      sizeGB: 10  # $2.50/mo - provides 10GB for temp files
     envVars:
+      - key: TMPDIR
+        value: /app/tmp
       - key: PYTHON_VERSION
         value: 3.11
       - key: POLL_INTERVAL

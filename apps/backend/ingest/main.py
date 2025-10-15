@@ -48,6 +48,34 @@ class DocumentWorker:
         self.db_conn = None
         self.running = True
         
+    def cleanup_temp_on_startup(self):
+        """Clean up temp directory on worker startup to prevent disk buildup."""
+        try:
+            import tempfile
+            import shutil
+            
+            tmp_dir = tempfile.gettempdir()
+            logger.info(f"Cleaning up temp directory on startup: {tmp_dir}")
+            
+            # Clean up all temp files and directories
+            cleaned_count = 0
+            for item in os.listdir(tmp_dir):
+                item_path = os.path.join(tmp_dir, item)
+                try:
+                    if os.path.isdir(item_path):
+                        shutil.rmtree(item_path, ignore_errors=True)
+                        cleaned_count += 1
+                    elif os.path.isfile(item_path):
+                        os.unlink(item_path)
+                        cleaned_count += 1
+                except Exception:
+                    # Ignore errors for individual items
+                    pass
+            
+            logger.info(f"Startup cleanup complete: removed {cleaned_count} items from {tmp_dir}")
+        except Exception as e:
+            logger.warning(f"Error during startup cleanup: {e}")
+        
     def connect_db(self):
         """Establish database connection for pgmq."""
         try:
@@ -210,6 +238,10 @@ class DocumentWorker:
     def run(self):
         """Main worker loop."""
         logger.info("Starting document processing worker")
+        
+        # Clean up temp directory on startup
+        self.cleanup_temp_on_startup()
+        
         self.connect_db()
         
         while self.running:

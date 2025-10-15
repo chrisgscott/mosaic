@@ -147,3 +147,59 @@ export async function deleteDocument(documentId: string) {
 
   return { success: true };
 }
+
+export async function toggleDocumentPublic(documentId: string, isPublic: boolean) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  // Check if user is admin
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile?.is_admin) {
+    return { error: "Only admins can make documents public" };
+  }
+
+  // Get the document to verify ownership
+  const { data: document, error: fetchError } = await supabase
+    .from("documents")
+    .select("user_id")
+    .eq("id", documentId)
+    .single();
+
+  if (fetchError || !document) {
+    return { error: "Document not found" };
+  }
+
+  // Verify ownership
+  if (document.user_id !== user.id) {
+    return { error: "Unauthorized" };
+  }
+
+  // Update the document
+  const { error: updateError } = await supabase
+    .from("documents")
+    .update({ is_public: isPublic })
+    .eq("id", documentId);
+
+  if (updateError) {
+    console.error("Update error:", updateError);
+    return { error: `Failed to update document: ${updateError.message}` };
+  }
+
+  revalidatePath("/documents");
+  revalidatePath(`/documents/${documentId}`);
+
+  return { success: true };
+}

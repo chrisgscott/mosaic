@@ -1,12 +1,14 @@
 "use client";
 
-import { ArrowLeft, Download, Trash2, FileText, Sheet, FileCode, Presentation, File } from "lucide-react";
+import { ArrowLeft, Download, Trash2, FileText, Sheet, FileCode, Presentation, File, Globe, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { deleteDocument } from "@/app/(app)/documents/actions";
+import { deleteDocument, toggleDocumentPublic } from "@/app/(app)/documents/actions";
+import { useIsAdmin } from "@/lib/hooks/use-is-admin";
+import { useState } from "react";
 
 type DocumentWithStats = {
   id: string;
@@ -20,6 +22,7 @@ type DocumentWithStats = {
   chunk_count: number;
   total_tokens: number;
   user_name?: string;
+  is_public?: boolean;
 };
 
 type DocumentHeaderProps = {
@@ -81,6 +84,8 @@ const getFileIcon = (fileType: string, fileName: string) => {
 export function DocumentHeader({ document }: DocumentHeaderProps) {
   const router = useRouter();
   const supabase = createClient();
+  const { isAdmin } = useIsAdmin();
+  const [isTogglingPublic, setIsTogglingPublic] = useState(false);
 
   const handleDownload = async () => {
     try {
@@ -113,6 +118,24 @@ export function DocumentHeader({ document }: DocumentHeaderProps) {
     } catch (error) {
       console.error("Delete error:", error);
       toast.error("Failed to delete document");
+    }
+  };
+
+  const handleTogglePublic = async () => {
+    setIsTogglingPublic(true);
+    try {
+      const result = await toggleDocumentPublic(document.id, !document.is_public);
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success(document.is_public ? "Document is now private" : "Document is now public");
+        router.refresh();
+      }
+    } catch (error) {
+      console.error("Toggle public error:", error);
+      toast.error("Failed to update document");
+    } finally {
+      setIsTogglingPublic(false);
     }
   };
 
@@ -155,6 +178,26 @@ export function DocumentHeader({ document }: DocumentHeaderProps) {
 
         {/* Actions */}
         <div className="flex gap-2">
+          {isAdmin && (
+            <Button 
+              variant={document.is_public ? "default" : "outline"} 
+              size="sm" 
+              onClick={handleTogglePublic}
+              disabled={isTogglingPublic}
+            >
+              {document.is_public ? (
+                <>
+                  <Globe className="h-4 w-4 mr-2" />
+                  Public
+                </>
+              ) : (
+                <>
+                  <Lock className="h-4 w-4 mr-2" />
+                  Private
+                </>
+              )}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={handleDownload}>
             <Download className="h-4 w-4 mr-2" />
             Download

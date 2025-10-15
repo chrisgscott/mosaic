@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Trash2, Download, MoreHorizontal, Loader2, Trash, Sheet, FileCode, Presentation, File } from "lucide-react";
+import { FileText, Trash2, Download, MoreHorizontal, Loader2, Trash, Sheet, FileCode, Presentation, File, Globe, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -18,7 +18,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { deleteDocument } from "@/app/(app)/documents/actions";
+import { deleteDocument, toggleDocumentPublic } from "@/app/(app)/documents/actions";
+import { useIsAdmin } from "@/lib/hooks/use-is-admin";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -32,6 +33,7 @@ type Document = {
   file_type: string;
   status: string;
   created_at: string;
+  is_public?: boolean;
 };
 
 const getFileIcon = (fileName: string) => {
@@ -75,6 +77,8 @@ export function DocumentList({
   const [internalDocuments, setInternalDocuments] = useState<Document[]>(externalDocuments);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
+  const [togglingPublicId, setTogglingPublicId] = useState<string | null>(null);
+  const { isAdmin } = useIsAdmin();
 
   // Use external or internal documents
   const documents = onDocumentsChange ? externalDocuments : internalDocuments;
@@ -368,6 +372,11 @@ export function DocumentList({
                       return <IconComponent className="h-4 w-4 text-muted-foreground flex-shrink-0" />;
                     })()}
                     <span className="font-medium truncate">{doc.file_name}</span>
+                    {doc.is_public && (
+                      <span title="Public document">
+                        <Globe className="h-3 w-3 text-muted-foreground ml-1 flex-shrink-0" />
+                      </span>
+                    )}
                   </button>
                 </TableCell>
                 <TableCell className="text-muted-foreground">
@@ -389,6 +398,34 @@ export function DocumentList({
                         <Download className="mr-2 h-4 w-4" />
                         Download
                       </DropdownMenuItem>
+                      {isAdmin && (
+                        <DropdownMenuItem
+                          onClick={async () => {
+                            setTogglingPublicId(doc.id);
+                            const result = await toggleDocumentPublic(doc.id, !doc.is_public);
+                            if (result.error) {
+                              toast.error(result.error);
+                            } else {
+                              toast.success(doc.is_public ? "Document is now private" : "Document is now public");
+                              router.refresh();
+                            }
+                            setTogglingPublicId(null);
+                          }}
+                          disabled={togglingPublicId === doc.id}
+                        >
+                          {doc.is_public ? (
+                            <>
+                              <Lock className="mr-2 h-4 w-4" />
+                              Make Private
+                            </>
+                          ) : (
+                            <>
+                              <Globe className="mr-2 h-4 w-4" />
+                              Make Public
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem
                         className="text-destructive"
                         onClick={() => handleDelete(doc.id)}

@@ -23,6 +23,7 @@ type DocumentWithStats = {
   chunk_count: number;
   total_tokens: number;
   user_name?: string;
+  is_public?: boolean;
 };
 
 async function getDocumentWithChunks(documentId: string) {

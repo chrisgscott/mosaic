@@ -24,6 +24,7 @@ type DocumentWithStats = {
   updated_at: string;
   chunk_count: number;
   total_tokens: number;
+  is_public?: boolean;
 };
 
 type DocumentDetailsViewProps = {

@@ -1112,6 +1112,275 @@ def process_document_parallel(self, file_path):
 
 ---
 
+## 🎨 Docling with Vision Language Models (VLM)
+
+### Concept
+Replace traditional OCR-based document processing (Unstructured) with modern Vision Language Models for faster, more accurate document understanding. Docling supports both local VLM models and API-based services.
+
+### The Problem with Current Approach (Unstructured + OCR)
+**Processing a 200-page complex PDF:**
+- **Time:** 15-20 minutes
+- **Method:** Tesseract OCR + image extraction + table detection
+- **Disk usage:** 2.3GB temp files (images, intermediate processing)
+- **Bottleneck:** CPU-bound OCR processing
+- **Quality:** Good for text, struggles with complex layouts
+
+### Docling VLM Solutions
+
+#### **Option 1: Docling + Local VLM (GraniteDocling-258M)**
+
+**Self-hosted, privacy-first approach:**
+```python
+from docling.document_converter import DocumentConverter
+from docling.datamodel import vlm_model_specs
+from docling.pipeline.vlm_pipeline import VlmPipeline
+
+# 100% local processing - no API calls
+pipeline_options = VlmPipelineOptions(
+    vlm_options=vlm_model_specs.GRANITEDOCLING
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_cls=VlmPipeline,
+            pipeline_options=pipeline_options,
+        )
+    }
+)
+```
+
+**Performance:**
+- **Speed:** ~6 seconds per page = 20 minutes for 200 pages (similar to current)
+- **Cost:** $0 (free, local)
+- **Model:** IBM's GraniteDocling-258M (specialized for documents)
+- **Output:** Structured DocTags format (better than raw text)
+- **Disk:** Still uses temp storage for model weights (~500MB)
+
+**Benefits:**
+- ✅ 100% self-hosted (no data leaves server)
+- ✅ Works in air-gapped environments
+- ✅ Better structured output than OCR
+- ✅ No API costs
+- ✅ Handles complex layouts better
+- ✅ Drop-in replacement for Unstructured
+
+**Drawbacks:**
+- ⚠️ Similar speed to current OCR approach
+- ⚠️ Still needs temp disk space (but less than Unstructured)
+- ⚠️ Requires model download (~500MB, one-time)
+
+---
+
+#### **Option 2: Docling + API-based VLM (GPT-4o-mini)**
+
+**Cloud-based, ultra-fast approach:**
+```python
+from docling.datamodel.pipeline_options_vlm_model import ApiVlmOptions
+
+# Configure for OpenAI GPT-4o-mini
+vlm_options = ApiVlmOptions(
+    url="https://api.openai.com/v1/chat/completions",
+    params=dict(
+        model="gpt-4o-mini",
+        max_tokens=4096,
+    ),
+    headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+    prompt="Convert this document page to markdown with tables and structure.",
+    temperature=0.1,
+    response_format=ResponseFormat.MARKDOWN,
+)
+
+pipeline_options = VlmPipelineOptions(
+    vlm_options=vlm_options,
+    enable_remote_services=True
+)
+```
+
+**Performance:**
+- **Speed:** 1-2 seconds per page = **3-7 minutes for 200 pages** (3-4x faster!)
+- **Cost:** ~$0.005 per document (half a cent)
+- **Scaling:** 1000 docs/month = $5/mo
+- **Disk:** Zero temp files (API-based)
+
+**Benefits:**
+- ✅ **3-4x faster** than OCR
+- ✅ **No temp disk usage** (solves /tmp problem completely)
+- ✅ Better at understanding complex layouts
+- ✅ Handles tables, charts, graphs semantically
+- ✅ Very cheap ($0.005 per doc)
+- ✅ No model management or updates
+
+**Drawbacks:**
+- ⚠️ Requires internet connection
+- ⚠️ Data sent to OpenAI (privacy consideration)
+- ⚠️ API rate limits (60 req/min for GPT-4o-mini)
+- ⚠️ Ongoing cost (though minimal)
+
+---
+
+#### **Option 3: Hybrid Approach (Best of Both Worlds)**
+
+**Intelligent routing based on document characteristics:**
+```python
+def choose_processor(document):
+    if document.is_sensitive:
+        return local_vlm_processor  # Privacy-first
+    elif document.page_count > 100:
+        return api_vlm_processor    # Speed-first
+    elif document.has_complex_tables:
+        return api_vlm_processor    # Quality-first
+    else:
+        return local_vlm_processor  # Cost-first
+```
+
+**Or user-selectable:**
+- **"Accurate" mode:** Local VLM (free, private, slower)
+- **"Fast" mode:** API VLM (cheap, fast, cloud)
+
+---
+
+### Benchmark Comparison
+
+**Processing 200-page complex PDF with tables/charts:**
+
+| Method | Time | Cost | Disk | Privacy | Quality |
+|--------|------|------|------|---------|---------|
+| **Unstructured (current)** | 15-20 min | $0 | 2.3GB | 🔒 Local | Good |
+| **Docling + Local VLM** | ~20 min | $0 | ~500MB | 🔒 Local | Better |
+| **Docling + GPT-4o-mini** | 3-7 min | $0.005 | 0 | ⚠️ Cloud | Best |
+| **LlamaParse (comparison)** | ~6 min | $0.10 | 0 | ⚠️ Cloud | Good |
+
+**Source:** [PDF Data Extraction Benchmark 2025](https://procycons.com/en/blogs/pdf-data-extraction-benchmark/)
+
+---
+
+### Implementation Considerations
+
+#### **Migration Path**
+1. **Phase 1:** Add Docling + Local VLM as alternative processor
+2. **Phase 2:** Test side-by-side with Unstructured
+3. **Phase 3:** Make Docling default, keep Unstructured as fallback
+4. **Phase 4:** Add API VLM as "fast mode" option
+5. **Phase 5:** Remove Unstructured entirely
+
+#### **Code Changes Required**
+- Create new `DoclingProcessor` class (similar to `UnstructuredProcessor`)
+- Add processor selection logic
+- Update worker to support multiple processors
+- Add configuration for VLM model selection
+- Update UI to show processing method used
+
+#### **Infrastructure Impact**
+- **Local VLM:** Needs model download on first run (~500MB)
+- **API VLM:** Needs `OPENAI_API_KEY` environment variable
+- **Both:** Significantly less temp disk usage than current
+
+#### **Cost Analysis**
+
+**Current (Unstructured + Render):**
+```
+Worker: $27.50/mo (Standard + 10GB disk)
+Processing: $0
+Total: $27.50/mo
+```
+
+**With Docling + Local VLM:**
+```
+Worker: $25/mo (Standard, less disk needed)
+Processing: $0
+Total: $25/mo (saves $2.50/mo)
+```
+
+**With Docling + API VLM:**
+```
+Worker: $7/mo (Starter, no disk needed!)
+Processing: $5/mo (1000 docs)
+Total: $12/mo (saves $15.50/mo)
+```
+
+**Break-even:** API VLM is cheaper until ~4000 docs/month
+
+---
+
+### Docling Features
+
+**What Docling Provides:**
+- 🗂️ Multiple format support (PDF, DOCX, PPTX, XLSX, HTML, images, audio)
+- 📑 Advanced PDF understanding (layout, reading order, tables, formulas)
+- 🧬 Unified DoclingDocument format
+- ↪️ Multiple export formats (Markdown, HTML, DocTags, JSON)
+- 🔒 Local execution for sensitive data
+- 🤖 Integrations with LangChain, LlamaIndex, Crew AI, Haystack
+- 🔍 Extensive OCR support (fallback if needed)
+- 👓 Multiple VLM model support (local and API)
+- 🎙️ Audio support with ASR models
+- 🔌 MCP server for agentic applications
+
+**Supported VLM Models:**
+- **Local:** GraniteDocling-258M, SmolDocling-256M, Granite Vision
+- **Self-hosted:** VLLM, LM Studio, Ollama
+- **API:** OpenAI (GPT-4o, GPT-4o-mini), IBM watsonx.ai
+- **Any OpenAI-compatible endpoint**
+
+---
+
+### Privacy & Security
+
+**Docling is built for sensitive data:**
+- 🔒 Local execution capabilities
+- 🔒 Air-gapped environment support
+- 🔒 No telemetry or phone-home
+- 🔒 Open source (MIT license)
+- 🔒 Self-hostable VLM servers
+
+**From their docs:**
+> "🔒 Local execution capabilities for sensitive data and air-gapped environments"
+
+---
+
+### Recommendation
+
+**For Mosaic:**
+
+**Short-term (Now):**
+- Implement Docling + Local VLM as alternative to Unstructured
+- Test with sample documents
+- Compare quality, speed, and disk usage
+- Keep Unstructured as fallback during transition
+
+**Medium-term (After validation):**
+- Make Docling default processor
+- Add API VLM as optional "fast mode"
+- Let users choose processing method at upload
+- Remove Unstructured dependency
+
+**Long-term (Production):**
+- Use Local VLM for sensitive documents
+- Use API VLM for speed-critical documents
+- Hybrid routing based on document characteristics
+- Consider self-hosted VLM server for best of both worlds
+
+**Why this is valuable:**
+1. **Solves /tmp disk problem** - API VLM uses zero disk
+2. **3-4x faster processing** - Better user experience
+3. **Better quality** - VLMs understand document structure
+4. **Cost effective** - API VLM cheaper than larger Render instance
+5. **Future-proof** - VLM technology improving rapidly
+6. **Flexible** - Can choose local or API based on needs
+
+---
+
+### Resources
+
+- **Docling GitHub:** https://github.com/docling-project/docling
+- **Docling Docs:** https://docling-project.github.io/docling/
+- **GraniteDocling Model:** https://huggingface.co/ibm-granite/granite-docling-258M
+- **Benchmark Study:** https://procycons.com/en/blogs/pdf-data-extraction-benchmark/
+- **VLM Examples:** https://docling-project.github.io/docling/examples/
+
+---
+
 ## 📝 Notes
 
 - These patterns are proven in production but add complexity

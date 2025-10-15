@@ -1,7 +1,7 @@
 # Mosaic RAG Platform - Build Plan
 
 **Last Updated:** October 14, 2025  
-**Status:** Phase 1 Complete - Background Processing Active
+**Status:** Phase 1 & 2 Complete - Real-time Updates & Multiple File Upload Active
 
 ---
 
@@ -94,42 +94,37 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 
 ---
 
-## Phase 2: Real-Time Status Updates 🔄 IN PROGRESS
+## Phase 2: Real-Time Status Updates & UX Improvements ✅ COMPLETE
 
 ### Goals
 - Users see document status changes without refreshing
 - Live updates as documents move through processing pipeline
 - Better UX with instant feedback
+- Support multiple file uploads
 
-### Tasks
+### Completed Tasks
 
-#### 🔄 Supabase Realtime Integration
-- [ ] Subscribe to `documents` table changes
-- [ ] Update UI when status changes
-- [ ] Show processing progress indicators
-- [ ] Handle connection states (connecting, connected, error)
+#### ✅ Supabase Realtime Integration
+- [x] Subscribe to `documents` table changes
+- [x] Update UI when status changes (INSERT, UPDATE, DELETE)
+- [x] Show processing progress indicators with animated spinners
+- [x] Handle connection states
 
-#### 🔄 UI Enhancements
-- [ ] Add status badges with animations
-- [ ] Show "Processing..." spinner for active documents
-- [ ] Toast notifications for status changes
-- [ ] Optimistic updates for better perceived performance
+#### ✅ UI Enhancements
+- [x] Add status badges with animations (Uploading, Processing, Ready)
+- [x] Show "Processing..." spinner for active documents
+- [x] Toast notifications for status changes (upload start, complete, ready)
+- [x] Optimistic updates for instant feedback
+- [x] Non-blocking upload (modal closes immediately)
+- [x] Multiple file selection and parallel uploads
+- [x] Shared state management via DocumentsPageClient wrapper
 
-### Implementation Notes
-```typescript
-// Subscribe to document changes
-const subscription = supabase
-  .channel('documents')
-  .on('postgres_changes', {
-    event: 'UPDATE',
-    schema: 'public',
-    table: 'documents',
-    filter: `user_id=eq.${userId}`
-  }, (payload) => {
-    // Update UI with new status
-  })
-  .subscribe()
-```
+### Key Features Implemented
+- **Optimistic UI**: Files appear in table instantly with "Uploading" status
+- **Real-time updates**: Status changes reflected immediately via Supabase Realtime
+- **Multiple uploads**: Select and upload multiple files simultaneously
+- **Toast notifications**: Clear feedback at each stage
+- **Non-blocking**: Users can continue working while uploads happen
 
 ---
 
@@ -169,7 +164,24 @@ const subscription = supabase
 - [ ] Create indexes for efficient querying
 
 ### Technical Decisions
-- **Unstructured vs Docling**: Start with Unstructured (more mature), evaluate Docling for complex PDFs
+
+#### Text Extraction Strategy: Tiered Approach
+- **Tier 1 (Default): Unstructured.io OSS**
+  - Why: Mature, broad format support (20+ types), good for 80% of documents
+  - Use for: All initial document processing
+  - Features: OCR, table extraction, layout detection, spreadsheet handling
+  
+- **Tier 2 (Fallback for PDFs): Docling (IBM)**
+  - Why: Superior table extraction and layout analysis for complex PDFs
+  - Use when: Unstructured fails on tables or structured content from PDFs
+  - Best for: Academic papers, technical documents, multi-column layouts
+  
+- **Tier 3 (Fallback for Complex Cases): Multimodal LLM (GPT-4V/Claude 3 Vision)**
+  - Why: Extract from complex diagrams, images, or layouts that parsers fail on
+  - Use when: Both Unstructured and Docling fail on specific pages/documents
+  - Note: Most expensive option, use sparingly
+
+#### Other Decisions
 - **Chunking strategy**: Semantic chunking with overlap for better context preservation
 - **Chunk size**: 512 tokens (balance between context and precision)
 

@@ -1,0 +1,9 @@
+tesseract-ocr
+tesseract-ocr-eng
+libtesseract-dev
+poppler-utils
+libmagic1
+libxml2
+libxslt1-dev
+libpq-dev
+pandoc

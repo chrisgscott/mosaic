@@ -5,15 +5,7 @@ services:
     region: oregon
     plan: starter  # $7/mo - upgrade to standard ($25/mo) for better performance
     rootDir: apps/backend/ingest
-    buildCommand: |
-      apt-get update && apt-get install -y \
-        tesseract-ocr tesseract-ocr-eng libtesseract-dev \
-        poppler-utils \
-        libmagic1 \
-        libxml2 libxslt1-dev \
-        libpq-dev \
-        pandoc
-      pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: python main.py
     autoDeploy: true
     branch: main  # or your default branch

@@ -903,6 +903,215 @@ def cleanup_document_data(document_id):
 
 ---
 
+## ⚡ Parallel Document Processing
+
+### Concept
+Enable concurrent processing of multiple documents or parallel processing within a single document to improve throughput and reduce processing time.
+
+### Implementation Options
+
+#### **Option 1: Multiple Workers (Recommended for MVP)**
+
+**How It Works:**
+- Deploy 2-3 identical worker instances on Render
+- All workers poll the same pgmq queue
+- pgmq ensures each job is delivered to only one worker
+- Zero code changes required
+
+**Benefits:**
+- ✅ **Simple** - Just duplicate service configuration
+- ✅ **Fault tolerant** - If one worker crashes, others continue
+- ✅ **Easy scaling** - Add/remove workers anytime
+- ✅ **Proven pattern** - pgmq handles coordination automatically
+
+**Cost:**
+- 1 worker: $7/mo (baseline)
+- 2 workers: $14/mo (2x throughput)
+- 3 workers: $21/mo (3x throughput)
+
+**Implementation:**
+```yaml
+# render.yaml - Just duplicate the service
+services:
+  - type: worker
+    name: mosaic-document-processor-1
+    # ... same config
+  
+  - type: worker
+    name: mosaic-document-processor-2
+    # ... same config
+  
+  - type: worker
+    name: mosaic-document-processor-3
+    # ... same config
+```
+
+**When to Use:**
+- Multiple users uploading simultaneously
+- Need to process document backlog faster
+- Want simple horizontal scaling
+- Budget allows for additional workers
+
+---
+
+#### **Option 2: Multi-threaded Single Worker**
+
+**How It Works:**
+- Single worker with ThreadPoolExecutor
+- Polls queue for multiple jobs
+- Spawns threads to process N documents concurrently
+- Requires code changes
+
+**Benefits:**
+- ✅ More efficient resource usage per worker
+- ✅ Single worker to manage and monitor
+- ✅ Better CPU utilization
+
+**Drawbacks:**
+- ⚠️ Requires more RAM (2GB → 4GB recommended)
+- ⚠️ More complex error handling
+- ⚠️ Python GIL limitations (threading not true parallelism)
+- ⚠️ Code changes required
+
+**Implementation:**
+```python
+from concurrent.futures import ThreadPoolExecutor
+
+class DocumentProcessor:
+    def __init__(self):
+        self.executor = ThreadPoolExecutor(max_workers=3)
+    
+    def run(self):
+        while self.running:
+            # Poll for multiple jobs
+            jobs = self.poll_queue(batch_size=3)
+            
+            # Process in parallel
+            futures = [
+                self.executor.submit(self.process_document, job)
+                for job in jobs
+            ]
+            
+            # Wait for completion
+            for future in futures:
+                try:
+                    future.result()
+                except Exception as e:
+                    logger.error(f"Job failed: {e}")
+```
+
+**Cost:**
+- Requires Standard plan ($21/mo) for 4GB RAM
+- Single worker but processes 2-3x faster
+
+**When to Use:**
+- Want to maximize single worker efficiency
+- Have budget for larger instance
+- Documents are small-medium (< 50 pages)
+- Comfortable with code complexity
+
+---
+
+#### **Option 3: Parallel Page Processing (Advanced)**
+
+**How It Works:**
+- Break large documents into page ranges
+- Process pages in parallel within single document
+- Merge results back together
+
+**Benefits:**
+- ✅ Faster processing for large documents (100+ pages)
+- ✅ Better CPU utilization
+- ✅ Reduces single-document processing time
+
+**Drawbacks:**
+- ⚠️ **High complexity** - Difficult to implement correctly
+- ⚠️ Not all formats support page-range extraction
+- ⚠️ Chunk ordering becomes tricky
+- ⚠️ Metadata coordination required
+- ⚠️ May not provide significant speedup for most documents
+
+**Implementation:**
+```python
+def process_document_parallel(self, file_path):
+    # Split PDF into page ranges
+    total_pages = get_page_count(file_path)
+    page_ranges = [
+        (1, 33), (34, 66), (67, 100)
+    ]
+    
+    # Process each range in parallel
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        chunk_groups = executor.map(
+            lambda pages: self.extract_pages(file_path, pages),
+            page_ranges
+        )
+    
+    # Merge chunks (preserve order!)
+    all_chunks = []
+    for group in chunk_groups:
+        all_chunks.extend(group)
+    
+    return all_chunks
+```
+
+**When to Use:**
+- Processing 500+ page documents regularly
+- Single-document speed is critical bottleneck
+- Have engineering time for complexity
+- Documents are primarily PDFs (easier to split)
+
+---
+
+### Performance Comparison
+
+| Approach | Docs/min | Cost/mo | Complexity | Best For |
+|----------|----------|---------|------------|----------|
+| **1 Worker** | 1-2 | $7 | Simple ✅ | Low volume, testing |
+| **3 Workers** | 3-6 | $21 | Simple ✅ | Multiple users, production |
+| **Multi-threaded** | 2-4 | $21 | Medium | Single worker efficiency |
+| **Parallel Pages** | 1-3 (faster) | $21 | High ⚠️ | Large documents only |
+
+### Recommendation
+
+**Start with Option 1 (Multiple Workers):**
+1. Simplest to implement (just config change)
+2. Proven to work with pgmq
+3. Easy to scale up/down based on demand
+4. No code changes or testing required
+
+**Consider Option 2 later if:**
+- Want to optimize cost per document
+- Have consistent high volume
+- Comfortable with code complexity
+
+**Skip Option 3 unless:**
+- Processing massive documents (500+ pages) regularly
+- Single-document speed is critical
+- Have dedicated engineering resources
+
+### Implementation Notes
+
+**Multiple Workers:**
+- Each worker needs same environment variables
+- All connect to same database and queue
+- Render auto-restarts failed workers
+- Can mix worker sizes (1x Standard + 2x Starter)
+
+**Monitoring:**
+- Track which worker processed which document
+- Add worker_id to processing logs
+- Monitor queue depth to decide scaling
+- Set up alerts for worker failures
+
+**Future Enhancements:**
+- Auto-scaling based on queue depth
+- Priority queues for urgent documents
+- Worker specialization (PDFs vs spreadsheets)
+- Load balancing across regions
+
+---
+
 ## 📝 Notes
 
 - These patterns are proven in production but add complexity
@@ -913,4 +1122,4 @@ def cleanup_document_data(document_id):
 ---
 
 *Document created: 2025-10-15*
-*Last updated: 2025-10-15 (Added document management actions)*
+*Last updated: 2025-10-15 (Added parallel processing options)*

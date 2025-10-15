@@ -13,6 +13,8 @@ unstructured[pdf]==0.18.15
 unstructured[docx]==0.18.15
 unstructured[xlsx]==0.18.15
 unstructured[pptx]==0.18.15
+unstructured[csv]==0.18.15
+unstructured[md]==0.18.15
 
 # Text processing
 langchain-text-splitters==0.3.4

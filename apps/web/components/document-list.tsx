@@ -226,6 +226,50 @@ export function DocumentList({
     router.refresh();
   };
 
+  const handleBulkMakePublic = async () => {
+    if (selectedIds.size === 0) return;
+
+    setIsDeleting(true);
+
+    const togglePromises = Array.from(selectedIds).map(id => toggleDocumentPublic(id, true));
+    const results = await Promise.allSettled(togglePromises);
+
+    const successful = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+
+    if (failed === 0) {
+      toast.success(`Made ${successful} document${successful > 1 ? 's' : ''} public`);
+    } else {
+      toast.error(`Failed to update ${failed} document${failed > 1 ? 's' : ''}`);
+    }
+
+    setSelectedIds(new Set());
+    setIsDeleting(false);
+    router.refresh();
+  };
+
+  const handleBulkMakePrivate = async () => {
+    if (selectedIds.size === 0) return;
+
+    setIsDeleting(true);
+
+    const togglePromises = Array.from(selectedIds).map(id => toggleDocumentPublic(id, false));
+    const results = await Promise.allSettled(togglePromises);
+
+    const successful = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+
+    if (failed === 0) {
+      toast.success(`Made ${successful} document${successful > 1 ? 's' : ''} private`);
+    } else {
+      toast.error(`Failed to update ${failed} document${failed > 1 ? 's' : ''}`);
+    }
+
+    setSelectedIds(new Set());
+    setIsDeleting(false);
+    router.refresh();
+  };
+
   const toggleSelection = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -313,24 +357,66 @@ export function DocumentList({
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Your Documents</h2>
           {selectedIds.size > 0 && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleBulkDelete}
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
+            <div className="flex gap-2">
+              {isAdmin && (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <Trash className="mr-2 h-4 w-4" />
-                  Delete {selectedIds.size} {selectedIds.size === 1 ? 'Document' : 'Documents'}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleBulkMakePublic}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <Globe className="mr-2 h-4 w-4" />
+                        Make Public
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleBulkMakePrivate}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="mr-2 h-4 w-4" />
+                        Make Private
+                      </>
+                    )}
+                  </Button>
                 </>
               )}
-            </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleBulkDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash className="mr-2 h-4 w-4" />
+                    Delete {selectedIds.size}
+                  </>
+                )}
+              </Button>
+            </div>
           )}
         </div>
         <Table>

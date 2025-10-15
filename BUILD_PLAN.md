@@ -1,7 +1,7 @@
 # Mosaic RAG Platform - Build Plan
 
-**Last Updated:** October 14, 2025  
-**Status:** Phase 1 & 2 Complete - Real-time Updates & Multiple File Upload Active
+**Last Updated:** October 15, 2025  
+**Status:** Phase 1-3 & 7 Complete - Full document processing pipeline with rich metadata + document details page live
 
 ---
 
@@ -128,7 +128,7 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 
 ---
 
-## Phase 3: Document Processing Pipeline
+## Phase 3: Document Processing Pipeline ✅ COMPLETE
 
 ### Goals
 - Extract text from various document formats
@@ -151,13 +151,18 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - [ ] Add Docling as Tier 2 fallback (future)
 
 #### ✂️ Text Chunking
-- [x] Implement semantic chunking (sentence boundaries)
-- [x] Implement fixed-size chunking with overlap
-- [x] Implement recursive chunking for long documents
-- [x] Add metadata to chunks (page numbers, section headers)
-- [x] Configurable chunk size (default: 512 tokens)
-- [x] Configurable overlap (default: 50 tokens)
+- [x] Implement Unstructured by_title chunking strategy
+- [x] Respect section boundaries (never split titles)
+- [x] Configurable chunk size (1200 char soft max, 2000 char hard max)
+- [x] Configurable overlap (100 characters)
 - [x] Token counting with tiktoken
+- [x] Extract comprehensive metadata:
+  - Page numbers for citations
+  - Element types (Title, NarrativeText, Table, etc.)
+  - Table HTML for structured data
+  - PDF coordinates for deep linking
+  - File metadata (source, last modified)
+  - Links from HTML/web documents
 
 #### 🗄️ Chunks Database
 - [x] Create `chunks` table migration
@@ -189,33 +194,46 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
   - Note: Most expensive option, use sparingly
 
 #### Service Architecture
-- **Background Worker**: Python service deployed on Render.com
+- **Background Worker**: Python service deployed on Render.com (2GB RAM, $21/mo)
 - **Queue**: pgmq (Postgres-based message queue)
 - **Processing Flow**:
-  1. Edge Function adds job to pgmq queue
+  1. Server action adds job to pgmq queue
   2. Python worker polls queue every 5 seconds
   3. Downloads file from Supabase Storage
-  4. Extracts text with Unstructured
-  5. Chunks text with LangChain RecursiveCharacterTextSplitter
-  6. Stores chunks in Postgres
-  7. Updates document status
-  8. Real-time UI update via Supabase Realtime
+  4. Extracts elements with Unstructured (strategy="auto", page breaks, table structure)
+  5. Chunks elements with Unstructured by_title strategy
+  6. Extracts comprehensive metadata (pages, coordinates, tables, links)
+  7. Stores chunks in Postgres
+  8. Updates document status
+  9. Real-time UI update via Supabase Realtime
+  10. Orphaned job cleanup (deletes jobs for deleted documents)
 
 #### Other Decisions
-- **Chunking strategy**: Semantic chunking with overlap for better context preservation
-- **Chunk size**: 512 tokens (balance between context and precision)
-- **Deployment**: Render.com Background Worker ($7/mo starter plan)
+- **Chunking strategy**: by_title (respects section boundaries, never splits titles)
+- **Chunk size**: 1200 char soft max, 2000 char hard max (balance context and precision)
+- **Overlap**: 100 characters between chunks
+- **Deployment**: Render.com Background Worker with 2GB RAM for "auto" strategy
+- **File types**: PDF, DOC, DOCX, TXT, MD, HTML, XML, CSV, XLSX, PPTX
 
 ---
 
 ## Phase 4: Vector Embeddings & Semantic Search
 
 ### Goals
-- Generate embeddings for all text chunks
+- Generate embeddings for all text chunks (or summaries)
 - Enable semantic search across documents
 - Implement efficient vector similarity search
+- Optional: LLM-enhanced chunk summaries for better retrieval
 
 ### Tasks
+
+#### 📝 Chunk Summaries (Optional Enhancement)
+- [ ] Add `chunk_summary` column to chunks table
+- [ ] Generate context-aware summaries with GPT-4o Mini
+- [ ] Include surrounding chunk context when summarizing
+- [ ] Store both original content and summary
+- [ ] Backfill summaries for existing chunks
+- [ ] Decide: Embed summaries vs original content
 
 #### 🧮 Embeddings Generation
 - [ ] Setup pgvector extension (already installed)
@@ -224,7 +242,7 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
   - `embedding` (vector(1536) for OpenAI)
   - `model`, `created_at`
 - [ ] Integrate OpenAI Embeddings API (or alternatives)
-- [ ] Generate embeddings for all chunks
+- [ ] Generate embeddings for all chunks (or summaries)
 - [ ] Store embeddings with chunk references
 - [ ] Add HNSW index for fast similarity search
 
@@ -338,7 +356,342 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 
 ---
 
-## Phase 7: Polish & Production Readiness
+## Phase 7: Document Details & Management
+
+### Goals
+- Create detailed document view page
+- Enable document inspection and debugging
+- Provide access to chunks and metadata
+- Support future embeddings and graph visualization
+
+### Tasks
+
+#### 📄 Document Details Page (`/documents/[id]`)
+- [ ] Create dynamic route for document details
+- [ ] Implement document details page layout
+- [ ] Add breadcrumb navigation (Documents → [Document Name])
+
+#### 📊 Core Overview Section
+- [ ] Display document header
+  - File name, upload timestamp, owner (if multi-user)
+  - Current status with badge (uploaded/processing/ready/error)
+- [ ] Show quick stats cards
+  - File size, page count (if available)
+  - Total chunk count, total tokens
+  - Last processed timestamp, processing duration
+
+#### 🗂️ Metadata & Context Section
+- [ ] Display source metadata
+  - Storage path, MIME type
+  - File hash/checksum (if tracked)
+  - Processing duration, retry count
+- [ ] Show processing timeline
+  - Ordered log of status transitions
+  - Timestamps for each state change
+  - Helpful for debugging ingestion issues
+
+#### ✂️ Chunks Section
+- [ ] Create chunks table/list view
+  - Chunk index, text preview (first 100 chars)
+  - Token count, embedding status (Phase 4)
+- [ ] Add chunk search/filter
+  - Search within chunks
+  - Filter by token count range
+- [ ] Implement chunk drilldown
+  - Side panel or modal for full chunk text
+  - Display chunk metadata (level, entities, etc.)
+  - Show embedding status and vector (Phase 4)
+
+#### 📥 Original Asset Access
+- [ ] Add download button
+  - Generate signed URL from Supabase Storage
+  - Direct download of original file
+- [ ] Optional: Inline viewer
+  - PDF viewer for PDFs (if lightweight)
+  - Markdown preview for .md files
+  - Text display for .txt files
+  - Keep simple, fallback to download for complex formats
+
+#### 🔮 Future-Ready Sections (Placeholders)
+- [ ] Embeddings status section
+  - Show if embeddings generated
+  - Display embedding model used
+  - Link to vector visualization (future)
+- [ ] Knowledge graph section
+  - Display entities extracted from document
+  - Show relationships tied to this document
+  - Link to graph view (Phase 5)
+- [ ] Audit log section
+  - Track delete/restore events
+  - Show reprocess history
+  - Compliance and debugging
+
+#### ⚡ Action Bar
+- [ ] Add action buttons
+  - Reprocess document (requeue)
+  - Delete document (with confirmation)
+  - Download original file
+  - Copy shareable link (future)
+- [ ] Add debug tools
+  - View worker logs filtered to this document
+  - Requeue for processing
+  - View raw metadata JSON
+
+### Technical Implementation
+
+#### Data Fetching
+```typescript
+// Server component for initial data
+async function DocumentDetailsPage({ params }: { params: { id: string } }) {
+  const document = await getDocument(params.id);
+  const chunks = await getDocumentChunks(params.id);
+  const timeline = await getProcessingTimeline(params.id);
+  
+  return <DocumentDetailsView document={document} chunks={chunks} timeline={timeline} />;
+}
+```
+
+#### Component Structure
+```
+/documents/[id]/
+├── page.tsx                    # Server component (data fetching)
+├── components/
+│   ├── document-header.tsx     # Title, status, stats
+│   ├── metadata-section.tsx    # Source info, timeline
+│   ├── chunks-table.tsx        # Chunk list with search
+│   ├── chunk-detail-panel.tsx  # Full chunk view
+│   ├── action-bar.tsx          # Buttons and actions
+│   └── processing-timeline.tsx # Status history
+```
+
+#### Database Queries
+```sql
+-- Get document with stats
+SELECT 
+  d.*,
+  COUNT(c.id) as chunk_count,
+  SUM(c.token_count) as total_tokens
+FROM documents d
+LEFT JOIN chunks c ON c.document_id = d.id
+WHERE d.id = $1
+GROUP BY d.id;
+
+-- Get chunks for document
+SELECT id, chunk_index, content, token_count, metadata
+FROM chunks
+WHERE document_id = $1
+ORDER BY chunk_index;
+
+-- Get processing timeline (future: add status_history table)
+SELECT status, created_at, updated_at
+FROM documents
+WHERE id = $1;
+```
+
+### UI/UX Considerations
+- **Progressive disclosure**: Start with overview, expand for details
+- **Performance**: Paginate chunks if document has >100 chunks
+- **Mobile responsive**: Stack sections vertically on mobile
+- **Loading states**: Show skeletons while fetching data
+- **Error states**: Handle missing documents gracefully
+
+### Phase Rollout
+1. **Phase 7.1**: Core overview + metadata + download ✅
+2. **Phase 7.2**: Chunks table + search + drilldown ✅
+3. **Phase 7.3**: Processing timeline + action bar
+4. **Phase 7.4**: Embeddings section (after Phase 4)
+5. **Phase 7.5**: Knowledge graph section (after Phase 5)
+
+---
+
+## Phase 7.5: Document Management Actions
+
+### Goals
+- Provide advanced lifecycle actions beyond delete
+- Maintain data integrity across chunks/embeddings/graph
+- Enable bulk operations with auditability
+
+### Tasks
+
+#### 🗄️ Archive & Restore
+- [ ] Add `archived` boolean + `archived_at` timestamp to `documents` table
+- [ ] Exclude archived docs from default queries and search
+- [ ] Add "Archive" / "Restore" UI actions in document list and details
+- [ ] Visual indicator for archived documents (grayed out, archive icon)
+
+#### 🔁 Reprocess Document
+- [ ] Add "Reprocess" action to document dropdown
+- [ ] Confirmation dialog explaining data deletion
+- [ ] Delete existing chunks, embeddings, entities, relationships
+- [ ] Re-download file from storage
+- [ ] Re-run full processing pipeline
+- [ ] Maintain document ID and metadata (created_at, user_id)
+- [ ] Update `updated_at` timestamp
+- [ ] Handle edge cases (missing file, changed settings)
+
+#### 📝 Replace File
+- [ ] Add "Replace" action with file upload dialog
+- [ ] Upload new file to storage
+- [ ] Delete old file from storage
+- [ ] Clean up all derived data
+- [ ] Update document metadata (file_size, file_type, file_path)
+- [ ] Optional: Track version history in `document_versions` table
+- [ ] Rollback mechanism if replacement fails
+
+#### 📄 Duplicate Document
+- [ ] Add "Duplicate" action to dropdown
+- [ ] Option: "Copy as-is" (fast) or "Reprocess with settings" (flexible)
+- [ ] Create new document record with new ID
+- [ ] Copy or reference file in storage
+- [ ] Append "(Copy)" to file_name
+- [ ] Navigate to new document after duplication
+
+#### 📦 Batch Operations
+- [ ] Extend bulk delete to support other actions
+- [ ] Multi-select with action dropdown (Archive, Reprocess, Delete)
+- [ ] Progress modal: "Processing 5 of 10 documents..."
+- [ ] Summary of results: "8 succeeded, 2 failed"
+- [ ] Ability to cancel in-progress batch operation
+- [ ] Queue-based processing with rate limiting
+
+#### 📊 Processing Audit Log
+- [ ] Create `document_processing_log` table
+- [ ] Track actions: upload, reprocess, replace, archive
+- [ ] Store status: started, completed, failed
+- [ ] Record error messages and performer
+- [ ] Display processing history in document details
+
+### Database Schema
+```sql
+-- Archive support
+ALTER TABLE documents ADD COLUMN archived BOOLEAN DEFAULT FALSE;
+ALTER TABLE documents ADD COLUMN archived_at TIMESTAMPTZ;
+
+-- Version tracking (optional)
+CREATE TABLE document_versions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+  version_number INTEGER NOT NULL,
+  file_path TEXT NOT NULL,
+  file_size INTEGER NOT NULL,
+  replaced_at TIMESTAMPTZ DEFAULT NOW(),
+  replaced_by UUID REFERENCES auth.users(id)
+);
+
+-- Audit log
+CREATE TABLE document_processing_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+  action TEXT NOT NULL,
+  status TEXT NOT NULL,
+  error_message TEXT,
+  performed_by UUID REFERENCES auth.users(id),
+  performed_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### Priority
+- **High Priority**: Archive/Unarchive, Processing Log
+- **Medium Priority**: Reprocess, Batch Operations
+- **Lower Priority**: Replace (with versioning), Duplicate
+
+---
+
+## Phase 8: Collaborative Annotations & Comments
+
+### Goals
+- Enable inline discussions on document chunks
+- Support @mentions, threading, and status tracking
+- Integrate with search, graph, and analytics
+
+### Tasks
+
+#### ✍️ Core Annotation System
+- [ ] Create `annotations` table (chunk-based anchoring)
+- [ ] Text selection with character offsets
+- [ ] Comment creation with rich text editor
+- [ ] Threading support (parent_annotation_id, thread_position)
+- [ ] Status management (open, resolved, archived)
+- [ ] RLS policies for access control
+
+#### 👥 Collaboration Features
+- [ ] @mention functionality with autocomplete
+- [ ] Create `annotation_mentions` table
+- [ ] User notifications (email + in-app)
+- [ ] Reply to existing annotations
+- [ ] Show reply count and collapse/expand threads
+
+#### 🔔 Realtime Collaboration
+- [ ] Supabase Realtime channels for annotations
+- [ ] Live updates when new comments added
+- [ ] Presence indicators (who's viewing)
+- [ ] Typing indicators for replies
+- [ ] Toast notifications for @mentions
+
+#### 🎨 UI Components
+- [ ] Inline highlights for annotated text
+- [ ] Annotation sidebar with filters
+- [ ] Comment cards with user avatars
+- [ ] Jump to chunk when clicking comment
+- [ ] Annotation count badges
+
+#### 🔐 Permissions & Sharing
+- [ ] Create `document_collaborators` table
+- [ ] Permission levels: view, comment, edit
+- [ ] Invite users to collaborate
+- [ ] RLS policies for annotations
+
+#### 📚 Integration
+- [ ] Link annotations to entities (Phase 5)
+- [ ] Include annotations in search index (Phase 4)
+- [ ] Export comments to PDF/CSV
+- [ ] Annotation analytics dashboard
+
+### Database Schema
+```sql
+CREATE TABLE annotations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+  chunk_id UUID REFERENCES chunks(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id),
+  selected_text TEXT NOT NULL,
+  chunk_start_offset INTEGER,
+  chunk_end_offset INTEGER,
+  comment_text TEXT NOT NULL,
+  status TEXT DEFAULT 'open',
+  parent_annotation_id UUID REFERENCES annotations(id),
+  thread_position INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE annotation_mentions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  annotation_id UUID REFERENCES annotations(id) ON DELETE CASCADE,
+  mentioned_user_id UUID REFERENCES auth.users(id),
+  notified BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE document_collaborators (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id),
+  permission_level TEXT NOT NULL,
+  invited_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### Implementation Phases
+1. **Phase 8.1**: Basic annotations (text selection, simple comments)
+2. **Phase 8.2**: Collaboration (@mentions, threading, notifications)
+3. **Phase 8.3**: Advanced features (realtime, rich text, presence)
+4. **Phase 8.4**: Polish (search, export, analytics)
+
+---
+
+## Phase 9: Polish & Production Readiness
 
 ### Goals
 - Improve user experience
@@ -348,11 +701,9 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 ### Tasks
 
 #### 🎨 UX Improvements
-- [ ] Add multiple file upload support
-- [ ] Implement drag-and-drop for multiple files
-- [ ] Show upload queue with progress for each file
-- [ ] Add document download functionality
-- [ ] Implement document preview
+- [x] Add multiple file upload support
+- [x] Implement drag-and-drop for multiple files
+- [x] Show upload queue with progress for each file
 - [ ] Add document sharing capabilities
 
 #### 🔧 Error Handling & Reliability

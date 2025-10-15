@@ -93,14 +93,15 @@ class TextChunker:
                 chunk_text = str(chunk)
                 token_count = self._token_length(chunk_text)
                 
-                # Extract metadata from original elements if available
+                # Extract metadata from original elements for citations and deep linking
                 chunk_metadata = metadata.copy() if metadata else {}
                 if hasattr(chunk, 'metadata') and hasattr(chunk.metadata, 'orig_elements'):
-                    # Store info about original elements
                     orig_elements = chunk.metadata.orig_elements
                     if orig_elements:
+                        # Basic element info
                         chunk_metadata['element_count'] = len(orig_elements)
-                        # Get page numbers if available
+                        
+                        # Page numbers for citations
                         page_numbers = {
                             e.metadata.page_number 
                             for e in orig_elements 
@@ -108,6 +109,55 @@ class TextChunker:
                         }
                         if page_numbers:
                             chunk_metadata['page_numbers'] = sorted(list(page_numbers))
+                        
+                        # Element types (Title, NarrativeText, Table, etc.)
+                        element_types = [type(e).__name__ for e in orig_elements]
+                        chunk_metadata['element_types'] = list(set(element_types))
+                        
+                        # Check if chunk contains tables (for special handling)
+                        has_table = any(t in element_types for t in ['Table', 'TableChunk'])
+                        if has_table:
+                            chunk_metadata['contains_table'] = True
+                            # Extract table HTML if available
+                            for e in orig_elements:
+                                if hasattr(e, 'metadata') and hasattr(e.metadata, 'text_as_html'):
+                                    if e.metadata.text_as_html:
+                                        chunk_metadata['table_html'] = e.metadata.text_as_html
+                                        break
+                        
+                        # Coordinates for PDF deep linking (if available)
+                        # This enables linking directly to the position in the PDF
+                        coordinates = []
+                        for e in orig_elements:
+                            if hasattr(e, 'metadata') and hasattr(e.metadata, 'coordinates'):
+                                coords = e.metadata.coordinates
+                                if coords:
+                                    coordinates.append({
+                                        'page': getattr(e.metadata, 'page_number', None),
+                                        'x': coords.points[0][0] if coords.points else None,
+                                        'y': coords.points[0][1] if coords.points else None,
+                                    })
+                        if coordinates:
+                            chunk_metadata['coordinates'] = coordinates[:1]  # Store first element's coords
+                        
+                        # File metadata (author, creation date, etc.) from first element
+                        first_elem = orig_elements[0]
+                        if hasattr(first_elem, 'metadata'):
+                            if hasattr(first_elem.metadata, 'filename'):
+                                chunk_metadata['source_filename'] = first_elem.metadata.filename
+                            if hasattr(first_elem.metadata, 'file_directory'):
+                                chunk_metadata['source_directory'] = first_elem.metadata.file_directory
+                            if hasattr(first_elem.metadata, 'last_modified'):
+                                chunk_metadata['file_last_modified'] = str(first_elem.metadata.last_modified)
+                        
+                        # Links for HTML/web documents
+                        links = []
+                        for e in orig_elements:
+                            if hasattr(e, 'metadata') and hasattr(e.metadata, 'links'):
+                                if e.metadata.links:
+                                    links.extend(e.metadata.links)
+                        if links:
+                            chunk_metadata['links'] = links[:10]  # Store up to 10 links
                 
                 chunk_record = {
                     "document_id": document_id,

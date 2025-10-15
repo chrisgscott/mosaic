@@ -34,6 +34,9 @@ type Document = {
   status: string;
   created_at: string;
   is_public?: boolean;
+  error_message?: string;
+  retry_count?: number;
+  last_error_at?: string;
 };
 
 const getFileIcon = (fileName: string) => {
@@ -306,7 +309,7 @@ export function DocumentList({
     });
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, doc?: Document) => {
     switch (status) {
       case "uploading":
         return (
@@ -327,7 +330,12 @@ export function DocumentList({
       case "ready":
         return <Badge variant="outline" className="border-green-500 text-green-700">Ready</Badge>;
       case "error":
-        return <Badge variant="destructive">Error</Badge>;
+        const retryInfo = doc?.retry_count ? ` (${doc.retry_count}/3)` : '';
+        return (
+          <Badge variant="destructive" title={doc?.error_message || 'Processing failed'}>
+            Error{retryInfo}
+          </Badge>
+        );
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -468,7 +476,7 @@ export function DocumentList({
                 <TableCell className="text-muted-foreground">
                   {formatFileSize(doc.file_size)}
                 </TableCell>
-                <TableCell>{getStatusBadge(doc.status)}</TableCell>
+                <TableCell>{getStatusBadge(doc.status, doc)}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {formatDate(doc.created_at)}
                 </TableCell>

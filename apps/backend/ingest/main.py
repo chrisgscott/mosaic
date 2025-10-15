@@ -104,13 +104,25 @@ class DocumentWorker:
         except Exception as e:
             logger.error(f"Error deleting message {msg_id}: {e}")
     
-    def update_document_status(self, document_id: str, status: str):
-        """Update document status in the database."""
+    def update_document_status(self, document_id: str, status: str, error_message: str = None, retry_count: int = None):
+        """Update document status in database."""
         try:
-            supabase.table("documents").update({"status": status}).eq("id", document_id).execute()
+            update_data = {
+                "status": status,
+                "updated_at": "now()"
+            }
+            
+            if error_message is not None:
+                update_data["error_message"] = error_message
+                update_data["last_error_at"] = "now()"
+            
+            if retry_count is not None:
+                update_data["retry_count"] = retry_count
+            
+            supabase.table("documents").update(update_data).eq("id", document_id).execute()
             logger.info(f"Updated document {document_id} status to {status}")
         except Exception as e:
-            logger.error(f"Error updating document status: {e}")
+            logger.error(f"Failed to update document status: {e}")
     
     def process_document(self, job: Dict[str, Any]) -> tuple[bool, bool]:
         """
@@ -129,7 +141,12 @@ class DocumentWorker:
         # Check if we've exceeded max retries
         if read_ct >= MAX_RETRIES:
             logger.error(f"Document {document_id} exceeded max retries ({MAX_RETRIES}), giving up")
-            self.update_document_status(document_id, "error")
+            self.update_document_status(
+                document_id, 
+                "error", 
+                error_message=f"Processing failed after {MAX_RETRIES} attempts",
+                retry_count=read_ct
+            )
             return (False, True)  # Delete from queue, stop retrying
         
         try:
@@ -175,8 +192,14 @@ class DocumentWorker:
             
         except Exception as e:
             attempt_num = read_ct + 1
-            logger.error(f"Error processing document {document_id} (attempt {attempt_num}/{MAX_RETRIES}): {e}")
-            self.update_document_status(document_id, "error")
+            error_msg = str(e)
+            logger.error(f"Error processing document {document_id} (attempt {attempt_num}/{MAX_RETRIES}): {error_msg}")
+            self.update_document_status(
+                document_id, 
+                "error",
+                error_message=error_msg,
+                retry_count=attempt_num
+            )
             # Retry on general errors - will be retried up to MAX_RETRIES times
             return (False, False)
     

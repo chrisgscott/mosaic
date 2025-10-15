@@ -152,7 +152,7 @@ class DocumentWorker:
             
             # Chunk the elements using by_title strategy
             logger.info("Chunking elements (respecting section boundaries)")
-            chunks = chunker.chunk_elements(elements, document_id, user_id)
+            chunks = chunker.chunk_elements(elements, document_id, user_id, storage_path=file_path)
             
             logger.info(f"Created {len(chunks)} chunks")
             

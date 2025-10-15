@@ -55,7 +55,8 @@ class TextChunker:
         elements: List[Any],
         document_id: str,
         user_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        storage_path: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Chunk document elements using Unstructured's by_title strategy.
@@ -67,6 +68,7 @@ class TextChunker:
             document_id: ID of the source document
             user_id: Optional user ID for the document
             metadata: Optional metadata to attach to chunks
+            storage_path: Actual storage path (e.g., 'user_id/filename.pdf') to override temp file metadata
             
         Returns:
             List of chunk dictionaries ready for database insertion
@@ -140,13 +142,24 @@ class TextChunker:
                         if coordinates:
                             chunk_metadata['coordinates'] = coordinates[:1]  # Store first element's coords
                         
-                        # File metadata (author, creation date, etc.) from first element
+                        # File metadata from storage path or fallback to element metadata
+                        if storage_path:
+                            # Use actual Supabase Storage path
+                            import os
+                            chunk_metadata['source_filename'] = os.path.basename(storage_path)
+                            chunk_metadata['source_directory'] = os.path.dirname(storage_path)
+                        else:
+                            # Fallback to element metadata (temp file paths)
+                            first_elem = orig_elements[0]
+                            if hasattr(first_elem, 'metadata'):
+                                if hasattr(first_elem.metadata, 'filename'):
+                                    chunk_metadata['source_filename'] = first_elem.metadata.filename
+                                if hasattr(first_elem.metadata, 'file_directory'):
+                                    chunk_metadata['source_directory'] = first_elem.metadata.file_directory
+                        
+                        # Last modified date from element metadata
                         first_elem = orig_elements[0]
                         if hasattr(first_elem, 'metadata'):
-                            if hasattr(first_elem.metadata, 'filename'):
-                                chunk_metadata['source_filename'] = first_elem.metadata.filename
-                            if hasattr(first_elem.metadata, 'file_directory'):
-                                chunk_metadata['source_directory'] = first_elem.metadata.file_directory
                             if hasattr(first_elem.metadata, 'last_modified'):
                                 chunk_metadata['file_last_modified'] = str(first_elem.metadata.last_modified)
                         

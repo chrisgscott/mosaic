@@ -8,6 +8,7 @@ import logging
 import tempfile
 import os
 import shutil
+from io import BytesIO
 from typing import Optional, List, Any
 from unstructured.partition.auto import partition
 
@@ -43,21 +44,24 @@ class UnstructuredProcessor:
             logger.warning(f"Unsupported file type: {ext}")
             return None
         
-        # Write to temporary file (Unstructured needs a file path)
-        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp_file:
-            tmp_file.write(file_data)
-            tmp_path = tmp_file.name
-        
         try:
             logger.info(f"Processing file with extension {ext}")
             logger.info(f"File size: {len(file_data)} bytes")
             
+            # Process directly from memory (no /tmp usage!)
+            # Create a file-like object from bytes
+            file_obj = BytesIO(file_data)
+            
+            # Add filename hint for Unstructured to detect file type
+            # Some parsers need the extension
+            file_obj.name = f"document{ext}"
+            
             # Use Unstructured to partition the document
-            # partition() automatically detects the file type and uses the appropriate parser
-            logger.info("Starting partition() call...")
+            # partition() can read from file-like objects
+            logger.info("Starting partition() call (memory-based)...")
             elements = partition(
-                filename=tmp_path,
-                strategy="auto",  # Auto-select best strategy (we have 2GB RAM now)
+                file=file_obj,
+                strategy="auto",  # Auto-select best strategy (we have 2GB RAM)
                 include_page_breaks=True,  # Track page boundaries for citations
                 infer_table_structure=True,  # Extract tables as structured HTML
             )
@@ -73,14 +77,8 @@ class UnstructuredProcessor:
             return None
             
         finally:
-            # Clean up temp file
-            try:
-                os.unlink(tmp_path)
-            except Exception as e:
-                logger.warning(f"Could not delete temp file {tmp_path}: {e}")
-            
             # Clean up any Unstructured temp directories
-            # Unstructured creates temp dirs for image extraction, etc.
+            # Unstructured may still create temp dirs for image extraction
             self.cleanup_temp_dirs()
     
     def extract_with_metadata(self, file_data: bytes, file_path: str) -> Optional[dict]:

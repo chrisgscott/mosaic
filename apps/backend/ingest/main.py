@@ -161,6 +161,10 @@ class DocumentWorker:
             # Update status to processing
             self.update_document_status(document_id, "processing")
             
+            # Clean up temp directories BEFORE downloading to ensure max available space
+            logger.info("Cleaning up temp directories before processing")
+            processor.cleanup_temp_dirs()
+            
             # Download file from Supabase Storage
             logger.info(f"Downloading file from storage: {file_path}")
             file_data = supabase.storage.from_("documents").download(file_path)

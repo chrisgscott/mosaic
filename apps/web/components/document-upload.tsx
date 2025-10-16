@@ -271,10 +271,13 @@ export function DocumentUpload({ onUploadStart }: { onUploadStart?: (file: File)
             <div className="space-y-4">
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {files.map((file, index) => (
-                  <div key={index} className="flex items-center gap-3 p-3 border rounded-lg overflow-hidden">
+                  <div key={index} className="flex items-center gap-3 p-3 border rounded-lg">
                     <FileText className="h-6 w-6 text-muted-foreground flex-shrink-0" />
-                    <div className="flex-1 min-w-0 overflow-hidden">
-                      <p className="text-sm font-medium truncate" title={file.name}>
+                    <div className="flex-1 min-w-0">
+                      <p 
+                        className="text-sm font-medium overflow-hidden text-ellipsis whitespace-nowrap" 
+                        title={file.name}
+                      >
                         {file.name}
                       </p>
                       <p className="text-xs text-muted-foreground">

@@ -225,7 +225,7 @@ export function DocumentUpload({ onUploadStart }: { onUploadStart?: (file: File)
           Upload Document
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[525px]">
+      <DialogContent className="max-w-[525px]">
         <DialogHeader>
           <DialogTitle>Upload Document</DialogTitle>
           <DialogDescription>

@@ -6,12 +6,13 @@ This document captures advanced RAG patterns and optimizations that could be app
 
 ---
 
-## 🐛 Frontend Chunk Display Limit Issue
+## 🐛 Frontend Display Issues
 
-### Problem
-The document details page shows "Chunks (1000)" even when documents have more chunks (e.g., 1972 chunks). The query includes `.limit(10000)` but Next.js appears to be caching or the limit isn't being applied correctly.
+### 1. Chunk Display Limit Issue
 
-### Current Implementation
+**Problem:** The document details page shows "Chunks (1000)" even when documents have more chunks (e.g., 1972 chunks). The query includes `.limit(10000)` but Next.js appears to be caching or the limit isn't being applied correctly.
+
+**Current Implementation:**
 ```typescript
 // apps/web/app/(app)/documents/[id]/page.tsx
 const { data: chunks } = await supabase
@@ -22,25 +23,79 @@ const { data: chunks } = await supabase
   .limit(10000); // Added but still showing 1000
 ```
 
-### Investigation Needed
+**Investigation Needed:**
 - Verify Supabase query is actually using the limit parameter
 - Check if there's a separate Supabase configuration limiting results
 - Investigate Next.js caching behavior (tried clearing `.next` cache)
 - Consider if there's a PostgREST limit configuration
 
-### Workaround Considerations
+**Workaround Considerations:**
 Since users don't typically need to view all 1000+ chunks:
 - Could paginate the chunks table (load 100 at a time)
 - Could show accurate count without loading all chunks
 - Could use a separate count query: `select count(*) from chunks where document_id = ?`
 
-### Priority
-Low - The chunks are all stored correctly in the database (verified via logs showing 1972 chunks inserted successfully). This is purely a display issue that doesn't affect functionality. Users can still search and retrieve from all chunks.
+**Priority:** Low - The chunks are all stored correctly in the database (verified via logs showing 1972 chunks inserted successfully). This is purely a display issue that doesn't affect functionality. Users can still search and retrieve from all chunks.
 
-### Next Steps
-1. Test with a separate count query to verify total chunk count
-2. Implement pagination if displaying 1000+ chunks becomes necessary
-3. Research Supabase/PostgREST default limits and configuration options
+---
+
+### 2. Upload Modal Filename Truncation Not Working
+
+**Problem:** Long filenames in the upload modal overflow their container instead of truncating with ellipsis, despite having the correct CSS classes applied (`overflow-hidden text-ellipsis whitespace-nowrap`).
+
+**Current Implementation:**
+```tsx
+// apps/web/components/document-upload.tsx
+<div className="flex items-center gap-3 p-3 border rounded-lg">
+  <FileText className="h-6 w-6 text-muted-foreground flex-shrink-0" />
+  <div className="flex-1 min-w-0">
+    <p className="text-sm font-medium overflow-hidden text-ellipsis whitespace-nowrap" title={file.name}>
+      {file.name}
+    </p>
+    <p className="text-xs text-muted-foreground">
+      {(file.size / 1024 / 1024).toFixed(2)} MB
+    </p>
+  </div>
+  {/* ... */}
+</div>
+```
+
+**Attempted Fixes (None Worked):**
+1. Added `truncate` class (Tailwind utility)
+2. Added `overflow-hidden` to parent containers
+3. Replaced `truncate` with explicit classes: `overflow-hidden text-ellipsis whitespace-nowrap`
+4. Changed dialog from `sm:max-w-[525px]` to `max-w-[525px]`
+5. Cleared Next.js cache (`.next` directory)
+6. Cleared Turbopack cache (`node_modules/.cache`)
+7. Restarted dev server multiple times
+8. Tested in incognito window
+9. Hard refresh with dev tools open
+10. Verified CSS classes are present in browser inspector
+
+**Symptoms:**
+- CSS classes are correctly applied (visible in browser inspector)
+- Text still overflows the container
+- Happens even in fresh incognito window after cache clearing
+- Dev server shows file compiling correctly
+
+**Investigation Needed:**
+- Check if there's a conflicting CSS rule from shadcn/ui Dialog component
+- Inspect computed styles in browser to see what's overriding truncation
+- Test if the issue is specific to the Dialog component's rendering
+- Consider if there's a z-index or positioning issue preventing proper layout
+- Check if Tailwind CSS is properly configured/built
+- Verify that the text element has an actual width constraint from its parent
+
+**Possible Root Causes:**
+1. Dialog component CSS might be overriding the truncation behavior
+2. Flexbox layout might not be constraining the text element properly
+3. There might be a CSS specificity issue
+4. The parent container chain might be missing a critical width constraint
+5. Tailwind CSS might not be generating the correct classes
+
+**Priority:** Low - Cosmetic issue only. Filenames are still readable and the tooltip (title attribute) shows the full name on hover.
+
+**Workaround:** Could manually truncate filename in JavaScript before rendering, but this doesn't solve the underlying CSS issue.
 
 ---
 

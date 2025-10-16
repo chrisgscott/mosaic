@@ -73,6 +73,7 @@ export function DocumentUpload({ onUploadStart }: { onUploadStart?: (file: File)
       });
 
     if (uploadError) {
+      console.error('Storage upload error:', uploadError);
       throw new Error(`Upload failed for ${file.name}: ${uploadError.message}`);
     }
 
@@ -85,6 +86,7 @@ export function DocumentUpload({ onUploadStart }: { onUploadStart?: (file: File)
     });
 
     if (result.error) {
+      console.error('Database record creation error:', result.error);
       // Clean up uploaded file if DB insert fails
       await supabase.storage.from("documents").remove([uploadData.path]);
       throw new Error(`Database error for ${file.name}: ${result.error}`);
@@ -173,6 +175,13 @@ export function DocumentUpload({ onUploadStart }: { onUploadStart?: (file: File)
       const successful = results.filter((r) => r.status === "fulfilled").length;
       const failed = results.filter((r) => r.status === "rejected").length;
 
+      // Log any failures
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          console.error(`Upload failed for ${filesToUpload[index].name}:`, result.reason);
+        }
+      });
+
       // Show result toast
       if (failed === 0) {
         toast.success(
@@ -191,7 +200,8 @@ export function DocumentUpload({ onUploadStart }: { onUploadStart?: (file: File)
 
       setUploading(false);
       router.refresh();
-    } catch {
+    } catch (error) {
+      console.error('Unexpected error during upload:', error);
       toast.error("An unexpected error occurred");
       setUploading(false);
     }

@@ -46,13 +46,24 @@ export async function createDocumentRecord(data: {
 
     // Enqueue document for processing
     try {
-      await supabase.rpc('pgmq_send', {
+      console.log('Enqueueing document for processing:', {
+        document_id: documentData.id,
+        file_path: data.file_path,
+      });
+      
+      const { data: queueData, error: queueError } = await supabase.rpc('pgmq_send', {
         queue_name: 'document_processing',
         msg: {
           document_id: documentData.id,
           file_path: data.file_path,
         },
       });
+      
+      if (queueError) {
+        console.error("Queue RPC error:", queueError);
+      } else {
+        console.log('Document enqueued successfully:', queueData);
+      }
     } catch (queueError) {
       console.error("Failed to enqueue document for processing:", queueError);
       // Don't fail the whole operation if queue fails

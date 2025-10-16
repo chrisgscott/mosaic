@@ -137,7 +137,7 @@ class HybridChunker:
                     }
                 ],
                 temperature=0.3,
-                max_tokens=max_tokens
+                max_completion_tokens=max_tokens  # GPT-5 models use max_completion_tokens
             )
             
             summary = response.choices[0].message.content.strip()

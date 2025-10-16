@@ -488,22 +488,24 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - [x] Show entity/relationship results in search UI
 - [x] Add progress tracking for graph operations
 
-### Phase 5.3: Smart Cascade Delete & Data Integrity (High Priority)
+### Phase 5.3: Smart Cascade Delete & Data Integrity ✅ COMPLETE
 **Goal**: Ensure graph data is properly cleaned up when documents are deleted
 
-- [ ] Implement smart cascade delete for entities
+- [x] Implement smart cascade delete for entities
   - Check if entity has multiple `document_ids` in array
-  - If yes: Remove only the deleted document_id
+  - If yes: Remove only the deleted document_id and chunk_ids
   - If no: Delete the entity entirely
-- [ ] Implement smart cascade delete for relationships
+- [x] Implement smart cascade delete for relationships
   - Same logic as entities for `document_ids` and `chunk_ids`
-- [ ] Add database trigger or function for automatic cleanup
-- [ ] Add tests for cascade delete logic
-- [ ] Update delete endpoint to handle graph cleanup
+- [x] Update delete endpoint to handle graph cleanup
+- [ ] Add database trigger or function for automatic cleanup (optional optimization)
+- [ ] Add tests for cascade delete logic (future)
 
-**Files to modify:**
-- Database migration for trigger/function
-- `apps/web/app/api/documents/[id]/route.ts`
+**Implementation:**
+- Smart cascade logic in `apps/web/app/(app)/documents/actions.ts`
+- Handles both `document_ids` and `chunk_ids` arrays
+- Non-fatal errors (logs warning but continues deletion)
+- Preserves shared entities/relationships across documents
 
 ### Phase 5.4: Graph Management UI (Medium Priority)
 **Goal**: Give users control over extracted entities and relationships

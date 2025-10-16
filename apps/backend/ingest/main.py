@@ -254,9 +254,14 @@ class DocumentWorker:
             
             logger.info(f"Created {len(chunks)} chunks")
             
-            # Store chunks in database
+            # Store chunks in database in batches to avoid timeout
             logger.info("Storing chunks in database")
-            supabase.table("chunks").insert(chunks).execute()
+            CHUNK_BATCH_SIZE = 100
+            for i in range(0, len(chunks), CHUNK_BATCH_SIZE):
+                batch = chunks[i:i + CHUNK_BATCH_SIZE]
+                logger.debug(f"Inserting chunk batch {i//CHUNK_BATCH_SIZE + 1}/{(len(chunks) + CHUNK_BATCH_SIZE - 1)//CHUNK_BATCH_SIZE} ({len(batch)} chunks)")
+                supabase.table("chunks").insert(batch).execute()
+            logger.info(f"Successfully stored {len(chunks)} chunks in database")
             
             # Update document status to ready
             self.update_document_status(document_id, "ready")

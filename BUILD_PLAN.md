@@ -126,6 +126,54 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - **Toast notifications**: Clear feedback at each stage
 - **Non-blocking**: Users can continue working while uploads happen
 
+### Phase 2 Improvements (Future Enhancement)
+
+#### 📊 Granular Document Processing Status (Low Priority)
+**Goal**: Provide detailed visibility into each processing stage for better UX and debugging
+
+**Current Status Values:**
+- `uploading` - File upload in progress
+- `uploaded` - Upload complete, queued for processing
+- `processing` - Worker is processing the document
+- `ready` - All processing complete
+- `error` - Processing failed
+
+**Proposed Granular Status Values:**
+- `uploading` - File upload in progress
+- `pending` - Queued for processing
+- `processing` - Worker has picked up the job
+- `chunking` - Creating chunks from document
+- `embedding` - Generating embeddings for chunks
+- `extracting_graph` - Extracting entities and relationships
+- `ready` - All processing complete
+- `error` - Processing failed
+
+**Additional Tracking:**
+- [ ] Add `processing_stage_started_at` timestamp field
+- [ ] Track duration of each stage for analytics
+- [ ] Add progress percentage (0-100%)
+- [ ] Show estimated time remaining per stage
+
+**Benefits:**
+- Users see exactly what stage their document is in
+- Easier debugging (know where failures occur)
+- Better progress indication
+- Can show estimated time remaining per stage
+
+**Implementation:**
+- [ ] Update `documents.status` enum in database
+- [ ] Update worker to set status at each stage
+- [ ] Update frontend status display components
+- [ ] Add stage duration tracking
+- [ ] Add progress percentage calculation
+
+**Files to modify:**
+- Database migration for status enum
+- `apps/backend/ingest/main.py` - Update status at each stage
+- Frontend status components
+
+**Priority:** Low - Nice to have but not critical
+
 ---
 
 ## Phase 3: Document Processing Pipeline ✅ COMPLETE
@@ -232,6 +280,43 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - **VLM mode**: Environment variable `USE_API_VLM` (default: true for speed)
 
 ### Phase 3 Improvements (Future Enhancements)
+
+#### 🧠 Intelligent Chunking for Better Graph Extraction (High Priority)
+**Goal**: Improve chunking quality to enhance all downstream results (embeddings, search, graph extraction)
+
+**Problem**: Current fixed-size chunking doesn't preserve semantic boundaries or context, limiting graph extraction quality.
+
+**Proposed Solutions:**
+
+1. **Agentic Chunking**
+   - [ ] Use LLM to determine optimal chunk boundaries based on semantic meaning
+   - [ ] Preserve entity boundaries (don't split entities across chunks)
+   - [ ] Maintain relationship context within chunks
+   - [ ] Implement as optional chunking strategy
+
+2. **Chunk Summaries**
+   - [ ] Generate summaries by comparing each chunk to nearest X neighbors
+   - [ ] Provide better context for entity/relationship extraction
+   - [ ] Improve embedding quality
+   - [ ] Help LLM understand chunk's role in larger document
+   - [ ] Store summaries in `chunks.metadata` JSONB field
+
+**Benefits:**
+- Better entity extraction (entities won't be split across chunks)
+- More accurate relationships (context preserved)
+- Improved search results (better embeddings)
+- Addresses root cause of many RAG quality issues
+
+**Implementation Approach:**
+1. Add new chunking strategy option (markdown, agentic, hybrid)
+2. Implement chunk summary generation as post-processing step
+3. Store summaries in existing metadata field
+4. Use summaries for graph extraction instead of raw content
+5. Measure quality improvement vs cost increase
+
+**Priority:** High - Improves entire pipeline quality
+
+---
 
 #### 🔧 OpenAI API Timeout Handling
 - [ ] Increase API timeout from 60s to 120s
@@ -392,24 +477,77 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - [x] Performance notes and cost analysis
 - [x] Implementation summary (`/GRAPH_RAG_IMPLEMENTATION.md`)
 
-### Phase 5.2: Testing & Integration (Next)
-- [ ] Test extraction on multiple documents
-- [ ] Verify deduplication works correctly
-- [ ] Validate relationship accuracy
-- [ ] Measure extraction performance
-- [ ] Integrate graph search into main search API
-- [ ] Add graph search toggle to UI
-- [ ] Show entity/relationship results in search UI
-- [ ] Add progress tracking for graph operations
+### Phase 5.2: Testing & Integration ✅ COMPLETE
+- [x] Test extraction on multiple documents
+- [x] Verify deduplication works correctly
+- [x] Validate relationship accuracy
+- [x] Measure extraction performance
+- [x] Integrate graph search into main search API
+- [x] Add graph search toggle to UI (automatic via relationship query detection)
+- [x] Show entity/relationship results in search UI
+- [x] Add progress tracking for graph operations
 
-### Phase 5.3: Graph Visualization (Future)
+### Phase 5.3: Smart Cascade Delete & Data Integrity (High Priority)
+**Goal**: Ensure graph data is properly cleaned up when documents are deleted
+
+- [ ] Implement smart cascade delete for entities
+  - Check if entity has multiple `document_ids` in array
+  - If yes: Remove only the deleted document_id
+  - If no: Delete the entity entirely
+- [ ] Implement smart cascade delete for relationships
+  - Same logic as entities for `document_ids` and `chunk_ids`
+- [ ] Add database trigger or function for automatic cleanup
+- [ ] Add tests for cascade delete logic
+- [ ] Update delete endpoint to handle graph cleanup
+
+**Files to modify:**
+- Database migration for trigger/function
+- `apps/web/app/api/documents/[id]/route.ts`
+
+### Phase 5.4: Graph Management UI (Medium Priority)
+**Goal**: Give users control over extracted entities and relationships
+
+#### Entity/Relationship Editing
+- [ ] Create graph management page (`/graph`)
+- [ ] View all entities with filtering (by type, document, search)
+- [ ] Edit entity names, types, descriptions
+- [ ] Merge duplicate entities
+- [ ] Delete incorrect entities
+- [ ] Add manual entities
+- [ ] View all relationships with filtering
+- [ ] Edit relationship types and descriptions
+- [ ] Delete incorrect relationships
+- [ ] Add manual relationships
+
+#### Type Management
+- [ ] Create type management interface
+- [ ] Edit entity types (add/remove/rename)
+- [ ] Edit relationship types (add/remove/rename)
+- [ ] Add custom types per user/organization
+- [ ] Type validation and suggestions
+- [ ] Audit trail for type changes
+
+#### API Endpoints
+- [ ] `GET /api/graph/entities` - List entities with filters
+- [ ] `PATCH /api/graph/entities/:id` - Update entity
+- [ ] `DELETE /api/graph/entities/:id` - Delete entity
+- [ ] `POST /api/graph/entities/merge` - Merge entities
+- [ ] `GET /api/graph/relationships` - List relationships
+- [ ] `PATCH /api/graph/relationships/:id` - Update relationship
+- [ ] `DELETE /api/graph/relationships/:id` - Delete relationship
+- [ ] `GET /api/graph/types` - Get available types
+- [ ] `POST /api/graph/types` - Add custom type
+
+### Phase 5.5: Graph Visualization (Future)
 - [ ] Integrate graph visualization library (D3.js, Cytoscape, React Flow)
 - [ ] Create interactive graph view
 - [ ] Show entity details on hover
 - [ ] Enable graph exploration (zoom, pan, filter)
 - [ ] Highlight paths between entities
+- [ ] Click to edit entities/relationships
+- [ ] Visual indication of confidence/source
 
-### Phase 5.4: Advanced Features (Future)
+### Phase 5.6: Advanced Features (Future)
 - [ ] Community detection (Leiden clustering)
 - [ ] Entity resolution improvements
 - [ ] Temporal relationships
@@ -1536,7 +1674,16 @@ mosaic/
   - CSV: 7-line CSV processed in 0.00 sec with table extraction
 - ✅ Automatic embedding generation integrated into processing pipeline
 - ✅ All documents → chunks → embeddings → searchable
-- 🎯 **System Status: Production-ready for real-world use**
+- ✅ **Graph RAG Implementation Complete (Phase 5.1 & 5.2)**
+  - Postgres-native entities and relationships tables with pgvector
+  - Automatic entity/relationship extraction during document processing
+  - 64 entities, 46 relationships extracted from test document
+  - Semantic entity search with adaptive thresholds (0.5 → 0.3 fallback)
+  - Graph search integrated into main search API
+  - Multi-hop graph traversal (1-hop default)
+  - Relationship query detection (automatic graph search trigger)
+  - ~$0.23 per 200-page document, ~$0.0001 per search
+- 🎯 **System Status: Production-ready with Graph RAG for real-world use**
 
 ### 2025-10-15
 - ✅ Completed Phase 1: Core Upload Infrastructure

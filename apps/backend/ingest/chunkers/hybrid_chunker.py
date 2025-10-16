@@ -140,12 +140,34 @@ class HybridChunker:
                 # Note: GPT-5-nano only supports default temperature (1)
             )
             
-            summary = response.choices[0].message.content.strip()
+            # Debug: Log the full response structure
+            logger.debug(f"API Response: {response}")
+            
+            # Extract summary from response
+            if not response.choices:
+                logger.error("No choices in API response")
+                return None
+            
+            message = response.choices[0].message
+            if not message:
+                logger.error("No message in first choice")
+                return None
+            
+            content = message.content
+            if not content:
+                logger.error(f"No content in message. Message: {message}")
+                return None
+            
+            summary = content.strip()
+            if not summary:
+                logger.error("Summary is empty after stripping")
+                return None
+                
             logger.debug(f"Generated summary: {summary[:100]}...")
             return summary
             
         except Exception as e:
-            logger.error(f"Error generating chunk summary: {e}")
+            logger.error(f"Error generating chunk summary: {e}", exc_info=True)
             return None
     
     def chunk_document(self, docling_doc: DoclingDocument, document_id: str) -> List[Dict[str, Any]]:

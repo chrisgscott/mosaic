@@ -295,9 +295,10 @@ class DocumentWorker:
                 stored_chunks = result.data
                 
                 # Prepare batch for embeddings (OpenAI supports up to 2048 inputs per request)
-                # Use summary if available, otherwise use content
+                # Always embed full content for maximum search precision
+                # Summaries are metadata only, not for embedding
                 chunk_texts = [
-                    chunk.get("summary") or chunk["content"] 
+                    chunk["content"] 
                     for chunk in stored_chunks
                 ]
                 embeddings = self.embeddings_generator.generate_embeddings_batch(chunk_texts)

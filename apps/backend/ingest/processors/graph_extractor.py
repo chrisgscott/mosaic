@@ -394,8 +394,9 @@ Guidelines:
         
         for i, chunk in enumerate(chunks, 1):
             try:
-                # Use summary if available, otherwise use content
-                text = chunk.get("summary") or chunk["content"]
+                # Always use full content for graph extraction to capture all entities/relationships
+                # Summaries are too compressed and miss important details
+                text = chunk["content"]
                 
                 entity_count, rel_count = self.process_chunk(
                     chunk["id"],

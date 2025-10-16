@@ -45,15 +45,16 @@ MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 # Processor selection
 USE_DOCLING = os.getenv("USE_DOCLING", "false").lower() == "true"
 USE_API_VLM = os.getenv("USE_API_VLM", "true").lower() == "true"
+DOCLING_MAX_WORKERS = int(os.getenv("DOCLING_MAX_WORKERS", "10"))
 
 # Initialize clients
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 # Initialize processor based on configuration
 if USE_DOCLING:
-    processor = DoclingProcessor(use_api_vlm=USE_API_VLM)
+    processor = DoclingProcessor(use_api_vlm=USE_API_VLM, max_workers=DOCLING_MAX_WORKERS)
     chunker = MarkdownChunker()
-    logger.info(f"Using Docling processor (API VLM: {USE_API_VLM})")
+    logger.info(f"Using Docling processor (API VLM: {USE_API_VLM}, max_workers: {DOCLING_MAX_WORKERS})")
 else:
     processor = UnstructuredProcessor()
     chunker = TextChunker()

@@ -28,6 +28,8 @@ services:
         value: false  # Set to "true" to use Docling (VLM-based, faster)
       - key: USE_API_VLM
         value: true   # Only used if USE_DOCLING=true. Set to "true" for API VLM (GPT-4o-mini)
+      - key: DOCLING_MAX_WORKERS
+        value: 10     # Number of pages to process in parallel (10 = ~11 min for 216 pages)
       # Add these in Render dashboard (they're secrets):
       # - SUPABASE_URL
       # - SUPABASE_SERVICE_ROLE_KEY

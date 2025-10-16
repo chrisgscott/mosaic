@@ -21,6 +21,7 @@ unstructured[md]==0.18.15
 # Lightweight, faster alternative to Unstructured
 docling
 openai  # For API-based VLM (GPT-4o-mini)
+pypdf  # For splitting PDFs into pages for parallel processing
 
 # Text processing
 langchain-text-splitters==0.3.4

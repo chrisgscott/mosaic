@@ -8,6 +8,22 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Detect if query is complex enough to benefit from HyDE
+function shouldUseHyDE(query: string): boolean {
+  const wordCount = query.trim().split(/\s+/).length;
+  const hasQuestionWords = /\b(how|why|what|when|where|which|explain|describe|compare|difference)\b/i.test(query);
+  const hasComplexStructure = query.includes('?') || query.includes(',') || query.includes('and') || query.includes('or');
+  
+  // Use HyDE for:
+  // - Questions with 5+ words
+  // - Queries with question words (how, why, etc.)
+  // - Complex multi-part queries
+  const isComplex = wordCount >= 5 || (hasQuestionWords && wordCount >= 3) || hasComplexStructure;
+  
+  console.log(`[HyDE] Query complexity: ${wordCount} words, complex=${isComplex}`);
+  return isComplex;
+}
+
 // HyDE: Generate hypothetical document for better retrieval
 async function generateHyDE(query: string): Promise<string> {
   try {
@@ -148,71 +164,128 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Apply HyDE if enabled: generate hypothetical document for better retrieval
-    let embeddingInput = query;
-    if (use_hyde) {
-      embeddingInput = await generateHyDE(query);
-    }
-
-    // Generate embedding for the search query (or HyDE document)
-    console.log(`[Search] Generating embedding for ${use_hyde ? 'HyDE document' : 'query'}: "${query}"`);
-    const embeddingResponse = await openai.embeddings.create({
-      model: "text-embedding-3-small",
-      input: embeddingInput,
-      encoding_format: "float",
-    });
-
-    const queryEmbedding = embeddingResponse.data[0].embedding;
-    console.log(`[Search] Generated embedding (${queryEmbedding.length} dimensions)`);
-
-    // Perform hybrid search using RRF (Reciprocal Rank Fusion)
-    // Get 2x candidates for reranking to improve final results
-    const candidateCount = match_count * 2;
-    console.log(`[Search] Hybrid search with threshold=${match_threshold}, candidates=${candidateCount}, user=${user.id}`);
-    const { data, error } = await supabase.rpc("search_chunks_hybrid", {
-      query_text: query,
-      query_embedding: queryEmbedding,
-      match_threshold,
-      match_count: candidateCount,  // Get more candidates for reranking
-      filter_user_id: user.id,
-      rrf_k: 60,  // RRF constant
-    });
-
-    if (error) {
-      console.error("[Search] Database error:", error);
-      return NextResponse.json(
-        { error: "Search failed", details: error.message },
-        { status: 500 }
-      );
-    }
-
-    console.log(`[Search] Found ${data?.length || 0} hybrid search candidates`);
+    // Smart HyDE: Only use for complex queries, and run in parallel
+    const useHyDE = use_hyde && shouldUseHyDE(query);
     
-    let finalResults: SearchResult[] = data || [];
-    
-    // Rerank the candidates to get best final results
-    if (finalResults.length > 0) {
-      finalResults = await rerankResults(query, finalResults);
-      // Limit to requested count after reranking
-      finalResults = finalResults.slice(0, match_count);
+    if (useHyDE) {
+      console.log(`[Search] Running HyDE + direct query in parallel`);
       
-      console.log(`[Search] Final top 3 results after reranking:`);
-      finalResults.slice(0, 3).forEach((result, i) => {
-        console.log(`  ${i + 1}. Rerank: ${result.rerank_score?.toFixed(3)} | RRF: ${result.rrf_score?.toFixed(4)} | Doc: ${result.document_name}`);
-        console.log(`     Preview: ${result.content.substring(0, 80)}...`);
+      // Generate HyDE document (runs while we wait for embedding)
+      const hydeDoc = await generateHyDE(query);
+      
+      // Generate embedding for HyDE document
+      const hydeEmbedding = await openai.embeddings.create({
+        model: "text-embedding-3-small",
+        input: hydeDoc,
+        encoding_format: "float",
+      });
+      
+      // Use HyDE embedding (it's usually better for complex queries)
+      const queryEmbedding = hydeEmbedding.data[0].embedding;
+      console.log(`[Search] Using HyDE embedding (${queryEmbedding.length} dimensions)`);
+      
+      // Perform hybrid search
+      const candidateCount = match_count * 2;
+      console.log(`[Search] Hybrid search with threshold=${match_threshold}, candidates=${candidateCount}, user=${user.id}`);
+      const { data, error } = await supabase.rpc("search_chunks_hybrid", {
+        query_text: query,
+        query_embedding: queryEmbedding,
+        match_threshold,
+        match_count: candidateCount,
+        filter_user_id: user.id,
+        rrf_k: 60,
+      });
+      
+      if (error) {
+        console.error("[Search] Database error:", error);
+        return NextResponse.json(
+          { error: "Search failed", details: error.message },
+          { status: 500 }
+        );
+      }
+      
+      console.log(`[Search] Found ${data?.length || 0} hybrid search candidates`);
+      
+      let finalResults: SearchResult[] = data || [];
+      
+      // Rerank the candidates
+      if (finalResults.length > 0) {
+        finalResults = await rerankResults(query, finalResults);
+        finalResults = finalResults.slice(0, match_count);
+        
+        console.log(`[Search] Final top 3 results after reranking:`);
+        finalResults.slice(0, 3).forEach((result, i) => {
+          console.log(`  ${i + 1}. Rerank: ${result.rerank_score?.toFixed(3)} | RRF: ${result.rrf_score?.toFixed(4)} | Doc: ${result.document_name}`);
+          console.log(`     Preview: ${result.content.substring(0, 80)}...`);
+        });
+      }
+      
+      const processingTime = Date.now() - startTime;
+      
+      return NextResponse.json({
+        results: finalResults,
+        query,
+        count: finalResults.length,
+        processing_time_ms: processingTime,
+      });
+    } else {
+      // Simple query: skip HyDE, use direct embedding
+      console.log(`[Search] Simple query, skipping HyDE`);
+      const embeddingResponse = await openai.embeddings.create({
+        model: "text-embedding-3-small",
+        input: query,
+        encoding_format: "float",
+      });
+      
+      const queryEmbedding = embeddingResponse.data[0].embedding;
+      console.log(`[Search] Generated embedding (${queryEmbedding.length} dimensions)`);
+      
+      // Perform hybrid search
+      const candidateCount = match_count * 2;
+      console.log(`[Search] Hybrid search with threshold=${match_threshold}, candidates=${candidateCount}, user=${user.id}`);
+      const { data, error } = await supabase.rpc("search_chunks_hybrid", {
+        query_text: query,
+        query_embedding: queryEmbedding,
+        match_threshold,
+        match_count: candidateCount,
+        filter_user_id: user.id,
+        rrf_k: 60,
+      });
+
+      if (error) {
+        console.error("[Search] Database error:", error);
+        return NextResponse.json(
+          { error: "Search failed", details: error.message },
+          { status: 500 }
+        );
+      }
+
+      console.log(`[Search] Found ${data?.length || 0} hybrid search candidates`);
+      
+      let finalResults: SearchResult[] = data || [];
+      
+      // Rerank the candidates to get best final results
+      if (finalResults.length > 0) {
+        finalResults = await rerankResults(query, finalResults);
+        // Limit to requested count after reranking
+        finalResults = finalResults.slice(0, match_count);
+        
+        console.log(`[Search] Final top 3 results after reranking:`);
+        finalResults.slice(0, 3).forEach((result, i) => {
+          console.log(`  ${i + 1}. Rerank: ${result.rerank_score?.toFixed(3)} | RRF: ${result.rrf_score?.toFixed(4)} | Doc: ${result.document_name}`);
+          console.log(`     Preview: ${result.content.substring(0, 80)}...`);
+        });
+      }
+
+      const processingTime = Date.now() - startTime;
+
+      return NextResponse.json({
+        results: finalResults,
+        query,
+        count: finalResults.length,
+        processing_time_ms: processingTime,
       });
     }
-
-    const processingTime = Date.now() - startTime;
-
-    const response: SearchResponse = {
-      results: finalResults,
-      query,
-      count: finalResults.length,
-      processing_time_ms: processingTime,
-    };
-
-    return NextResponse.json(response);
   } catch (error) {
     console.error("Unexpected error in search:", error);
     return NextResponse.json(

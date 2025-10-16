@@ -33,44 +33,211 @@ ALTER TABLE chunks RENAME COLUMN content TO original_content;
 
 ---
 
-## 🏗️ Hierarchical Chunking
+## 🏗️ Docling Native Chunking (HybridChunker & HierarchicalChunker)
 
-### Concept
-Multi-layer chunk hierarchy allowing AI to navigate up/down for context or detail.
+### Overview
+Docling provides built-in chunking capabilities that operate directly on the `DoclingDocument` object, offering significant advantages over our current markdown-based approach.
 
-### Architecture
+### Current Approach (Markdown-Based)
+```python
+# What we do now:
+markdown = docling_processor.process(pdf)  # Export to markdown
+chunks = markdown_chunker.chunk(markdown)  # Post-process markdown
+```
+
+**Limitations:**
+- ❌ Loses document structure information
+- ❌ No token awareness (guessing chunk sizes)
+- ❌ No context enrichment
+- ❌ Manual handling of tables/lists
+- ❌ Character-based splitting (not semantic)
+
+### Docling's Native Chunkers
+
+#### **1. HierarchicalChunker**
+Creates one chunk per document element (paragraph, table, list, heading).
+
+**Features:**
+- ✅ Preserves document structure
+- ✅ Attaches metadata (headings, captions)
+- ✅ Merges list items automatically
+- ✅ Keeps tables intact
+- ✅ Links chunks to source elements
+
+**Architecture:**
 ```
 Document
   ↓
-Page/Chapter Chunks (Layer 3 - Broadest)
+Heading 1 (chunk)
   ↓
-Context Chunks (Layer 2 - Medium)
+Paragraph (chunk)
   ↓
-Atomic Chunks (Layer 1 - Single concepts/ideas)
+Table (chunk - stays together)
+  ↓
+List (chunk - items merged)
+  ↓
+Heading 2 (chunk)
+  ↓
+...
 ```
 
-### Schema Design
-```sql
-CREATE TABLE chunks (
-  id UUID PRIMARY KEY,
-  document_id UUID REFERENCES documents(id),
-  content TEXT,
-  chunk_level INTEGER, -- 1=atomic, 2=context, 3=page/chapter
-  parent_chunk_id UUID REFERENCES chunks(id), -- Link to parent
-  child_chunk_ids UUID[], -- Array of child chunk IDs
-  ...
-);
+#### **2. HybridChunker** (Recommended)
+Combines hierarchical structure with token-aware refinements.
+
+**How It Works:**
+1. Starts with HierarchicalChunker output
+2. Uses embedding model's tokenizer (e.g., sentence-transformers)
+3. **Splits** oversized chunks (respects token limits)
+4. **Merges** undersized chunks (same headings/captions)
+5. Provides `contextualize()` method for context enrichment
+
+**Key Feature - Context Enrichment:**
+```python
+# Raw chunk text:
+"IBM originated with several innovations..."
+
+# After contextualize():
+"IBM\n1910s–1950s\nIBM originated with several innovations..."
+```
+**Adds heading hierarchy to each chunk for better retrieval!**
+
+### Implementation Example
+
+```python
+from docling.chunking import HybridChunker
+from transformers import AutoTokenizer
+
+# Initialize with your embedding model's tokenizer
+tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+chunker = HybridChunker(tokenizer=tokenizer)
+
+# Process DoclingDocument directly (no markdown export!)
+docling_doc = converter.convert(pdf).document
+
+# Generate chunks
+for chunk in chunker.chunk(dl_doc=docling_doc):
+    # Get context-enriched text
+    enriched_text = chunker.contextualize(chunk)
+    
+    # Store with metadata
+    store_chunk({
+        "content": enriched_text,
+        "token_count": tokenizer.count_tokens(enriched_text),
+        "metadata": {
+            "doc_items": chunk.meta.doc_items,  # Source elements
+            "headings": chunk.meta.headings,    # Heading hierarchy
+            "captions": chunk.meta.captions,    # Table/figure captions
+        }
+    })
 ```
 
-### Use Cases
-- **Need more context?** → Navigate up to parent chunk
-- **Need more detail?** → Navigate down to child chunks
-- **Adaptive retrieval** → Start at appropriate level based on query
+### Advanced Serialization
 
-### Benefits
-- AI can dynamically adjust context window
-- Better handling of complex documents
-- Preserves document structure
+Docling allows custom serialization strategies for different element types:
+
+**Table Serialization Options:**
+- **Markdown format** (default) - Human-readable tables
+- **Triplet notation** - Structured for LLMs
+- **Custom serializers** - Define your own
+
+**Example:**
+```python
+from docling_core.transforms.chunker.hierarchical_chunker import (
+    ChunkingDocSerializer,
+    ChunkingSerializerProvider,
+)
+from docling_core.transforms.serializer.markdown import MarkdownTableSerializer
+
+class CustomSerializerProvider(ChunkingSerializerProvider):
+    def get_serializer(self, doc):
+        return ChunkingDocSerializer(
+            doc=doc,
+            table_serializer=MarkdownTableSerializer(),  # Use markdown for tables
+            # Can add custom serializers for images, code blocks, etc.
+        )
+
+chunker = HybridChunker(
+    tokenizer=tokenizer,
+    serializer_provider=CustomSerializerProvider(),
+)
+```
+
+### Benefits Over Current Approach
+
+| Aspect | Current (Markdown) | Docling Native |
+|--------|-------------------|----------------|
+| **Structure Preservation** | Lost in markdown | ✅ Fully preserved |
+| **Token Awareness** | Manual (char-based) | ✅ Automatic (tokenizer) |
+| **Context Enrichment** | None | ✅ Heading hierarchy added |
+| **Table Handling** | Manual parsing | ✅ Automatic, configurable |
+| **Semantic Boundaries** | Guessing | ✅ Document-aware |
+| **Metadata** | Basic | ✅ Rich (headings, captions, refs) |
+| **Complexity** | Low | Medium |
+| **Quality** | Good | **Better** |
+
+### Migration Path
+
+**Phase 1: Validate Current Pipeline** (Now)
+- ✅ Finish markdown-based chunking
+- ✅ Test with 216-page PDF
+- ✅ Verify retrieval works
+
+**Phase 2: Add HybridChunker** (Next 1-2 weeks)
+- Keep MarkdownChunker as fallback
+- Add HybridChunker as optional processor
+- A/B test retrieval quality
+- Compare: markdown chunks vs hybrid chunks
+
+**Phase 3: Switch Default** (If better)
+- Make HybridChunker the default
+- Keep MarkdownChunker for edge cases
+- Update documentation
+
+### Implementation Estimate
+
+**Effort:**
+- Coding: ~2-3 hours
+- Testing: ~1-2 hours
+- Documentation: ~1 hour
+- **Total: ~4-6 hours**
+
+**Complexity:** Medium
+- Requires understanding Docling's chunker API
+- Need to match embedding model tokenizer
+- More configuration options to manage
+
+### When to Implement
+
+**Not Right Now Because:**
+- ❌ Just fixed token_count bug in current pipeline
+- ❌ Need to validate end-to-end flow first
+- ❌ Don't want to introduce new complexity yet
+
+**Soon (1-2 weeks) Because:**
+- ✅ Better retrieval quality (context-enriched chunks)
+- ✅ Token-aware (respects embedding limits)
+- ✅ Structure-preserved (tables, lists intact)
+- ✅ Less manual code (Docling handles complexity)
+- ✅ Production-ready (well-documented, tested)
+
+### Documentation Links
+
+- [Docling Chunking Concepts](https://docling-project.github.io/docling/concepts/chunking/)
+- [Hybrid Chunking Example](https://docling-project.github.io/docling/examples/hybrid_chunking/)
+- [Advanced Chunking & Serialization](https://docling-project.github.io/docling/examples/advanced_chunking_and_serialization/)
+
+### Recommendation
+
+**YES, we should use Docling's HybridChunker, but:**
+1. ✅ Validate current pipeline first (almost done!)
+2. ✅ Test with 216-page PDF
+3. 🔜 Add HybridChunker as enhancement
+4. 🔜 A/B test quality
+5. 🔜 Switch if better
+
+**Priority:** High (but not urgent)
+**Risk:** Low (can run in parallel with current approach)
+**ROI:** High (better retrieval quality for minimal effort)
 
 ---
 

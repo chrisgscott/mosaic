@@ -123,9 +123,9 @@ class HybridChunker:
             
             full_context = "\n\n---\n\n".join(context_parts)
             
-            # Generate summary using GPT-5-nano (58% cheaper with caching)
+            # Generate summary using GPT-4.1-nano (33% cheaper than GPT-4o-mini)
             response = self.openai_client.chat.completions.create(
-                model="gpt-5-nano",
+                model="gpt-4.1-nano",
                 messages=[
                     {
                         "role": "system",
@@ -136,8 +136,8 @@ class HybridChunker:
                         "content": full_context
                     }
                 ],
-                max_completion_tokens=max_tokens  # GPT-5 models use max_completion_tokens
-                # Note: GPT-5-nano only supports default temperature (1)
+                temperature=0.3,
+                max_completion_tokens=max_tokens  # GPT-4.1+ models use max_completion_tokens
             )
             
             # Debug: Log the full response structure

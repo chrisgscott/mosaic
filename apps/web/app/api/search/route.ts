@@ -20,6 +20,9 @@ async function rerankResults(query: string, results: SearchResult[]): Promise<Se
   try {
     const startTime = Date.now();
     
+    // BGE reranker expects pairs of [query, text] for each document
+    const pairs = results.map(r => [query, r.content]);
+    
     const response = await fetch(
       "https://api-inference.huggingface.co/models/BAAI/bge-reranker-v2-m3",
       {
@@ -29,10 +32,7 @@ async function rerankResults(query: string, results: SearchResult[]): Promise<Se
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          inputs: {
-            query: query,
-            texts: results.map(r => r.content),
-          },
+          inputs: pairs,
         }),
       }
     );
@@ -43,15 +43,28 @@ async function rerankResults(query: string, results: SearchResult[]): Promise<Se
       return results; // Fallback to original results
     }
 
-    const scores = await response.json();
+    const responseData = await response.json();
     const rerankTime = Date.now() - startTime;
     
     console.log(`[Rerank] Completed in ${rerankTime}ms`);
+    console.log(`[Rerank] Response format:`, Array.isArray(responseData) ? 'array' : typeof responseData);
+
+    // Handle response - HF returns array of scores or array of objects with score field
+    let scores: number[];
+    if (Array.isArray(responseData)) {
+      // Could be array of numbers or array of objects
+      scores = responseData.map(item => 
+        typeof item === 'number' ? item : (item.score || item[0] || 0)
+      );
+    } else {
+      console.error("[Rerank] Unexpected response format:", responseData);
+      return results;
+    }
 
     // Attach rerank scores and sort by them
     const rerankedResults = results.map((result, i) => ({
       ...result,
-      rerank_score: scores[i],
+      rerank_score: scores[i] || 0,
     })).sort((a, b) => (b.rerank_score || 0) - (a.rerank_score || 0));
 
     console.log(`[Rerank] Score changes:`);

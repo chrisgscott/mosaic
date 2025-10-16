@@ -18,6 +18,7 @@ from processors.unstructured_processor import UnstructuredProcessor
 from processors.docling_processor import DoclingProcessor
 from processors.chunker import TextChunker
 from chunkers.markdown_chunker import MarkdownChunker
+from processors.embeddings_generator import EmbeddingsGenerator
 
 # Load environment variables
 load_dotenv()
@@ -65,6 +66,13 @@ class DocumentWorker:
     """Background worker for processing documents from the queue."""
     
     def __init__(self):
+        # Initialize chunker
+        self.chunker = MarkdownChunker() if USE_DOCLING else TextChunker()
+        
+        # Initialize embeddings generator
+        self.embeddings_generator = EmbeddingsGenerator(supabase)
+        logger.info("Initialized embeddings generator")
+        
         self.db_conn = None
         self.running = True
         
@@ -254,14 +262,44 @@ class DocumentWorker:
             
             logger.info(f"Created {len(chunks)} chunks")
             
-            # Store chunks in database in batches to avoid timeout
-            logger.info("Storing chunks in database")
+            # Store chunks in database in batches and generate embeddings immediately
+            logger.info("Storing chunks and generating embeddings")
             CHUNK_BATCH_SIZE = 100
+            total_embeddings = 0
+            
             for i in range(0, len(chunks), CHUNK_BATCH_SIZE):
                 batch = chunks[i:i + CHUNK_BATCH_SIZE]
-                logger.debug(f"Inserting chunk batch {i//CHUNK_BATCH_SIZE + 1}/{(len(chunks) + CHUNK_BATCH_SIZE - 1)//CHUNK_BATCH_SIZE} ({len(batch)} chunks)")
-                supabase.table("chunks").insert(batch).execute()
-            logger.info(f"Successfully stored {len(chunks)} chunks in database")
+                batch_num = i//CHUNK_BATCH_SIZE + 1
+                total_batches = (len(chunks) + CHUNK_BATCH_SIZE - 1)//CHUNK_BATCH_SIZE
+                
+                logger.debug(f"Inserting chunk batch {batch_num}/{total_batches} ({len(batch)} chunks)")
+                result = supabase.table("chunks").insert(batch).execute()
+                
+                # Generate embeddings for this batch immediately
+                logger.debug(f"Generating embeddings for batch {batch_num}/{total_batches}")
+                stored_chunks = result.data
+                
+                # Prepare batch for embeddings (OpenAI supports up to 2048 inputs per request)
+                chunk_texts = [chunk["content"] for chunk in stored_chunks]
+                embeddings = self.embeddings_generator.generate_embeddings_batch(chunk_texts)
+                
+                # Store embeddings
+                embedding_records = [
+                    {
+                        "chunk_id": chunk["id"],
+                        "document_id": document_id,
+                        "user_id": user_id,
+                        "embedding": embedding,
+                        "model": "text-embedding-3-small"
+                    }
+                    for chunk, embedding in zip(stored_chunks, embeddings)
+                ]
+                supabase.table("embeddings").insert(embedding_records).execute()
+                total_embeddings += len(embeddings)
+                
+                logger.debug(f"Batch {batch_num}/{total_batches} complete: {len(batch)} chunks + {len(embeddings)} embeddings")
+            
+            logger.info(f"Successfully stored {len(chunks)} chunks and generated {total_embeddings} embeddings")
             
             # Update document status to ready
             self.update_document_status(document_id, "ready")

@@ -14,6 +14,7 @@ interface SearchResult {
   chunk_index: number;
   content: string;
   similarity: number;
+  rerank_score?: number;
   document_name: string;
   document_file_type: string;
 }
@@ -153,7 +154,7 @@ export function SemanticSearch() {
                       </Badge>
                       <span>Chunk #{result.chunk_index + 1}</span>
                       <Badge variant="outline" className="text-xs">
-                        {Math.round(result.similarity * 100)}% match
+                        {Math.round((result.rerank_score || result.similarity) * 100)}% match
                       </Badge>
                     </CardDescription>
                   </div>

@@ -243,6 +243,12 @@ class DoclingProcessor:
             
             # Write bytes to temporary file
             suffix = Path(file_path).suffix or '.pdf'
+            
+            # Convert .txt to .md since Docling doesn't support plain text
+            if suffix.lower() == '.txt':
+                suffix = '.md'
+                logger.info("Converting .txt to .md for Docling compatibility")
+            
             with tempfile.NamedTemporaryFile(mode='wb', suffix=suffix, delete=False) as temp_file:
                 temp_file.write(file_data)
                 temp_path = temp_file.name

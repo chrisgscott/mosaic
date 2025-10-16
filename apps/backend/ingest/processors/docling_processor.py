@@ -64,6 +64,7 @@ class DoclingProcessor:
                     ),
                     headers={"Authorization": f"Bearer {api_key}"},
                     prompt="Convert this document page to markdown, preserving all tables, lists, and structure. Be precise and complete.",
+                    timeout=120,  # Increased from default 60s to reduce timeout failures
                     temperature=0.1,
                     response_format=ResponseFormat.MARKDOWN,
                 )
@@ -176,6 +177,7 @@ class DoclingProcessor:
                     ),
                     headers={"Authorization": f"Bearer {api_key}"},
                     prompt="Convert this document page to markdown, preserving all tables, lists, and structure. Be precise and complete.",
+                    timeout=120,  # Increased from default 60s to reduce timeout failures
                     temperature=0.1,
                     response_format=ResponseFormat.MARKDOWN,
                 )

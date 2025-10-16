@@ -49,12 +49,13 @@ async function getDocumentWithChunks(documentId: string) {
   
   const user_name = profile?.full_name || profile?.email?.split("@")[0] || "Unknown";
 
-  // Get chunks
+  // Get chunks (set high limit to handle large documents)
   const { data: chunks, error: chunksError } = await supabase
     .from("chunks")
     .select("id, chunk_index, content, token_count, metadata, created_at")
     .eq("document_id", documentId)
-    .order("chunk_index", { ascending: true });
+    .order("chunk_index", { ascending: true })
+    .limit(10000); // Support up to 10k chunks per document
 
   if (chunksError) {
     console.error("Error fetching chunks:", chunksError);

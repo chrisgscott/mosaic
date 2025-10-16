@@ -23,11 +23,16 @@ from chunkers.markdown_chunker import MarkdownChunker
 load_dotenv()
 
 # Configure logging
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, LOG_LEVEL),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Set Docling loggers to same level
+logging.getLogger('docling').setLevel(getattr(logging, LOG_LEVEL))
+logging.getLogger('processors.docling_processor').setLevel(getattr(logging, LOG_LEVEL))
 
 # Configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL")

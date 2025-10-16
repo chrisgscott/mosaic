@@ -175,6 +175,156 @@ pillow-heif
 
 ---
 
+## 🔧 OpenAI API Timeout Handling
+
+### Problem
+Occasional OpenAI API timeouts during document processing cause individual pages to fail. Currently observed:
+- Timeout threshold: 60 seconds
+- Error: `ReadTimeout: HTTPSConnectionPool(host='api.openai.com', port=443): Read timed out`
+- Impact: Failed pages are skipped, rest of document continues processing
+
+### Current Behavior
+- ✅ Worker continues processing other pages after timeout
+- ✅ Document completes with successful pages
+- ❌ Failed pages are missing from final output
+- ❌ No retry mechanism for timed-out pages
+
+### Proposed Solutions
+
+#### Option 1: Increase API Timeout (Recommended First Step)
+
+**Implementation:**
+```python
+# In docling_processor.py, when configuring ApiVlmOptions
+api_vlm_options = ApiVlmOptions(
+    url="https://api.openai.com/v1/chat/completions",
+    params=dict(
+        model="gpt-4o-mini",
+        max_tokens=2048,
+        temperature=0.0,
+        timeout=120  # Increase from 60s to 120s
+    ),
+    headers={"Authorization": f"Bearer {api_key}"}
+)
+```
+
+**Benefits:**
+- ✅ Simple one-line change
+- ✅ Gives API more time to respond
+- ✅ Reduces timeout frequency
+- ⚠️ Increases processing time for slow pages
+
+**Trade-offs:**
+- Slower overall processing for complex pages
+- May still timeout on extremely complex pages or during API outages
+
+**Effort:** 5 minutes
+
+---
+
+#### Option 2: Add Retry Logic for Failed Pages (Recommended Long-term)
+
+**Implementation:**
+```python
+# In docling_processor.py _process_single_page method
+def _process_single_page(self, page_path: str, page_num: int, max_retries: int = 3) -> tuple[int, Optional[str]]:
+    """Process a single PDF page with retry logic."""
+    for attempt in range(max_retries):
+        try:
+            # Existing processing logic
+            result = converter.convert(page_path)
+            return (page_num, result.document.export_to_markdown())
+        except ReadTimeout as e:
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                logger.warning(f"Page {page_num} timed out (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s...")
+                time.sleep(wait_time)
+            else:
+                logger.error(f"Page {page_num} failed after {max_retries} attempts")
+                return (page_num, None)  # Return None for failed page
+        except Exception as e:
+            logger.error(f"Page {page_num} failed with error: {e}")
+            return (page_num, None)
+```
+
+**Benefits:**
+- ✅ Recovers from transient API issues
+- ✅ Exponential backoff prevents API hammering
+- ✅ Configurable retry count
+- ✅ Most pages will eventually succeed
+
+**Trade-offs:**
+- More complex code
+- Longer processing time for pages that ultimately fail
+- May still fail after all retries
+
+**Configuration:**
+- Add `MAX_PAGE_RETRIES` environment variable (default: 3)
+- Add `RETRY_BACKOFF_BASE` environment variable (default: 2 seconds)
+
+**Effort:** 30-60 minutes
+
+---
+
+#### Option 3: Track and Report Failed Pages
+
+**Implementation:**
+```python
+# Track failed pages during processing
+failed_pages = []
+
+# After parallel processing
+for page_num, content in results:
+    if content is None:
+        failed_pages.append(page_num)
+
+# Store in document metadata
+if failed_pages:
+    supabase.table("documents").update({
+        "metadata": {
+            "failed_pages": failed_pages,
+            "total_pages": total_pages,
+            "success_rate": f"{((total_pages - len(failed_pages)) / total_pages * 100):.1f}%"
+        }
+    }).eq("id", document_id).execute()
+    
+    logger.warning(f"Document {document_id} completed with {len(failed_pages)} failed pages: {failed_pages}")
+```
+
+**Benefits:**
+- ✅ User knows which pages failed
+- ✅ Can manually review/reprocess if needed
+- ✅ Provides transparency
+
+**Effort:** 20-30 minutes
+
+---
+
+### Recommended Implementation Plan
+
+**Phase 1 (Immediate - 5 minutes):**
+1. Increase timeout from 60s to 120s
+2. Monitor if timeout frequency decreases
+
+**Phase 2 (Next sprint - 1 hour):**
+1. Implement retry logic with exponential backoff
+2. Add `MAX_PAGE_RETRIES` environment variable
+3. Test with documents that previously timed out
+
+**Phase 3 (Future - 30 minutes):**
+1. Add failed page tracking to document metadata
+2. Display failed pages in frontend document details
+3. Add "Reprocess Failed Pages" action
+
+**Priority:** Medium-High - Affects document completeness and user experience.
+
+**Success Metrics:**
+- Reduce page failure rate from ~1-2% to <0.1%
+- 99%+ of pages successfully processed
+- Average processing time remains acceptable
+
+---
+
 ## 🎯 LLM-Enhanced Chunk Summaries ✅ MIGRATED TO BUILD_PLAN (Phase 4)
 
 ### Concept

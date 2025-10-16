@@ -123,9 +123,9 @@ class HybridChunker:
             
             full_context = "\n\n---\n\n".join(context_parts)
             
-            # Generate summary using GPT-4.1-nano (33% cheaper than GPT-4o-mini)
+            # Generate summary using GPT-4o-mini (better at complex multi-topic chunks)
             response = self.openai_client.chat.completions.create(
-                model="gpt-4.1-nano",
+                model="gpt-4o-mini",
                 messages=[
                     {
                         "role": "system",
@@ -137,7 +137,7 @@ class HybridChunker:
                     }
                 ],
                 temperature=0.3,
-                max_completion_tokens=max_tokens  # GPT-4.1+ models use max_completion_tokens
+                max_tokens=max_tokens
             )
             
             # Debug: Log the full response structure

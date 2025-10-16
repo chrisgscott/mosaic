@@ -6,6 +6,44 @@ This document captures advanced RAG patterns and optimizations that could be app
 
 ---
 
+## 🐛 Frontend Chunk Display Limit Issue
+
+### Problem
+The document details page shows "Chunks (1000)" even when documents have more chunks (e.g., 1972 chunks). The query includes `.limit(10000)` but Next.js appears to be caching or the limit isn't being applied correctly.
+
+### Current Implementation
+```typescript
+// apps/web/app/(app)/documents/[id]/page.tsx
+const { data: chunks } = await supabase
+  .from("chunks")
+  .select("id, chunk_index, content, token_count, metadata, created_at")
+  .eq("document_id", documentId)
+  .order("chunk_index", { ascending: true })
+  .limit(10000); // Added but still showing 1000
+```
+
+### Investigation Needed
+- Verify Supabase query is actually using the limit parameter
+- Check if there's a separate Supabase configuration limiting results
+- Investigate Next.js caching behavior (tried clearing `.next` cache)
+- Consider if there's a PostgREST limit configuration
+
+### Workaround Considerations
+Since users don't typically need to view all 1000+ chunks:
+- Could paginate the chunks table (load 100 at a time)
+- Could show accurate count without loading all chunks
+- Could use a separate count query: `select count(*) from chunks where document_id = ?`
+
+### Priority
+Low - The chunks are all stored correctly in the database (verified via logs showing 1972 chunks inserted successfully). This is purely a display issue that doesn't affect functionality. Users can still search and retrieve from all chunks.
+
+### Next Steps
+1. Test with a separate count query to verify total chunk count
+2. Implement pagination if displaying 1000+ chunks becomes necessary
+3. Research Supabase/PostgREST default limits and configuration options
+
+---
+
 ## 🎯 LLM-Enhanced Chunk Summaries ✅ MIGRATED TO BUILD_PLAN (Phase 4)
 
 ### Concept

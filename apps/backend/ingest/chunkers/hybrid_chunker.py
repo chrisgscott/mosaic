@@ -123,9 +123,9 @@ class HybridChunker:
             
             full_context = "\n\n---\n\n".join(context_parts)
             
-            # Generate summary using GPT-4o-mini
+            # Generate summary using GPT-5-nano (58% cheaper with caching)
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5-nano",
                 messages=[
                     {
                         "role": "system",

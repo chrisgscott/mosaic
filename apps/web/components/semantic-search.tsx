@@ -50,7 +50,7 @@ export function SemanticSearch() {
         },
         body: JSON.stringify({
           query: query.trim(),
-          match_threshold: 0.7,
+          match_threshold: 0.5,  // Lowered from 0.7 for better recall
           match_count: 10,
         }),
       });

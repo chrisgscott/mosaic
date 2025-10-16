@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       query,
-      match_threshold = 0.7,
+      match_threshold = 0.5,  // Lowered from 0.7 - semantic search typically gets 0.5-0.8 scores
       match_count = 10,
     } = body;
 
@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate embedding for the search query
+    console.log(`[Search] Generating embedding for query: "${query}"`);
     const embeddingResponse = await openai.embeddings.create({
       model: "text-embedding-3-small",
       input: query,
@@ -62,8 +63,10 @@ export async function POST(request: NextRequest) {
     });
 
     const queryEmbedding = embeddingResponse.data[0].embedding;
+    console.log(`[Search] Generated embedding (${queryEmbedding.length} dimensions)`);
 
     // Perform semantic search using the database function
+    console.log(`[Search] Searching with threshold=${match_threshold}, count=${match_count}, user=${user.id}`);
     const { data, error } = await supabase.rpc("search_chunks_semantic", {
       query_embedding: queryEmbedding,
       match_threshold,
@@ -72,11 +75,32 @@ export async function POST(request: NextRequest) {
     });
 
     if (error) {
-      console.error("Search error:", error);
+      console.error("[Search] Database error:", error);
       return NextResponse.json(
         { error: "Search failed", details: error.message },
         { status: 500 }
       );
+    }
+
+    console.log(`[Search] Found ${data?.length || 0} results`);
+    if (data && data.length > 0) {
+      console.log(`[Search] Top result similarity: ${data[0].similarity}`);
+      console.log(`[Search] Top result preview: ${data[0].content.substring(0, 100)}...`);
+    } else {
+      // Debug: Try with lower threshold to see if we get ANY results
+      console.log(`[Search] No results with threshold ${match_threshold}, trying with 0.0...`);
+      const { data: debugData } = await supabase.rpc("search_chunks_semantic", {
+        query_embedding: queryEmbedding,
+        match_threshold: 0.0,
+        match_count: 3,
+        filter_user_id: user.id,
+      });
+      if (debugData && debugData.length > 0) {
+        console.log(`[Search] DEBUG: Found ${debugData.length} results with threshold=0.0`);
+        console.log(`[Search] DEBUG: Best similarity score: ${debugData[0].similarity}`);
+      } else {
+        console.log(`[Search] DEBUG: Still no results even with threshold=0.0 - checking embeddings exist...`);
+      }
     }
 
     const processingTime = Date.now() - startTime;

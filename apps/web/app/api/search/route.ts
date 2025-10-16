@@ -1,10 +1,39 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { generateText } from "ai";
+import { openai as openaiProvider } from "@ai-sdk/openai";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// HyDE: Generate hypothetical document for better retrieval
+async function generateHyDE(query: string): Promise<string> {
+  try {
+    const startTime = Date.now();
+    
+    const { text } = await generateText({
+      model: openaiProvider("gpt-4o-mini"),
+      prompt: `You are an expert assistant. Given a user's question, write a detailed, comprehensive answer that would perfectly answer their question. This hypothetical answer will be used to find similar documents.
+
+Question: ${query}
+
+Write a detailed answer (2-3 paragraphs) that would perfectly answer this question. Use specific terminology and concepts that would appear in relevant documents.`,
+      temperature: 0.7,
+    });
+
+    const hydeTime = Date.now() - startTime;
+    console.log(`[HyDE] Generated hypothetical document in ${hydeTime}ms`);
+    console.log(`[HyDE] Preview: ${text.substring(0, 150)}...`);
+    
+    return text;
+  } catch (error) {
+    console.error("[HyDE] Error generating hypothetical document:", error);
+    // Fallback to original query
+    return query;
+  }
+}
 
 // Rerank results using Cohere Rerank API
 async function rerankResults(query: string, results: SearchResult[]): Promise<SearchResult[]> {
@@ -109,6 +138,7 @@ export async function POST(request: NextRequest) {
       query,
       match_threshold = 0.5,  // Lowered from 0.7 - semantic search typically gets 0.5-0.8 scores
       match_count = 10,
+      use_hyde = true,  // Enable HyDE by default
     } = body;
 
     if (!query || typeof query !== "string") {
@@ -118,11 +148,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate embedding for the search query
-    console.log(`[Search] Generating embedding for query: "${query}"`);
+    // Apply HyDE if enabled: generate hypothetical document for better retrieval
+    let embeddingInput = query;
+    if (use_hyde) {
+      embeddingInput = await generateHyDE(query);
+    }
+
+    // Generate embedding for the search query (or HyDE document)
+    console.log(`[Search] Generating embedding for ${use_hyde ? 'HyDE document' : 'query'}: "${query}"`);
     const embeddingResponse = await openai.embeddings.create({
       model: "text-embedding-3-small",
-      input: query,
+      input: embeddingInput,
       encoding_format: "float",
     });
 

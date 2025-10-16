@@ -61,7 +61,6 @@ class DoclingProcessor:
                     params=dict(
                         model="gpt-4o-mini",
                         max_tokens=4096,
-                        timeout=120,  # Increased from default 60s to reduce timeout failures
                     ),
                     headers={"Authorization": f"Bearer {api_key}"},
                     prompt="Convert this document page to markdown, preserving all tables, lists, and structure. Be precise and complete.",
@@ -174,7 +173,6 @@ class DoclingProcessor:
                     params=dict(
                         model="gpt-4o-mini",
                         max_tokens=4096,
-                        timeout=120,  # Increased from default 60s to reduce timeout failures
                     ),
                     headers={"Authorization": f"Bearer {api_key}"},
                     prompt="Convert this document page to markdown, preserving all tables, lists, and structure. Be precise and complete.",

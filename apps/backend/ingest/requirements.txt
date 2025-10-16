@@ -19,9 +19,9 @@ unstructured[md]==0.18.15
 
 # Document processing - Docling (VLM-based, new)
 # Lightweight, faster alternative to Unstructured
-docling
-openai  # For API-based VLM (GPT-4o-mini)
-pypdf  # For splitting PDFs into pages for parallel processing
+docling==2.15.0  # Pin to avoid breaking changes
+openai==1.57.4  # For API-based VLM (GPT-4o-mini)
+pypdf==5.1.0  # For splitting PDFs into pages for parallel processing
 
 # Text processing
 langchain-text-splitters==0.3.4

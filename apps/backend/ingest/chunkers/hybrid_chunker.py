@@ -215,6 +215,9 @@ class HybridChunker:
             if self.summary_neighbors > 0:
                 logger.info(f"Generating summaries with {self.summary_neighbors} neighbors per chunk")
                 
+                successful_summaries = 0
+                failed_summaries = 0
+                
                 for idx, db_chunk in enumerate(db_chunks):
                     # Get previous chunks
                     start_prev = max(0, idx - self.summary_neighbors)
@@ -234,11 +237,14 @@ class HybridChunker:
                     
                     if summary:
                         db_chunk["summary"] = summary
+                        successful_summaries += 1
                         logger.debug(f"Chunk {idx}: Generated summary ({len(summary)} chars)")
                     else:
                         db_chunk["summary"] = None
+                        failed_summaries += 1
+                        logger.warning(f"Chunk {idx}: Failed to generate summary")
                 
-                logger.info(f"Summary generation complete")
+                logger.info(f"Summary generation complete: {successful_summaries} successful, {failed_summaries} failed")
             
             logger.info(f"Created {len(db_chunks)} chunks from DoclingDocument")
             return db_chunks

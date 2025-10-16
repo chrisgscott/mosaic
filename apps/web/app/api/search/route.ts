@@ -24,6 +24,38 @@ function shouldUseHyDE(query: string): boolean {
   return isComplex;
 }
 
+// Multi-Query: Generate multiple query variations for better coverage
+async function generateMultiQuery(query: string): Promise<string[]> {
+  try {
+    const startTime = Date.now();
+    
+    const { text } = await generateText({
+      model: openaiProvider("gpt-4.1-nano"),
+      prompt: `Generate 3 different variations of this search query to improve search coverage. Each variation should:
+- Rephrase the question differently
+- Use different terminology or synonyms
+- Approach the topic from a different angle
+
+Original query: "${query}"
+
+Return ONLY the 3 variations, one per line, without numbering or explanation.`,
+      temperature: 0.8,
+    });
+
+    const variations = text.trim().split('\n').filter(v => v.trim().length > 0).slice(0, 3);
+    const multiQueryTime = Date.now() - startTime;
+    
+    console.log(`[Multi-Query] Generated ${variations.length} variations in ${multiQueryTime}ms`);
+    variations.forEach((v, i) => console.log(`  ${i + 1}. ${v}`));
+    
+    return variations;
+  } catch (error) {
+    console.error("[Multi-Query] Error generating variations:", error);
+    // Fallback to original query only
+    return [query];
+  }
+}
+
 // HyDE: Generate hypothetical document for better retrieval
 async function generateHyDE(query: string): Promise<string> {
   try {
@@ -164,49 +196,70 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Smart HyDE: Only use for complex queries, and run in parallel
+    // Smart query enhancement: Use HyDE + Multi-Query for complex queries
     const useHyDE = use_hyde && shouldUseHyDE(query);
     
     if (useHyDE) {
-      console.log(`[Search] Running HyDE + direct query in parallel`);
+      console.log(`[Search] Complex query detected - using HyDE + Multi-Query`);
       
-      // Generate HyDE document (runs while we wait for embedding)
-      const hydeDoc = await generateHyDE(query);
+      // Run HyDE and Multi-Query generation in parallel
+      const [hydeDoc, queryVariations] = await Promise.all([
+        generateHyDE(query),
+        generateMultiQuery(query),
+      ]);
       
-      // Generate embedding for HyDE document
-      const hydeEmbedding = await openai.embeddings.create({
-        model: "text-embedding-3-small",
-        input: hydeDoc,
-        encoding_format: "float",
-      });
+      // Generate embeddings for all queries in parallel
+      const allQueries = [hydeDoc, ...queryVariations];
+      console.log(`[Search] Generating embeddings for ${allQueries.length} query variations`);
       
-      // Use HyDE embedding (it's usually better for complex queries)
-      const queryEmbedding = hydeEmbedding.data[0].embedding;
-      console.log(`[Search] Using HyDE embedding (${queryEmbedding.length} dimensions)`);
+      const embeddingPromises = allQueries.map(q =>
+        openai.embeddings.create({
+          model: "text-embedding-3-small",
+          input: q,
+          encoding_format: "float",
+        })
+      );
       
-      // Perform hybrid search
+      const embeddings = await Promise.all(embeddingPromises);
+      
+      // Search with all query variations in parallel
       const candidateCount = match_count * 2;
-      console.log(`[Search] Hybrid search with threshold=${match_threshold}, candidates=${candidateCount}, user=${user.id}`);
-      const { data, error } = await supabase.rpc("search_chunks_hybrid", {
-        query_text: query,
-        query_embedding: queryEmbedding,
-        match_threshold,
-        match_count: candidateCount,
-        filter_user_id: user.id,
-        rrf_k: 60,
-      });
+      console.log(`[Search] Running ${embeddings.length} parallel searches`);
       
-      if (error) {
-        console.error("[Search] Database error:", error);
+      const searchPromises = embeddings.map((embResp, idx) =>
+        supabase.rpc("search_chunks_hybrid", {
+          query_text: allQueries[idx],
+          query_embedding: embResp.data[0].embedding,
+          match_threshold,
+          match_count: candidateCount,
+          filter_user_id: user.id,
+          rrf_k: 60,
+        })
+      );
+      
+      const searchResults = await Promise.all(searchPromises);
+      
+      // Check for errors
+      const firstError = searchResults.find(r => r.error);
+      if (firstError?.error) {
+        console.error("[Search] Database error:", firstError.error);
         return NextResponse.json(
-          { error: "Search failed", details: error.message },
+          { error: "Search failed", details: firstError.error.message },
           { status: 500 }
         );
       }
       
-      console.log(`[Search] Found ${data?.length || 0} hybrid search candidates`);
+      // Merge and deduplicate results from all searches
+      const allResults = searchResults.flatMap(r => r.data || []);
+      const uniqueResults = Array.from(
+        new Map(allResults.map(item => [item.chunk_id, item])).values()
+      );
       
-      let finalResults: SearchResult[] = data || [];
+      console.log(`[Search] Merged ${allResults.length} results into ${uniqueResults.length} unique chunks`);
+      
+      console.log(`[Search] Found ${uniqueResults.length} unique hybrid search candidates`);
+      
+      let finalResults: SearchResult[] = uniqueResults;
       
       // Rerank the candidates
       if (finalResults.length > 0) {

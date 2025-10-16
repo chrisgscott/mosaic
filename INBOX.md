@@ -74,6 +74,91 @@ Desired result: Description becomes "A methodology for long-term planning that i
 
 ---
 
+### Corpus-Level Entity Management vs Document-Level Review
+**Priority:** High (aligns with Phase 5.4 in BUILD_PLAN)  
+**Impact:** Better user control over knowledge graph quality without workflow interruption
+
+**Context:**
+Currently, entities are automatically extracted and created during document processing. There's no way for users to review, edit, merge, or delete entities after they're created. This can lead to:
+- Low-quality entities polluting the graph
+- Duplicate entities with slight name variations
+- Abstract concepts being treated as entities
+- No way to fix mistakes or improve over time
+
+**Two Approaches Considered:**
+
+**Option A: Document-Level Review (Per-Document Approval)**
+- Pause after extraction, show proposed entities
+- User approves/rejects before creation
+- Pros: Quality gate before creation
+- Cons: Interrupts workflow, can't see cross-document duplicates, review fatigue
+
+**Option B: Corpus-Level Management (Post-Processing Curation)** ⭐ RECOMMENDED
+- Let automation run without interruption
+- Provide `/graph` management page for entire corpus
+- User curates entities when convenient, in batches
+- Can see patterns, duplicates, and relationships across all documents
+
+**Why Corpus-Level is Better:**
+- ✅ No workflow interruption - documents process automatically
+- ✅ See the big picture - all entities across corpus in one view
+- ✅ Spot duplicates - "Strategic Design Approaches" vs "Strategic Design Approach"
+- ✅ Batch operations - merge, delete, edit multiple entities at once
+- ✅ Continuous improvement - refine graph over time
+- ✅ Scales better - works for 10 or 10,000 documents
+
+**Proposed Implementation (Phase 1 - Quick Win):**
+
+1. **Basic Entity List Page (`/graph`)**
+   - View all entities with search/filter
+   - Filter by type, document, confidence score
+   - Sort by most referenced, newest, confidence
+   - Show entity details: name, type, doc count, chunk count
+   - Basic delete functionality
+
+2. **Smart Quality Indicators**
+   - 🟢 High confidence (>0.85) + Multiple docs
+   - 🟡 Medium confidence (0.7-0.85) or Single doc
+   - 🔴 Low confidence (<0.7) or Suspicious pattern
+   - ⚠️ Potential duplicate detected (similar names/embeddings)
+
+3. **Entity Details Panel**
+   - Full description and aliases
+   - Documents and chunks where it appears
+   - Relationships (incoming/outgoing)
+   - Edit name, type, description
+   - View context from source chunks
+
+4. **Merge Workflow** (Phase 2)
+   - Automatic duplicate detection
+   - Select multiple entities → merge into one
+   - Choose primary name, combine aliases
+   - Synthesize descriptions
+   - Union document_ids and chunk_ids
+   - Update all relationships
+
+5. **Bulk Operations** (Phase 2)
+   - Select multiple entities → delete
+   - Filter by confidence → bulk delete low-quality
+   - Search pattern → review and clean up
+
+**This aligns with BUILD_PLAN Phase 5.4** which already outlines Graph Management UI. Should prioritize this over document-level review.
+
+**API Endpoints Needed:**
+- `GET /api/graph/entities` - List with filters
+- `GET /api/graph/entities/:id` - Get details
+- `PATCH /api/graph/entities/:id` - Update entity
+- `DELETE /api/graph/entities/:id` - Delete entity (uses smart cascade)
+- `POST /api/graph/entities/merge` - Merge multiple entities
+- Similar endpoints for relationships
+
+**Estimated Effort:**
+- Phase 1 (Basic list + delete): 2-3 hours
+- Phase 2 (Edit + merge): 1-2 days
+- Phase 3 (Relationships): 1-2 days
+
+---
+
 ## 🐛 Bugs & Issues
 
 *No items pending - INBOX is clean!*

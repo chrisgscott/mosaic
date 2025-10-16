@@ -6,12 +6,76 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Rerank results using Cohere Rerank API
+async function rerankResults(query: string, results: SearchResult[]): Promise<SearchResult[]> {
+  if (!process.env.COHERE_API_KEY) {
+    console.warn("[Rerank] No COHERE_API_KEY found, skipping reranking");
+    return results;
+  }
+
+  if (results.length === 0) {
+    return results;
+  }
+
+  try {
+    const startTime = Date.now();
+    
+    const response = await fetch(
+      "https://api.cohere.com/v2/rerank",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.COHERE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "rerank-english-v3.0",
+          query: query,
+          documents: results.map(r => r.content),
+          top_n: results.length, // Return all, we'll slice later
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("[Rerank] API error:", error);
+      return results; // Fallback to original results
+    }
+
+    const responseData = await response.json();
+    const rerankTime = Date.now() - startTime;
+    
+    console.log(`[Rerank] Completed in ${rerankTime}ms`);
+
+    // Cohere returns: { results: [{ index: 0, relevance_score: 0.95 }, ...] }
+    const rerankedResults = responseData.results.map((item: { index: number; relevance_score: number }) => ({
+      ...results[item.index],
+      rerank_score: item.relevance_score,
+    }));
+
+    console.log(`[Rerank] Score changes:`);
+    rerankedResults.slice(0, 3).forEach((result: SearchResult, i: number) => {
+      const originalIndex = results.findIndex(r => r.chunk_id === result.chunk_id);
+      console.log(`  ${i + 1}. Rerank: ${result.rerank_score?.toFixed(3)} | RRF: ${result.rrf_score?.toFixed(4)} | Moved from position ${originalIndex + 1}`);
+    });
+
+    return rerankedResults;
+  } catch (error) {
+    console.error("[Rerank] Error:", error);
+    return results; // Fallback to original results
+  }
+}
+
 export interface SearchResult {
   chunk_id: string;
   document_id: string;
   chunk_index: number;
   content: string;
   similarity: number;
+  bm25_score?: number;
+  rrf_score?: number;
+  rerank_score?: number;
   document_name: string;
   document_file_type: string;
 }
@@ -66,13 +130,14 @@ export async function POST(request: NextRequest) {
     console.log(`[Search] Generated embedding (${queryEmbedding.length} dimensions)`);
 
     // Perform hybrid search using RRF (Reciprocal Rank Fusion)
-    // Combines semantic (vector) search with keyword (BM25) search
-    console.log(`[Search] Hybrid search with threshold=${match_threshold}, count=${match_count}, user=${user.id}`);
+    // Get 2x candidates for reranking to improve final results
+    const candidateCount = match_count * 2;
+    console.log(`[Search] Hybrid search with threshold=${match_threshold}, candidates=${candidateCount}, user=${user.id}`);
     const { data, error } = await supabase.rpc("search_chunks_hybrid", {
       query_text: query,
       query_embedding: queryEmbedding,
       match_threshold,
-      match_count,
+      match_count: candidateCount,  // Get more candidates for reranking
       filter_user_id: user.id,
       rrf_k: 60,  // RRF constant
     });
@@ -85,36 +150,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[Search] Found ${data?.length || 0} results`);
-    if (data && data.length > 0) {
-      console.log(`[Search] Top 3 results:`);
-      data.slice(0, 3).forEach((result: any, i: number) => {
-        console.log(`  ${i + 1}. Similarity: ${result.similarity.toFixed(3)} | Doc: ${result.document_name}`);
+    console.log(`[Search] Found ${data?.length || 0} hybrid search candidates`);
+    
+    let finalResults: SearchResult[] = data || [];
+    
+    // Rerank the candidates to get best final results
+    if (finalResults.length > 0) {
+      finalResults = await rerankResults(query, finalResults);
+      // Limit to requested count after reranking
+      finalResults = finalResults.slice(0, match_count);
+      
+      console.log(`[Search] Final top 3 results after reranking:`);
+      finalResults.slice(0, 3).forEach((result, i) => {
+        console.log(`  ${i + 1}. Rerank: ${result.rerank_score?.toFixed(3)} | RRF: ${result.rrf_score?.toFixed(4)} | Doc: ${result.document_name}`);
         console.log(`     Preview: ${result.content.substring(0, 80)}...`);
       });
-    } else {
-      // Debug: Try with lower threshold to see if we get ANY results
-      console.log(`[Search] No results with threshold ${match_threshold}, trying with 0.0...`);
-      const { data: debugData } = await supabase.rpc("search_chunks_semantic", {
-        query_embedding: queryEmbedding,
-        match_threshold: 0.0,
-        match_count: 3,
-        filter_user_id: user.id,
-      });
-      if (debugData && debugData.length > 0) {
-        console.log(`[Search] DEBUG: Found ${debugData.length} results with threshold=0.0`);
-        console.log(`[Search] DEBUG: Best similarity score: ${debugData[0].similarity}`);
-      } else {
-        console.log(`[Search] DEBUG: Still no results even with threshold=0.0 - checking embeddings exist...`);
-      }
     }
 
     const processingTime = Date.now() - startTime;
 
     const response: SearchResponse = {
-      results: data || [],
+      results: finalResults,
       query,
-      count: data?.length || 0,
+      count: finalResults.length,
       processing_time_ms: processingTime,
     };
 

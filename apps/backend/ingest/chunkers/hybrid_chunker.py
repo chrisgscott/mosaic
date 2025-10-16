@@ -75,6 +75,7 @@ class HybridChunker:
     
     def _generate_chunk_summary(self, 
                                 current_chunk: str,
+                                current_chunk_tokens: int,
                                 previous_chunks: List[str],
                                 next_chunks: List[str]) -> Optional[str]:
         """
@@ -82,6 +83,7 @@ class HybridChunker:
         
         Args:
             current_chunk: The chunk to summarize
+            current_chunk_tokens: Token count of current chunk
             previous_chunks: List of preceding chunks (up to summary_neighbors)
             next_chunks: List of following chunks (up to summary_neighbors)
         
@@ -92,6 +94,20 @@ class HybridChunker:
             return None
         
         try:
+            # Determine summary length based on chunk size
+            if current_chunk_tokens < 100:
+                # Small chunks: 1-2 sentences
+                summary_guidance = "1-2 concise sentences"
+                max_tokens = 100
+            elif current_chunk_tokens < 300:
+                # Medium chunks: 2-3 sentences
+                summary_guidance = "2-3 sentences"
+                max_tokens = 150
+            else:
+                # Large chunks: 3-5 sentences with more detail
+                summary_guidance = "3-5 sentences covering all major points"
+                max_tokens = 250
+            
             # Build context from neighbors
             context_parts = []
             
@@ -113,7 +129,7 @@ class HybridChunker:
                 messages=[
                     {
                         "role": "system",
-                        "content": "Analyze the CURRENT CHUNK in context of its neighbors and write a concise 2-3 sentence summary. Focus on: (1) the main topic and key concepts, (2) how it connects to surrounding content, and (3) its role in the broader document. Write directly and avoid meta-commentary like 'this chunk describes' or 'the current chunk provides'."
+                        "content": f"Analyze the CURRENT CHUNK in context of its neighbors and write a {summary_guidance} summary. Focus on: (1) the main topic and key concepts, (2) how it connects to surrounding content, and (3) its role in the broader document. For larger chunks, ensure you capture all important concepts and details. Write directly and avoid meta-commentary like 'this chunk describes' or 'the current chunk provides'."
                     },
                     {
                         "role": "user",
@@ -121,7 +137,7 @@ class HybridChunker:
                     }
                 ],
                 temperature=0.3,
-                max_tokens=150
+                max_tokens=max_tokens
             )
             
             summary = response.choices[0].message.content.strip()
@@ -208,9 +224,10 @@ class HybridChunker:
                     end_next = min(len(chunk_texts), idx + self.summary_neighbors + 1)
                     next_chunks = chunk_texts[idx + 1:end_next]
                     
-                    # Generate summary
+                    # Generate summary with adaptive length based on chunk size
                     summary = self._generate_chunk_summary(
                         current_chunk=chunk_texts[idx],
+                        current_chunk_tokens=db_chunk["token_count"],
                         previous_chunks=previous_chunks,
                         next_chunks=next_chunks
                     )

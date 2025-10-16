@@ -9,12 +9,14 @@ Uses Docling's native HybridChunker which:
 """
 
 import logging
-from typing import List, Dict, Any
+import os
+from typing import List, Dict, Any, Optional
 from uuid import uuid4
 from docling_core.types.doc.document import DoclingDocument
 from docling.chunking import HybridChunker as DoclingHybridChunker
 from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
 from transformers import AutoTokenizer
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,8 @@ class HybridChunker:
     def __init__(self, 
                  embedding_model: str = "text-embedding-3-small",
                  max_tokens: int = 512,
-                 merge_peers: bool = True):
+                 merge_peers: bool = True,
+                 summary_neighbors: int = 2):
         """
         Initialize HybridChunker with embedding model tokenizer.
         
@@ -33,10 +36,20 @@ class HybridChunker:
             embedding_model: OpenAI embedding model name (for token counting)
             max_tokens: Maximum tokens per chunk
             merge_peers: Whether to merge undersized successive chunks with same headings
+            summary_neighbors: Number of neighboring chunks to include in summary generation (0 to disable)
         """
         self.embedding_model = embedding_model
         self.max_tokens = max_tokens
         self.merge_peers = merge_peers
+        self.summary_neighbors = summary_neighbors
+        
+        # Initialize OpenAI client for summary generation
+        if summary_neighbors > 0:
+            self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            logger.info(f"Summary generation enabled with {summary_neighbors} neighbors")
+        else:
+            self.openai_client = None
+            logger.info("Summary generation disabled")
         
         # For OpenAI models, we'll use tiktoken via a simple wrapper
         # since HuggingFace tokenizers are designed for HF models
@@ -59,6 +72,65 @@ class HybridChunker:
             merge_peers=merge_peers
         )
         logger.info(f"HybridChunker initialized (max_tokens={max_tokens}, merge_peers={merge_peers})")
+    
+    def _generate_chunk_summary(self, 
+                                current_chunk: str,
+                                previous_chunks: List[str],
+                                next_chunks: List[str]) -> Optional[str]:
+        """
+        Generate a contextual summary for a chunk by analyzing its neighbors.
+        
+        Args:
+            current_chunk: The chunk to summarize
+            previous_chunks: List of preceding chunks (up to summary_neighbors)
+            next_chunks: List of following chunks (up to summary_neighbors)
+        
+        Returns:
+            Summary string or None if generation fails
+        """
+        if not self.openai_client:
+            return None
+        
+        try:
+            # Build context from neighbors
+            context_parts = []
+            
+            if previous_chunks:
+                prev_text = "\n\n".join(previous_chunks)
+                context_parts.append(f"PRECEDING CONTEXT:\n{prev_text}")
+            
+            context_parts.append(f"CURRENT CHUNK:\n{current_chunk}")
+            
+            if next_chunks:
+                next_text = "\n\n".join(next_chunks)
+                context_parts.append(f"FOLLOWING CONTEXT:\n{next_text}")
+            
+            full_context = "\n\n---\n\n".join(context_parts)
+            
+            # Generate summary using GPT-4o-mini
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a document analysis assistant. Generate a concise summary (2-3 sentences) of the CURRENT CHUNK by analyzing it in the context of its neighboring chunks. The summary should capture what this chunk is actually about, including relevant context from surrounding content. Focus on the main topic, key concepts, and how it relates to the broader document."
+                    },
+                    {
+                        "role": "user",
+                        "content": full_context
+                    }
+                ],
+                temperature=0.3,
+                max_tokens=150
+            )
+            
+            summary = response.choices[0].message.content.strip()
+            logger.debug(f"Generated summary: {summary[:100]}...")
+            return summary
+            
+        except Exception as e:
+            logger.error(f"Error generating chunk summary: {e}")
+            return None
     
     def chunk_document(self, docling_doc: DoclingDocument, document_id: str) -> List[Dict[str, Any]]:
         """
@@ -84,11 +156,14 @@ class HybridChunker:
             
             logger.info(f"HybridChunker created {len(chunks)} chunks")
             
-            # Convert to database format
+            # First pass: Convert to database format with text
             db_chunks = []
+            chunk_texts = []
+            
             for idx, chunk in enumerate(chunks):
                 # Get contextualized text (includes metadata like headers)
                 chunk_text = self.chunker.contextualize(chunk=chunk)
+                chunk_texts.append(chunk_text)
                 
                 # Count tokens
                 token_count = self.tokenizer.count_tokens(text=chunk_text)
@@ -118,6 +193,35 @@ class HybridChunker:
                     "token_count": token_count,
                     "metadata": metadata
                 })
+            
+            # Second pass: Generate summaries with neighbor context
+            if self.summary_neighbors > 0:
+                logger.info(f"Generating summaries with {self.summary_neighbors} neighbors per chunk")
+                
+                for idx, db_chunk in enumerate(db_chunks):
+                    # Get previous chunks
+                    start_prev = max(0, idx - self.summary_neighbors)
+                    previous_chunks = chunk_texts[start_prev:idx]
+                    
+                    # Get next chunks
+                    end_next = min(len(chunk_texts), idx + self.summary_neighbors + 1)
+                    next_chunks = chunk_texts[idx + 1:end_next]
+                    
+                    # Generate summary
+                    summary = self._generate_chunk_summary(
+                        current_chunk=chunk_texts[idx],
+                        previous_chunks=previous_chunks,
+                        next_chunks=next_chunks
+                    )
+                    
+                    if summary:
+                        db_chunk["metadata"]["summary"] = summary
+                        db_chunk["metadata"]["has_summary"] = True
+                        logger.debug(f"Chunk {idx}: Generated summary ({len(summary)} chars)")
+                    else:
+                        db_chunk["metadata"]["has_summary"] = False
+                
+                logger.info(f"Summary generation complete")
             
             logger.info(f"Created {len(db_chunks)} chunks from DoclingDocument")
             return db_chunks

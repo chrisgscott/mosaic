@@ -52,14 +52,17 @@ DOCLING_MAX_WORKERS = int(os.getenv("DOCLING_MAX_WORKERS", "10"))
 # Graph extraction configuration
 ENABLE_GRAPH_EXTRACTION = os.getenv("ENABLE_GRAPH_EXTRACTION", "true").lower() == "true"
 
+# Chunk summary configuration
+CHUNK_SUMMARY_NEIGHBORS = int(os.getenv("CHUNK_SUMMARY_NEIGHBORS", "2"))
+
 # Initialize clients
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 # Initialize processor based on configuration
 if USE_DOCLING:
     processor = DoclingProcessor(use_api_vlm=USE_API_VLM, max_workers=DOCLING_MAX_WORKERS)
-    chunker = HybridChunker()
-    logger.info(f"Using Docling processor with HybridChunker (API VLM: {USE_API_VLM}, max_workers: {DOCLING_MAX_WORKERS})")
+    chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS)
+    logger.info(f"Using Docling processor with HybridChunker (API VLM: {USE_API_VLM}, max_workers: {DOCLING_MAX_WORKERS}, summary_neighbors: {CHUNK_SUMMARY_NEIGHBORS})")
 else:
     processor = UnstructuredProcessor()
     chunker = TextChunker()
@@ -71,7 +74,7 @@ class DocumentWorker:
     
     def __init__(self):
         # Initialize chunker
-        self.chunker = HybridChunker() if USE_DOCLING else TextChunker()
+        self.chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS) if USE_DOCLING else TextChunker()
         
         # Initialize embeddings generator
         self.embeddings_generator = EmbeddingsGenerator(supabase)

@@ -1,5 +1,51 @@
 # INBOX
 
+## 💡 Enhancements & Ideas
+
+### HyDE Query Enhancement Tuning
+**Priority:** Medium  
+**Impact:** Improved search accuracy and reduced hallucination impact
+
+**Context:**
+HyDE (Hypothetical Document Embeddings) currently generates hypothetical answers to improve semantic search. However, it can sometimes hallucinate incorrect context (e.g., interpreting "SDA" as "Seventh-day Adventist" instead of "Strategic Design Approaches"). While the system self-corrects through Multi-Query generation, Graph Search, and Reranking, we can improve HyDE's contribution.
+
+**Observed Behavior:**
+- HyDE occasionally generates incorrect hypothetical documents
+- Multi-Query + Graph Search + Reranking compensate effectively
+- Final results are still accurate (reranking buries bad HyDE results)
+- Overall search time: ~14s for complex queries
+
+**Proposed Improvements:**
+
+1. **Lower HyDE Weight in RRF Scoring**
+   - Reduce HyDE's influence in Reciprocal Rank Fusion
+   - Give more weight to Multi-Query and Graph Search results
+   - Prevents bad HyDE guesses from skewing initial rankings
+
+2. **Add HyDE Validation**
+   - Compare HyDE result against original query embedding
+   - If similarity is below threshold (e.g., 0.6), discard HyDE result
+   - Only use HyDE when it's semantically aligned with the query
+   - Prevents hallucinated content from entering the search pipeline
+
+3. **Make HyDE Optional by Query Type**
+   - Use HyDE for broad conceptual queries
+   - Skip HyDE for specific factual queries (names, dates, etc.)
+   - Add query classification to determine when HyDE helps
+
+**Benefits:**
+- Reduced risk of hallucination affecting results
+- Faster search when HyDE is skipped
+- More predictable search behavior
+- Better resource utilization
+
+**Files to Modify:**
+- `apps/web/app/api/search/route.ts` - Add HyDE validation and weight tuning
+- Search configuration - Add HyDE weight parameter
+- Query classifier - Determine when to use HyDE
+
+---
+
 ## 🐛 Bugs & Issues
 
 ### PGMQ Queue State Corruption on Document Deletion

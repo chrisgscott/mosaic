@@ -7,7 +7,8 @@ storage3==0.7.7
 postgrest==0.15.1
 python-dotenv==1.0.0
 
-# Document processing - using latest version compatible with Python 3.12
+# Document processing - Unstructured (OCR-based, legacy)
+# Keep for backward compatibility during transition
 unstructured==0.18.15
 unstructured[pdf]==0.18.15
 unstructured[docx]==0.18.15
@@ -15,6 +16,11 @@ unstructured[xlsx]==0.18.15
 unstructured[pptx]==0.18.15
 unstructured[csv]==0.18.15
 unstructured[md]==0.18.15
+
+# Document processing - Docling (VLM-based, new)
+# Lightweight, faster alternative to Unstructured
+docling
+openai  # For API-based VLM (GPT-4o-mini)
 
 # Text processing
 langchain-text-splitters==0.3.4

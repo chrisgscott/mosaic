@@ -1,8 +1,8 @@
 """
 Document Processing Background Worker
 
-Polls pgmq queue for document processing jobs, extracts text using Unstructured,
-chunks the content, and stores it in the database.
+Polls pgmq queue for document processing jobs, extracts text using either
+Unstructured (OCR) or Docling (VLM), chunks the content, and stores it in the database.
 """
 
 import os
@@ -15,7 +15,9 @@ from psycopg2.extras import RealDictCursor
 from supabase import create_client, Client
 
 from processors.unstructured_processor import UnstructuredProcessor
+from processors.docling_processor import DoclingProcessor
 from processors.chunker import TextChunker
+from chunkers.markdown_chunker import MarkdownChunker
 
 # Load environment variables
 load_dotenv()
@@ -35,10 +37,22 @@ POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "5"))
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", "1"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 
+# Processor selection
+USE_DOCLING = os.getenv("USE_DOCLING", "false").lower() == "true"
+USE_API_VLM = os.getenv("USE_API_VLM", "true").lower() == "true"
+
 # Initialize clients
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-processor = UnstructuredProcessor()
-chunker = TextChunker()
+
+# Initialize processor based on configuration
+if USE_DOCLING:
+    processor = DoclingProcessor(use_api_vlm=USE_API_VLM)
+    chunker = MarkdownChunker()
+    logger.info(f"Using Docling processor (API VLM: {USE_API_VLM})")
+else:
+    processor = UnstructuredProcessor()
+    chunker = TextChunker()
+    logger.info("Using Unstructured processor")
 
 
 class DocumentWorker:
@@ -189,26 +203,48 @@ class DocumentWorker:
             # Update status to processing
             self.update_document_status(document_id, "processing")
             
-            # Clean up temp directories BEFORE downloading to ensure max available space
-            logger.info("Cleaning up temp directories before processing")
-            processor.cleanup_temp_dirs()
+            # Clean up temp directories BEFORE downloading (only for Unstructured)
+            if not USE_DOCLING:
+                logger.info("Cleaning up temp directories before processing")
+                processor.cleanup_temp_dirs()
             
             # Download file from Supabase Storage
             logger.info(f"Downloading file from storage: {file_path}")
             file_data = supabase.storage.from_("documents").download(file_path)
             
-            # Extract elements using Unstructured
-            logger.info("Extracting elements with Unstructured")
-            elements = processor.extract_elements(file_data, file_path)
-            
-            if not elements:
-                raise ValueError("No elements extracted from document")
-            
-            logger.info(f"Extracted {len(elements)} elements")
-            
-            # Chunk the elements using by_title strategy
-            logger.info("Chunking elements (respecting section boundaries)")
-            chunks = chunker.chunk_elements(elements, document_id, user_id, storage_path=file_path)
+            # Process document based on selected processor
+            if USE_DOCLING:
+                # Docling returns markdown directly
+                logger.info(f"Extracting text with Docling ({'API VLM' if USE_API_VLM else 'Local VLM'})")
+                markdown_text = processor.extract_elements(file_data, file_path)
+                
+                if not markdown_text:
+                    raise ValueError("No text extracted from document")
+                
+                logger.info(f"Extracted {len(markdown_text):,} characters of markdown")
+                
+                # Chunk the markdown
+                logger.info("Chunking markdown text")
+                chunks = chunker.chunk_markdown(markdown_text, document_id)
+                
+                # Add user_id and storage_path to chunks
+                for chunk in chunks:
+                    chunk["user_id"] = user_id
+                    chunk["metadata"]["storage_path"] = file_path
+                
+            else:
+                # Unstructured returns elements
+                logger.info("Extracting elements with Unstructured")
+                elements = processor.extract_elements(file_data, file_path)
+                
+                if not elements:
+                    raise ValueError("No elements extracted from document")
+                
+                logger.info(f"Extracted {len(elements)} elements")
+                
+                # Chunk the elements using by_title strategy
+                logger.info("Chunking elements (respecting section boundaries)")
+                chunks = chunker.chunk_elements(elements, document_id, user_id, storage_path=file_path)
             
             logger.info(f"Created {len(chunks)} chunks")
             

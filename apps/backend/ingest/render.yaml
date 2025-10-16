@@ -23,8 +23,13 @@ services:
         value: 1
       - key: MAX_RETRIES
         value: 3
+      # Document processor selection
+      - key: USE_DOCLING
+        value: false  # Set to "true" to use Docling (VLM-based, faster)
+      - key: USE_API_VLM
+        value: true   # Only used if USE_DOCLING=true. Set to "true" for API VLM (GPT-4o-mini)
       # Add these in Render dashboard (they're secrets):
       # - SUPABASE_URL
       # - SUPABASE_SERVICE_ROLE_KEY
       # - DATABASE_URL
-      # - OPENAI_API_KEY (optional, for future use)
+      # - OPENAI_API_KEY (required if USE_DOCLING=true and USE_API_VLM=true)

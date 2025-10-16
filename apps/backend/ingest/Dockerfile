@@ -6,14 +6,16 @@ WORKDIR /app
 
 # Install system dependencies required for document processing
 RUN apt-get update && apt-get install -y \
-    # OCR support
+    # OCR support (for Unstructured processor)
     tesseract-ocr \
     tesseract-ocr-eng \
     libtesseract-dev \
-    # PDF processing
+    # PDF processing (for Unstructured processor)
     poppler-utils \
-    # File type detection
+    # File type detection (both processors)
     libmagic1 \
+    # Docling dependencies
+    libgomp1 \
     # HTML/XML parsing
     libxml2 \
     libxslt1-dev \

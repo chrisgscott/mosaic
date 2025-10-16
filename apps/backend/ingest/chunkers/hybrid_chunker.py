@@ -136,8 +136,8 @@ class HybridChunker:
                         "content": full_context
                     }
                 ],
-                temperature=0.3,
                 max_completion_tokens=max_tokens  # GPT-5 models use max_completion_tokens
+                # Note: GPT-5-nano only supports default temperature (1)
             )
             
             summary = response.choices[0].message.content.strip()

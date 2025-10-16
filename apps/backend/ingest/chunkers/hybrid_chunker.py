@@ -129,7 +129,7 @@ class HybridChunker:
                 messages=[
                     {
                         "role": "system",
-                        "content": f"Analyze the CURRENT CHUNK in context of its neighbors and write a {summary_guidance} summary. Focus on: (1) the main topic and key concepts, (2) how it connects to surrounding content, and (3) its role in the broader document. For larger chunks, ensure you capture all important concepts and details. Write directly and avoid meta-commentary like 'this chunk describes' or 'the current chunk provides'."
+                        "content": f"Analyze the CURRENT CHUNK and write a {summary_guidance} summary. If the chunk is self-contained (a complete concept, framework, or methodology), summarize it directly without forcing connections to neighbors. Only mention relationships to surrounding content if they are genuinely meaningful and evident from the context. For larger chunks, ensure you capture all important concepts and details. Write directly and avoid meta-commentary like 'this chunk describes' or 'the current chunk provides'."
                     },
                     {
                         "role": "user",

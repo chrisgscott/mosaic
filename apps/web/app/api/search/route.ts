@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import { generateText } from "ai";
 import { openai as openaiProvider } from "@ai-sdk/openai";
 import { createProgressEvent, type ProgressCallback } from "@/lib/search-progress";
+import { graphEnhancedSearch, isRelationshipQuery } from "@/lib/graph/graph-search";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -188,6 +189,8 @@ export async function POST(request: NextRequest) {
       match_threshold = 0.5,  // Lowered from 0.7 - semantic search typically gets 0.5-0.8 scores
       match_count = 10,
       use_hyde = true,  // Enable HyDE by default
+      use_graph = true,  // Enable graph search by default
+      graph_hops = 1,    // Number of hops for graph traversal
     } = body;
 
     if (!query || typeof query !== "string") {
@@ -202,6 +205,12 @@ export async function POST(request: NextRequest) {
       console.log(`[Progress] ${event.message} (${event.status})`);
       // TODO: Stream to frontend via SSE when we add streaming support
     };
+
+    // Detect if this is a relationship query that would benefit from graph search
+    const isRelQuery = use_graph && isRelationshipQuery(query);
+    if (isRelQuery) {
+      console.log(`[Graph] Relationship query detected - will use graph search`);
+    }
 
     // Smart query enhancement: Use HyDE + Multi-Query for complex queries
     const useHyDE = use_hyde && shouldUseHyDE(query);
@@ -280,6 +289,80 @@ export async function POST(request: NextRequest) {
       console.log(`[Search] Found ${uniqueResults.length} unique hybrid search candidates`);
       
       let finalResults: SearchResult[] = uniqueResults;
+      
+      // Run graph search if this is a relationship query
+      if (isRelQuery) {
+        try {
+          onProgress(createProgressEvent('searching-graph', 'in-progress'));
+          console.log(`[Graph] Running graph-enhanced search`);
+          
+          const graphResults = await graphEnhancedSearch({
+            query,
+            userId: user.id,
+            limit: match_count,
+            includeRelationships: true,
+            maxHops: graph_hops,
+            entitySimilarityThreshold: 0.5, // Lowered for better entity matching
+          });
+          
+          console.log(`[Graph] Found ${graphResults.entities.length} entities, ${graphResults.relationships.length} relationships`);
+          
+          // If graph found related chunks, fetch them and add to results
+          if (graphResults.relatedChunkIds.length > 0) {
+            onProgress(createProgressEvent('expanding-graph', 'in-progress'));
+            console.log(`[Graph] Fetching ${graphResults.relatedChunkIds.length} related chunks`);
+            
+            const { data: graphChunks, error: graphError } = await supabase
+              .from('chunks')
+              .select(`
+                id,
+                content,
+                chunk_index,
+                token_count,
+                metadata,
+                document:documents!inner(
+                  id,
+                  file_name,
+                  file_type
+                )
+              `)
+              .in('id', graphResults.relatedChunkIds)
+              .limit(match_count);
+            
+            if (!graphError && graphChunks) {
+              // Add graph chunks to results with a graph_source flag
+              const graphSearchResults = graphChunks.map((chunk: any) => ({
+                chunk_id: chunk.id,
+                content: chunk.content,
+                chunk_index: chunk.chunk_index,
+                token_count: chunk.token_count,
+                metadata: chunk.metadata,
+                document_id: chunk.document.id,
+                document_name: chunk.document.file_name,
+                document_file_type: chunk.document.file_type,
+                similarity: 0.9, // High score for graph-discovered chunks
+                rrf_score: 0.02, // Moderate RRF score
+                graph_source: true, // Flag to indicate this came from graph
+              }));
+              
+              // Merge with vector search results, deduplicate
+              const mergedResults = [...finalResults, ...graphSearchResults];
+              finalResults = Array.from(
+                new Map(mergedResults.map(item => [item.chunk_id, item])).values()
+              );
+              
+              console.log(`[Graph] Added ${graphSearchResults.length} graph chunks, total now ${finalResults.length}`);
+            }
+            
+            onProgress(createProgressEvent('expanding-graph', 'completed'));
+          }
+          
+          onProgress(createProgressEvent('searching-graph', 'completed'));
+        } catch (graphError) {
+          console.error('[Graph] Error during graph search:', graphError);
+          // Continue with vector-only results if graph search fails
+        }
+      }
       
       // Rerank the candidates
       if (finalResults.length > 0) {

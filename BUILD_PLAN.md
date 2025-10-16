@@ -316,54 +316,122 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 
 ---
 
-## Phase 5: Graph RAG - Knowledge Extraction
+## Phase 5: Graph RAG - Knowledge Extraction ✅ CORE COMPLETE
 
 ### Goals
-- Extract entities and relationships from documents
-- Build knowledge graph for advanced querying
-- Enable graph-based retrieval
+- ✅ Extract entities and relationships from documents
+- ✅ Build knowledge graph for advanced querying
+- ✅ Enable graph-based retrieval
 
-### Tasks
+### Phase 5.1: Core Implementation ✅ COMPLETE
 
 #### 🕸️ Graph Database Schema
-- [ ] Create `entities` table
-  - `id`, `document_id`, `user_id`
-  - `name`, `type`, `description`
-  - `metadata` (JSONB)
-  - `created_at`
-- [ ] Create `relationships` table
-  - `id`, `source_entity_id`, `target_entity_id`
-  - `relationship_type`, `description`
-  - `confidence_score`
-  - `document_id`, `user_id`
-- [ ] Add indexes for graph traversal
-- [ ] Implement RLS policies
+- [x] Create `entities` table (Postgres-native, following R2R approach)
+  - `id`, `user_id`, `name`, `type`, `description`
+  - `embedding` (VECTOR(1536)) for semantic entity search
+  - `document_ids`, `chunk_ids` arrays for source tracking
+  - `canonical_name`, `aliases` for deduplication
+  - `metadata` (JSONB), `extraction_confidence`
+  - HNSW index for fast similarity search
+- [x] Create `relationships` table
+  - `id`, `user_id`, `source_entity_id`, `target_entity_id`
+  - `relationship_type`, `description`, `bidirectional`
+  - `document_ids`, `chunk_ids` arrays
+  - `metadata` (JSONB), `extraction_confidence`
+  - Unique constraint on `(user_id, source_entity_id, target_entity_id, relationship_type)`
+- [x] Add indexes for graph traversal
+  - Source/target entity indexes
+  - Composite indexes for efficient joins
+  - GIN indexes for array columns
+- [x] Implement RLS policies
+  - User isolation for entities and relationships
+  - Public document support (entities visible if doc is public)
+- [x] Helper functions
+  - `find_similar_entities()` - Deduplication via pgvector
+  - `get_entity_with_relationships()` - 1-hop traversal
+  - `search_entities_by_name()` - Fuzzy text search
 
 #### 🤖 Entity Extraction
-- [ ] Integrate LLM for entity extraction (GPT-4, Claude)
-- [ ] Define entity types (Person, Organization, Concept, etc.)
-- [ ] Extract entities from chunks
-- [ ] Deduplicate entities across documents
-- [ ] Store entity metadata
+- [x] Integrate LLM for entity extraction (GPT-4o-mini via Vercel AI SDK)
+- [x] Define entity types (11 types)
+  - person, organization, concept, methodology, framework
+  - tool, technology, location, event, document, other
+- [x] Extract entities from chunks with structured output (Zod schemas)
+- [x] Deduplicate entities across documents
+  - Canonical name normalization (lowercase, trimmed)
+  - pgvector similarity search (0.85 threshold)
+  - Unique database constraints
+- [x] Store entity metadata with source tracking
+- [x] Batch processing (5 chunks at a time)
 
 #### 🔗 Relationship Extraction
-- [ ] Extract relationships between entities
-- [ ] Classify relationship types
-- [ ] Calculate confidence scores
-- [ ] Handle multi-hop relationships
-- [ ] Store relationship metadata
+- [x] Extract relationships between entities (12 types)
+  - uses, requires, relates_to, part_of, implements
+  - extends, depends_on, collaborates_with, manages
+  - creates, analyzes, evaluates, other
+- [x] Classify relationship types with structured output
+- [x] Calculate confidence scores (0.9 default)
+- [x] Store relationship metadata with source tracking
+- [x] Deduplicate via unique constraints
 
-#### 📊 Graph Visualization
+#### 🔍 Graph Search
+- [x] Semantic entity search using pgvector
+- [x] Multi-hop graph traversal (configurable depth)
+- [x] Relationship discovery between entities
+- [x] Context expansion via graph connections
+- [x] Query type detection (relationship vs entity queries)
+- [x] Combine graph results with vector search
+
+#### 📡 API Endpoints
+- [x] `POST /api/graph/extract` - Extract graph from document
+- [x] Graph search functions ready for integration
+
+#### 📚 Documentation
+- [x] Complete implementation guide (`/docs/graph-rag.md`)
+- [x] Usage examples and API reference
+- [x] Performance notes and cost analysis
+- [x] Implementation summary (`/GRAPH_RAG_IMPLEMENTATION.md`)
+
+### Phase 5.2: Testing & Integration (Next)
+- [ ] Test extraction on multiple documents
+- [ ] Verify deduplication works correctly
+- [ ] Validate relationship accuracy
+- [ ] Measure extraction performance
+- [ ] Integrate graph search into main search API
+- [ ] Add graph search toggle to UI
+- [ ] Show entity/relationship results in search UI
+- [ ] Add progress tracking for graph operations
+
+### Phase 5.3: Graph Visualization (Future)
 - [ ] Integrate graph visualization library (D3.js, Cytoscape, React Flow)
 - [ ] Create interactive graph view
 - [ ] Show entity details on hover
 - [ ] Enable graph exploration (zoom, pan, filter)
 - [ ] Highlight paths between entities
 
+### Phase 5.4: Advanced Features (Future)
+- [ ] Community detection (Leiden clustering)
+- [ ] Entity resolution improvements
+- [ ] Temporal relationships
+- [ ] Cross-document entity linking
+- [ ] Graph-based summarization
+
 ### Technical Decisions
-- **LLM for extraction**: GPT-4 or Claude (better reasoning for complex relationships)
-- **Graph library**: React Flow (React-native, good performance)
-- **Entity deduplication**: Fuzzy matching + embedding similarity
+- **Storage**: Postgres-native (no Neo4j) following R2R's proven approach
+- **LLM for extraction**: GPT-4o-mini via Vercel AI SDK with structured output (Zod)
+- **Entity deduplication**: pgvector cosine similarity (0.85 threshold) + unique constraints
+- **Graph traversal**: SQL joins with indexes (efficient for 1-2 hops)
+- **Batch processing**: 5 chunks at a time (balance speed and rate limits)
+- **Cost**: ~$0.23 per 200-page document, ~$0.0001 per search
+
+### Files Created
+- `supabase/migrations/20251016_graph_rag_schema.sql`
+- `apps/web/lib/graph/entity-extraction.ts`
+- `apps/web/lib/graph/graph-search.ts`
+- `apps/web/app/api/graph/extract/route.ts`
+- `docs/graph-rag.md`
+- `GRAPH_RAG_IMPLEMENTATION.md`
+- `test-graph-extract.sh`
 
 ---
 

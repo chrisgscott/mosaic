@@ -5,6 +5,8 @@ export type SearchProgressStep =
   | 'generating-hyde'
   | 'creating-embeddings'
   | 'searching'
+  | 'searching-graph'
+  | 'expanding-graph'
   | 'merging-results'
   | 'reranking'
   | 'complete';
@@ -23,6 +25,8 @@ export const PROGRESS_MESSAGES: Record<SearchProgressStep, string> = {
   'generating-hyde': 'Imagining the perfect answer',
   'creating-embeddings': 'Preparing search queries',
   'searching': 'Searching through your documents',
+  'searching-graph': 'Exploring knowledge connections',
+  'expanding-graph': 'Following related concepts',
   'merging-results': 'Combining results',
   'reranking': 'Ranking by relevance',
   'complete': 'Search complete',

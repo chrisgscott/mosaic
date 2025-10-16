@@ -19,6 +19,7 @@ from processors.docling_processor import DoclingProcessor
 from processors.chunker import TextChunker
 from chunkers.markdown_chunker import MarkdownChunker
 from processors.embeddings_generator import EmbeddingsGenerator
+from processors.graph_extractor import GraphExtractor
 
 # Load environment variables
 load_dotenv()
@@ -48,6 +49,9 @@ USE_DOCLING = os.getenv("USE_DOCLING", "false").lower() == "true"
 USE_API_VLM = os.getenv("USE_API_VLM", "true").lower() == "true"
 DOCLING_MAX_WORKERS = int(os.getenv("DOCLING_MAX_WORKERS", "10"))
 
+# Graph extraction configuration
+ENABLE_GRAPH_EXTRACTION = os.getenv("ENABLE_GRAPH_EXTRACTION", "true").lower() == "true"
+
 # Initialize clients
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
@@ -72,6 +76,14 @@ class DocumentWorker:
         # Initialize embeddings generator
         self.embeddings_generator = EmbeddingsGenerator(supabase)
         logger.info("Initialized embeddings generator")
+        
+        # Initialize graph extractor
+        if ENABLE_GRAPH_EXTRACTION:
+            self.graph_extractor = GraphExtractor(supabase)
+            logger.info("Initialized graph extractor")
+        else:
+            self.graph_extractor = None
+            logger.info("Graph extraction disabled")
         
         self.db_conn = None
         self.running = True
@@ -300,6 +312,26 @@ class DocumentWorker:
                 logger.debug(f"Batch {batch_num}/{total_batches} complete: {len(batch)} chunks + {len(embeddings)} embeddings")
             
             logger.info(f"Successfully stored {len(chunks)} chunks and generated {total_embeddings} embeddings")
+            
+            # Extract graph (entities and relationships) if enabled
+            if self.graph_extractor:
+                logger.info("Extracting entities and relationships for knowledge graph")
+                try:
+                    # Get stored chunks with IDs for graph extraction
+                    chunks_result = supabase.table("chunks").select("id, content").eq("document_id", document_id).execute()
+                    stored_chunks_for_graph = chunks_result.data
+                    
+                    # Process chunks for graph extraction
+                    entity_count, rel_count = self.graph_extractor.process_chunks_batch(
+                        stored_chunks_for_graph,
+                        document_id,
+                        user_id
+                    )
+                    
+                    logger.info(f"Graph extraction complete: {entity_count} entities, {rel_count} relationships")
+                except Exception as e:
+                    # Don't fail the whole job if graph extraction fails
+                    logger.error(f"Graph extraction failed (non-fatal): {e}")
             
             # Update document status to ready
             self.update_document_status(document_id, "ready")

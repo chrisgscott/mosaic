@@ -49,20 +49,25 @@ async function getDocumentWithChunks(documentId: string) {
   
   const user_name = profile?.full_name || profile?.email?.split("@")[0] || "Unknown";
 
-  // Get chunks (set high limit to handle large documents)
+  // Get accurate chunk count (PostgREST has 1000 row default limit)
+  const { count: chunkCount } = await supabase
+    .from("chunks")
+    .select("*", { count: "exact", head: true })
+    .eq("document_id", documentId);
+
+  // Get chunks (limited to 1000 for display, but show accurate count)
   const { data: chunks, error: chunksError } = await supabase
     .from("chunks")
     .select("id, chunk_index, content, token_count, metadata, created_at")
     .eq("document_id", documentId)
     .order("chunk_index", { ascending: true })
-    .limit(10000); // Support up to 10k chunks per document
+    .limit(1000); // PostgREST default max, paginate if needed
 
   if (chunksError) {
     console.error("Error fetching chunks:", chunksError);
   }
 
   // Calculate stats
-  const chunkCount = chunks?.length || 0;
   const totalTokens = chunks?.reduce((sum, chunk) => sum + (chunk.token_count || 0), 0) || 0;
 
   return {

@@ -1,7 +1,7 @@
 # Mosaic RAG Platform - Build Plan
 
 **Last Updated:** January 16, 2025  
-**Status:** Phase 1-3 Complete + Phase 7.1-7.4 Complete - Full document processing pipeline with Docling VLM processor, shared corpus, error tracking, and document details page
+**Status:** Phase 1-4 Complete + Phase 7.1-7.4 Complete - Full RAG pipeline with semantic search, document processing with Docling VLM, shared corpus, error tracking, and document details page
 
 ---
 
@@ -251,48 +251,46 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 
 ---
 
-## Phase 4: Vector Embeddings & Semantic Search
+## Phase 4: Vector Embeddings & Semantic Search ✅ COMPLETE
 
 ### Goals
-- Generate embeddings for all text chunks (or summaries)
-- Enable semantic search across documents
-- Implement efficient vector similarity search
-- Optional: LLM-enhanced chunk summaries for better retrieval
+- ✅ Generate embeddings for all text chunks
+- ✅ Enable semantic search across documents
+- ✅ Implement efficient vector similarity search
+- Optional: LLM-enhanced chunk summaries for better retrieval (future enhancement)
 
-### Tasks
+### Completed Tasks
 
-#### 📝 Chunk Summaries (Optional Enhancement)
+#### 🧮 Embeddings Generation ✅
+- [x] Setup pgvector extension
+- [x] Create `embeddings` table with vector(1536) column
+- [x] Integrate OpenAI Embeddings API (text-embedding-3-small)
+- [x] Generate embeddings for all chunks (1,494 embeddings)
+- [x] Store embeddings with chunk references
+- [x] Add HNSW index for fast similarity search
+- [x] Create `search_chunks_semantic()` database function
+
+#### 🔍 Semantic Search ✅
+- [x] Implement vector similarity search with cosine distance
+- [x] Add search API endpoint (`/api/search`)
+- [x] Create search UI component with real-time results
+- [x] Show relevant chunks with similarity scores
+- [x] Link back to source documents
+- [x] Display processing time and result count
+
+#### ⚡ Performance Optimization ✅
+- [x] Batch embedding generation (100 chunks per batch)
+- [x] Implement rate limiting with exponential backoff
+- [x] Monitor embedding costs (tracked in logs)
+- [x] Efficient database queries with RLS policies
+
+#### 📝 Chunk Summaries (Optional Enhancement - Future)
 - [ ] Add `chunk_summary` column to chunks table
 - [ ] Generate context-aware summaries with GPT-4o Mini
 - [ ] Include surrounding chunk context when summarizing
 - [ ] Store both original content and summary
 - [ ] Backfill summaries for existing chunks
 - [ ] Decide: Embed summaries vs original content
-
-#### 🧮 Embeddings Generation
-- [ ] Setup pgvector extension (already installed)
-- [ ] Create `embeddings` table
-  - `id`, `chunk_id`, `document_id`, `user_id`
-  - `embedding` (vector(1536) for OpenAI)
-  - `model`, `created_at`
-- [ ] Integrate OpenAI Embeddings API (or alternatives)
-- [ ] Generate embeddings for all chunks (or summaries)
-- [ ] Store embeddings with chunk references
-- [ ] Add HNSW index for fast similarity search
-
-#### 🔍 Semantic Search
-- [ ] Implement vector similarity search
-- [ ] Add search API endpoint
-- [ ] Create search UI component
-- [ ] Show relevant chunks with context
-- [ ] Highlight matching text
-- [ ] Link back to source documents
-
-#### ⚡ Performance Optimization
-- [ ] Batch embedding generation (reduce API calls)
-- [ ] Implement embedding caching
-- [ ] Add rate limiting for API calls
-- [ ] Monitor embedding costs
 
 #### Docling Native Chunking (Enhancement)
 - [ ] Evaluate HybridChunker vs current MarkdownChunker

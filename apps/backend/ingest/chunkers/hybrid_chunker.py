@@ -191,6 +191,7 @@ class HybridChunker:
                     "content": chunk_text.strip(),
                     "chunk_index": idx,
                     "token_count": token_count,
+                    "summary": None,  # Will be populated in second pass
                     "metadata": metadata
                 })
             
@@ -215,11 +216,10 @@ class HybridChunker:
                     )
                     
                     if summary:
-                        db_chunk["metadata"]["summary"] = summary
-                        db_chunk["metadata"]["has_summary"] = True
+                        db_chunk["summary"] = summary
                         logger.debug(f"Chunk {idx}: Generated summary ({len(summary)} chars)")
                     else:
-                        db_chunk["metadata"]["has_summary"] = False
+                        db_chunk["summary"] = None
                 
                 logger.info(f"Summary generation complete")
             

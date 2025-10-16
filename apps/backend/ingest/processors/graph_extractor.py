@@ -394,9 +394,12 @@ Guidelines:
         
         for i, chunk in enumerate(chunks, 1):
             try:
+                # Use summary if available, otherwise use content
+                text = chunk.get("summary") or chunk["content"]
+                
                 entity_count, rel_count = self.process_chunk(
                     chunk["id"],
-                    chunk["content"],
+                    text,
                     document_id,
                     user_id
                 )

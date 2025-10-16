@@ -295,7 +295,11 @@ class DocumentWorker:
                 stored_chunks = result.data
                 
                 # Prepare batch for embeddings (OpenAI supports up to 2048 inputs per request)
-                chunk_texts = [chunk["content"] for chunk in stored_chunks]
+                # Use summary if available, otherwise use content
+                chunk_texts = [
+                    chunk.get("summary") or chunk["content"] 
+                    for chunk in stored_chunks
+                ]
                 embeddings = self.embeddings_generator.generate_embeddings_batch(chunk_texts)
                 
                 # Store embeddings
@@ -321,7 +325,7 @@ class DocumentWorker:
                 logger.info("Extracting entities and relationships for knowledge graph")
                 try:
                     # Get stored chunks with IDs for graph extraction
-                    chunks_result = supabase.table("chunks").select("id, content").eq("document_id", document_id).execute()
+                    chunks_result = supabase.table("chunks").select("id, content, summary").eq("document_id", document_id).execute()
                     stored_chunks_for_graph = chunks_result.data
                     
                     # Process chunks for graph extraction

@@ -2,151 +2,30 @@
 
 ## 💡 Enhancements & Ideas
 
-### HyDE Query Enhancement Tuning
-**Priority:** Medium  
-**Impact:** Improved search accuracy and reduced hallucination impact
-
-**Context:**
-HyDE (Hypothetical Document Embeddings) currently generates hypothetical answers to improve semantic search. However, it can sometimes hallucinate incorrect context (e.g., interpreting "SDA" as "Seventh-day Adventist" instead of "Strategic Design Approaches"). While the system self-corrects through Multi-Query generation, Graph Search, and Reranking, we can improve HyDE's contribution.
-
-**Observed Behavior:**
-- HyDE occasionally generates incorrect hypothetical documents
-- Multi-Query + Graph Search + Reranking compensate effectively
-- Final results are still accurate (reranking buries bad HyDE results)
-- Overall search time: ~14s for complex queries
-
-**Proposed Improvements:**
-
-1. **Lower HyDE Weight in RRF Scoring**
-   - Reduce HyDE's influence in Reciprocal Rank Fusion
-   - Give more weight to Multi-Query and Graph Search results
-   - Prevents bad HyDE guesses from skewing initial rankings
-
-2. **Add HyDE Validation**
-   - Compare HyDE result against original query embedding
-   - If similarity is below threshold (e.g., 0.6), discard HyDE result
-   - Only use HyDE when it's semantically aligned with the query
-   - Prevents hallucinated content from entering the search pipeline
-
-3. **Make HyDE Optional by Query Type**
-   - Use HyDE for broad conceptual queries
-   - Skip HyDE for specific factual queries (names, dates, etc.)
-   - Add query classification to determine when HyDE helps
-
-**Benefits:**
-- Reduced risk of hallucination affecting results
-- Faster search when HyDE is skipped
-- More predictable search behavior
-- Better resource utilization
-
-**Files to Modify:**
-- `apps/web/app/api/search/route.ts` - Add HyDE validation and weight tuning
-- Search configuration - Add HyDE weight parameter
-- Query classifier - Determine when to use HyDE
-
-### Graph Extractor Entity Quality Improvement
-**Priority:** Medium  
-**Impact:** More precise knowledge graph, better relationship discovery, improved graph search quality
-
-**Context:**
-The graph extractor currently extracts relationships to abstract concepts that aren't actual entities (e.g., "stakeholder alignment", "system-wide coordination", "effectiveness"). This dilutes the knowledge graph with low-value relationships and makes it harder to discover meaningful connections between concrete methodologies, tools, and frameworks.
-
-**Current Behavior:**
-- LLM extracts both concrete entities (methodologies, tools, frameworks, people) and abstract concepts (goals, outcomes, qualities)
-- Abstract concepts aren't stored as entities (correctly)
-- Relationships to these concepts are attempted but fail silently
-- Result: Knowledge graph misses potential connections because LLM "wastes" extraction on non-entities
-- Side effect: Warning logs clutter output
-
-**Proposed Solutions:**
-
-1. **Improve Entity Extraction Prompt (Recommended)**
-   - Update graph extractor prompt to only extract concrete entities
-   - Define clear criteria: methodologies, tools, frameworks, people, organizations
-   - Exclude abstract concepts: "alignment", "coordination", "effectiveness", etc.
-   - Reduces spurious relationship attempts at the source
-
-2. **Add Entity Type Validation**
-   - Before creating relationships, validate both entities exist
-   - Skip relationship creation silently (or at DEBUG level)
-   - Prevents warnings for expected behavior
-
-3. **Post-Processing Filter**
-   - After LLM extraction, filter out relationships to known abstract concepts
-   - Maintain a list of common abstract terms to exclude
-   - Quick fix but requires maintenance
-
-**Benefits:**
-- **Higher quality knowledge graph** - Focus on concrete, actionable entities
-- **Better relationship discovery** - LLM can extract more real connections instead of wasting capacity on abstract concepts
-- **Improved graph search** - Queries find more relevant methodology connections
-- **More precise entity clustering** - Similar entities group together better
-- Bonus: Cleaner logs as a side effect
-
-**Files to Modify:**
-- `apps/backend/ingest/processors/graph_extractor.py` - Update extraction prompt or add validation
-- Consider downgrading log level from WARNING to DEBUG for missing entities
+*No items pending - INBOX is clean!*
 
 ---
 
 ## 🐛 Bugs & Issues
 
-### PGMQ Queue State Corruption on Document Deletion
-**Priority:** High  
-**Impact:** Database restart required to recover
-
-**Problem:**
-When a document is deleted while in an error state, the `document_processing` queue enters a corrupted state where:
-- Queue cannot be purged using standard PGMQ commands
-- Messages remain stuck in the queue
-- Only solution is to restart the database
-
-**Root Cause:**
-Likely a race condition between:
-1. Document deletion (CASCADE deletes chunks/embeddings)
-2. Worker retrying the failed job
-3. PGMQ message visibility timeout
-
-**Potential Solutions:**
-1. **Immediate:** Add queue cleanup on document deletion
-   - Before deleting document, archive/delete any pending queue messages
-   - Use `pgmq.archive()` or `pgmq.delete()` for the document's job
-   
-2. **Short-term:** Improve error handling
-   - Check if document exists before processing
-   - If document not found, delete message immediately (don't retry)
-   
-3. **Long-term:** Implement dead letter queue
-   - Move permanently failed messages to separate queue
-   - Prevents main queue corruption
-   - Allows manual inspection/cleanup
-
-**Files to modify:**
-- `apps/backend/ingest/main.py` - Add document existence check
-- `apps/web/app/api/documents/[id]/route.ts` - Clean queue on delete
-- Database migration - Add dead letter queue table
+*No items pending - INBOX is clean!*
 
 ---
 
 ## ✅ Recently Completed
 
-All items have been processed and moved to their appropriate locations:
+### Moved to BUILD_PLAN.md (October 16, 2025)
+- **HyDE Query Enhancement Tuning** → Phase 6 Enhancements (Medium Priority)
+- **Graph Extractor Entity Quality Improvement** → Phase 6 Enhancements (Medium Priority)
+- **PGMQ Queue State Corruption Fix** → Phase 6 Enhancements (High Priority)
 
-- **Actionable items** → Moved to BUILD_PLAN.md with proper phase assignments
-- **Items needing decisions** → Moved to TO_PROCESS.md for evaluation
-- **Already implemented** → Removed (Docling VLM, parallel processing)
-
-## Recent Migrations (January 16, 2025)
-
-### Moved to BUILD_PLAN.md
+### Previous Migrations (January 16, 2025)
 - **Docling Native Chunking (HybridChunker)** → Phase 4 enhancement
 - **OpenAI API Timeout Handling** → Phase 3 improvements
-
-### Moved to TO_PROCESS.md
-- Frontend Display Issues (chunk limit, filename truncation)
-- Infrastructure Cleanup (disk size reduction, Unstructured removal)
-- Advanced RAG Patterns (agentic chunking, lazy processing, structured data)
-- Operational Decisions (multi-worker scaling)
+- Frontend Display Issues → TO_PROCESS.md
+- Infrastructure Cleanup → TO_PROCESS.md
+- Advanced RAG Patterns → TO_PROCESS.md
+- Operational Decisions → TO_PROCESS.md
 
 ### Already Implemented (Removed from INBOX)
 - Docling with VLM ✅ Deployed and working

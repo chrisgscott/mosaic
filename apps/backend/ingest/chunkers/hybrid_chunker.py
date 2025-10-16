@@ -113,7 +113,7 @@ class HybridChunker:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a document analysis assistant. Generate a concise summary (2-3 sentences) of the CURRENT CHUNK by analyzing it in the context of its neighboring chunks. The summary should capture what this chunk is actually about, including relevant context from surrounding content. Focus on the main topic, key concepts, and how it relates to the broader document."
+                        "content": "Analyze the CURRENT CHUNK in context of its neighbors and write a concise 2-3 sentence summary. Focus on: (1) the main topic and key concepts, (2) how it connects to surrounding content, and (3) its role in the broader document. Write directly and avoid meta-commentary like 'this chunk describes' or 'the current chunk provides'."
                     },
                     {
                         "role": "user",

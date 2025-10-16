@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { generateText } from "ai";
 import { openai as openaiProvider } from "@ai-sdk/openai";
+import { createProgressEvent, type ProgressCallback } from "@/lib/search-progress";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -196,11 +197,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Progress tracking helper (logs for now, will stream to frontend later)
+    const onProgress: ProgressCallback = (event) => {
+      console.log(`[Progress] ${event.message} (${event.status})`);
+      // TODO: Stream to frontend via SSE when we add streaming support
+    };
+
     // Smart query enhancement: Use HyDE + Multi-Query for complex queries
     const useHyDE = use_hyde && shouldUseHyDE(query);
     
     if (useHyDE) {
       console.log(`[Search] Complex query detected - using HyDE + Multi-Query`);
+      onProgress(createProgressEvent('analyzing', 'completed'));
+      onProgress(createProgressEvent('generating-variations', 'in-progress'));
+      onProgress(createProgressEvent('generating-hyde', 'in-progress'));
       
       // Run HyDE and Multi-Query generation in parallel
       const [hydeDoc, queryVariations] = await Promise.all([
@@ -208,7 +218,11 @@ export async function POST(request: NextRequest) {
         generateMultiQuery(query),
       ]);
       
+      onProgress(createProgressEvent('generating-variations', 'completed'));
+      onProgress(createProgressEvent('generating-hyde', 'completed'));
+      
       // Generate embeddings for all queries in parallel
+      onProgress(createProgressEvent('creating-embeddings', 'in-progress'));
       const allQueries = [hydeDoc, ...queryVariations];
       console.log(`[Search] Generating embeddings for ${allQueries.length} query variations`);
       
@@ -221,8 +235,10 @@ export async function POST(request: NextRequest) {
       );
       
       const embeddings = await Promise.all(embeddingPromises);
+      onProgress(createProgressEvent('creating-embeddings', 'completed'));
       
       // Search with all query variations in parallel
+      onProgress(createProgressEvent('searching', 'in-progress'));
       const candidateCount = match_count * 2;
       console.log(`[Search] Running ${embeddings.length} parallel searches`);
       
@@ -249,13 +265,17 @@ export async function POST(request: NextRequest) {
         );
       }
       
+      onProgress(createProgressEvent('searching', 'completed'));
+      
       // Merge and deduplicate results from all searches
+      onProgress(createProgressEvent('merging-results', 'in-progress'));
       const allResults = searchResults.flatMap(r => r.data || []);
       const uniqueResults = Array.from(
         new Map(allResults.map(item => [item.chunk_id, item])).values()
       );
       
       console.log(`[Search] Merged ${allResults.length} results into ${uniqueResults.length} unique chunks`);
+      onProgress(createProgressEvent('merging-results', 'completed'));
       
       console.log(`[Search] Found ${uniqueResults.length} unique hybrid search candidates`);
       
@@ -263,8 +283,10 @@ export async function POST(request: NextRequest) {
       
       // Rerank the candidates
       if (finalResults.length > 0) {
+        onProgress(createProgressEvent('reranking', 'in-progress'));
         finalResults = await rerankResults(query, finalResults);
         finalResults = finalResults.slice(0, match_count);
+        onProgress(createProgressEvent('reranking', 'completed'));
         
         console.log(`[Search] Final top 3 results after reranking:`);
         finalResults.slice(0, 3).forEach((result, i) => {
@@ -274,6 +296,7 @@ export async function POST(request: NextRequest) {
       }
       
       const processingTime = Date.now() - startTime;
+      onProgress(createProgressEvent('complete', 'completed'));
       
       return NextResponse.json({
         results: finalResults,

@@ -159,6 +159,189 @@ Currently, entities are automatically extracted and created during document proc
 
 ---
 
+### Two-Level Graph Architecture (Document + Global Entities)
+**Priority:** High (Critical for enterprise requirements)  
+**Impact:** Enables cross-source intelligence, audit trails, multi-source validation, temporal tracking
+
+**Context:**
+Mosaic is an **enterprise-grade intelligence platform foundation** designed for multi-billion dollar companies with requirements for:
+- Cross-source entity resolution (documents + structured data + news feeds)
+- Multi-source validation and confidence scoring
+- Complete audit trails and data lineage
+- Temporal tracking of entity evolution
+- Multi-tenant organization isolation
+- Compliance-ready provenance tracking
+
+**Current Architecture (Single-Level):**
+```sql
+entities (
+  id, name, type, description,
+  document_ids[], chunk_ids[],  -- Track which docs mention this
+  embedding
+)
+```
+
+**Limitations:**
+- ❌ Can't see raw extraction per document/source
+- ❌ No immutable audit trail (entities are updated in place)
+- ❌ Can't track which source contributed what information
+- ❌ Difficult to re-run deduplication with different strategies
+- ❌ Can't calculate confidence from source diversity
+- ❌ No temporal tracking of entity evolution
+
+**Proposed Architecture (R2R-Style Two-Level):**
+
+**Level 1: Document Entities (Raw Extractions)**
+```sql
+document_entities (
+  id, user_id, organization_id,
+  document_id, chunk_id,
+  source_type,  -- 'document', 'structured_data', 'news_feed'
+  name, type, description, aliases,
+  confidence,
+  extracted_at,
+  extraction_metadata JSONB
+)
+```
+
+**Level 2: Global Entities (Deduplicated)**
+```sql
+entities (
+  id, user_id, organization_id,
+  name, canonical_name, type, description, aliases,
+  
+  -- Multi-source tracking
+  document_ids[], chunk_ids[],
+  data_source_ids[], news_article_ids[],
+  source_count, source_types[],
+  
+  -- Aggregated confidence
+  confidence,
+  first_seen, last_updated,
+  
+  embedding,
+  created_at, updated_at
+)
+
+entity_sources (  -- Provenance link table
+  entity_id, document_entity_id,
+  contribution_type,  -- 'name', 'description', 'alias'
+  contributed_at
+)
+```
+
+**Benefits for Enterprise Mosaic:**
+
+1. **Cross-Source Intelligence (Tier 0)**
+   - Track which sources contributed to each entity
+   - "Strategic Planning appears in 3 PDFs, 2 databases, 5 news articles"
+   - Calculate confidence from source diversity
+   - 360-degree entity views from all data sources
+
+2. **Multi-Source Validation**
+   - Confidence scoring based on cross-source confirmation
+   - Higher confidence when entity appears in multiple source types
+   - Risk correlation across document/data/news sources
+
+3. **Audit Trails & Compliance**
+   - Immutable extraction records (document_entities never deleted)
+   - Complete provenance via entity_sources link table
+   - Can answer: "Where did this information come from?"
+   - Regulatory compliance for data lineage
+
+4. **Temporal Tracking**
+   - See how entity descriptions evolved over time
+   - Track when each source contributed information
+   - Query: "Show me how understanding of X changed over 6 months"
+
+5. **Flexible Entity Resolution**
+   - Re-run deduplication with different thresholds
+   - Experiment with merging strategies without losing raw data
+   - A/B test entity resolution algorithms
+
+6. **Organization Isolation**
+   - Both levels scoped to organization_id
+   - Multi-tenant RLS policies at document and global levels
+   - Enterprise-grade data isolation
+
+**Implementation Strategy:**
+
+**Phase 1: Add Document-Level Tables**
+- Create `document_entities` table
+- Create `entity_sources` link table
+- Add indexes for performance
+- Implement RLS policies
+
+**Phase 2: Modify Entity Extractor**
+- Store raw extraction in `document_entities` first
+- Then merge into global `entities`
+- Track provenance in `entity_sources`
+- Preserve existing deduplication logic
+
+**Phase 3: Entity Resolution Service**
+- Background job to merge document → global entities
+- Configurable similarity thresholds
+- Confidence scoring from source diversity
+- Description synthesis from multiple sources
+
+**Phase 4: Extend to Multi-Source**
+- Add `source_type` field ('document', 'data', 'news')
+- Track data_source_ids and news_article_ids
+- Cross-source entity resolution
+- Multi-source confidence scoring
+
+**Query Patterns:**
+
+```sql
+-- Users query global entities (deduplicated, fast)
+SELECT * FROM entities WHERE organization_id = $1 AND embedding <=> $2 < 0.3;
+
+-- Audit trail uses document entities (provenance)
+SELECT de.*, d.file_name, c.content
+FROM document_entities de
+JOIN entity_sources es ON es.document_entity_id = de.id
+JOIN documents d ON d.id = de.document_id
+WHERE es.entity_id = $1 ORDER BY de.extracted_at;
+
+-- Multi-source validation (confidence calculation)
+SELECT e.name, 
+  COUNT(DISTINCT de.document_id) as doc_count,
+  COUNT(DISTINCT de.source_type) as source_type_count,
+  AVG(de.confidence) as avg_confidence
+FROM entities e
+JOIN entity_sources es ON es.entity_id = e.id
+JOIN document_entities de ON de.id = es.document_entity_id
+WHERE e.id = $1 GROUP BY e.id;
+```
+
+**Storage Overhead vs. Capabilities:**
+- Yes, duplicate data (same entity stored N times in document_entities)
+- But: Essential for enterprise requirements (audit, compliance, provenance)
+- Trade-off: More storage for critical capabilities
+- Aligns with Mosaic's enterprise-grade positioning
+
+**This aligns with:**
+- Mosaic's Four-Tier Intelligence Architecture (Tier 0: Cross-Source Knowledge Graph)
+- Universal Citation System (10 citation types with provenance)
+- Multi-tenant security requirements
+- Enterprise compliance and audit needs
+
+**Same pattern should apply to relationships:**
+- `document_relationships` (raw extractions)
+- `relationships` (global, deduplicated)
+- `relationship_sources` (provenance)
+
+**Estimated Effort:**
+- Phase 1 (Tables + RLS): 1 day
+- Phase 2 (Extractor changes): 1-2 days
+- Phase 3 (Resolution service): 2-3 days
+- Phase 4 (Multi-source extension): 2-3 days
+- Total: ~1-2 weeks for complete implementation
+
+**Decision:** This is the right architecture for Mosaic's enterprise requirements. The storage overhead is justified by the critical capabilities it enables.
+
+---
+
 ## 🐛 Bugs & Issues
 
 *No items pending - INBOX is clean!*

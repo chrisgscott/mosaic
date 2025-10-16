@@ -99,6 +99,82 @@ Since users don't typically need to view all 1000+ chunks:
 
 ---
 
+## 🧹 Infrastructure Cleanup & Optimization
+
+### 1. Reduce Render Persistent Disk Size
+
+**Current State:** Using persistent disk for `/tmp` storage on Render ingestion worker.
+
+**Opportunity:** With Docling, we create significantly fewer temp files than with Unstructured:
+- **Docling usage**: Main PDF file + individual page PDFs for parallel processing
+- **Unstructured usage** (old): PDF + extracted images + OCR processing + intermediate files
+
+**Action Items:**
+1. Monitor actual `/tmp` usage during document processing
+2. Test with various document sizes (small, medium, large PDFs)
+3. Calculate maximum concurrent `/tmp` usage
+4. Reduce disk size to minimum needed + buffer
+5. Potential savings: $0.25/GB/month
+
+**Testing Approach:**
+```bash
+# Add to worker startup
+df -h /tmp
+# Monitor during processing
+watch -n 5 'du -sh /tmp/*'
+# Log max usage
+```
+
+**Priority:** Medium - Cost optimization opportunity once Docling is proven stable.
+
+---
+
+### 2. Remove Unstructured Processor & Dependencies
+
+**Current State:** Both Unstructured and Docling processors exist in codebase. Unstructured is no longer used but code remains.
+
+**Cleanup Tasks:**
+
+**Files to Remove:**
+- `apps/backend/ingest/processors/unstructured_processor.py`
+- Any Unstructured-specific imports in `main.py`
+- Unstructured-related environment variables from `.env.example`
+
+**Dependencies to Remove from `requirements.txt`:**
+```txt
+unstructured[all-docs]
+unstructured-inference
+pillow-heif
+# Any other Unstructured-specific packages
+```
+
+**Code to Clean:**
+- Remove `USE_DOCLING` environment variable (make Docling the only option)
+- Remove conditional logic in `main.py` that switches between processors
+- Update documentation to remove Unstructured references
+
+**Benefits:**
+- ✅ Smaller Docker image (Unstructured is very heavy)
+- ✅ Faster builds
+- ✅ Simpler codebase (one processor instead of two)
+- ✅ Reduced maintenance burden
+- ✅ Lower memory requirements
+
+**Prerequisites:**
+- ✅ Docling proven stable in production
+- ✅ Process at least 50-100 documents successfully
+- ✅ No critical bugs or edge cases discovered
+- ✅ Performance meets requirements
+
+**Timeline:** 
+- **Wait period**: 1-2 weeks of production usage
+- **Cleanup effort**: ~1-2 hours
+- **Testing**: Verify builds and deployments work
+
+**Priority:** Medium - Wait for Docling stability confirmation before removing Unstructured as fallback.
+
+---
+
 ## 🎯 LLM-Enhanced Chunk Summaries ✅ MIGRATED TO BUILD_PLAN (Phase 4)
 
 ### Concept

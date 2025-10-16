@@ -134,6 +134,18 @@ export async function deleteDocument(documentId: string) {
     return { error: "Unauthorized" };
   }
 
+  // Clean up any pending queue messages for this document
+  // This prevents queue corruption when deleting documents in error state
+  try {
+    await supabase.rpc('pgmq_archive_by_document', {
+      p_document_id: documentId
+    });
+    console.log(`Archived queue messages for document ${documentId}`);
+  } catch (queueError) {
+    // Log but don't fail - queue cleanup is best-effort
+    console.warn("Queue cleanup failed (non-fatal):", queueError);
+  }
+
   // Delete from storage
   const { error: storageError } = await supabase.storage
     .from("documents")

@@ -20,6 +20,8 @@ unstructured[md]==0.18.15
 # Document processing - Docling (VLM-based, new)
 # Lightweight, faster alternative to Unstructured
 docling  # Use latest version
+transformers  # For HuggingFace tokenizers in HybridChunker
+sentencepiece  # Required by some HuggingFace tokenizers
 openai  # For API-based VLM (GPT-4o-mini)
 pypdf  # For splitting PDFs into pages for parallel processing
 

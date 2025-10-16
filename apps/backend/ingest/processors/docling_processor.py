@@ -213,6 +213,71 @@ class DoclingProcessor:
             logger.error(f"✗ Error processing page {page_num}: {e}")
             return (page_num, None)
     
+    def extract_document(self, file_data: bytes, file_path: str):
+        """
+        Extract DoclingDocument object for use with HybridChunker.
+        
+        Args:
+            file_data: Raw file bytes
+            file_path: Original file path (for logging/context)
+        
+        Returns:
+            DoclingDocument object, or None if processing fails.
+            
+        Note:
+            This method returns the full DoclingDocument object which can be used
+            with Docling's native chunkers (HybridChunker, HierarchicalChunker).
+            For parallel processing, pages are combined into a single document.
+        """
+        temp_path = None
+        page_paths = []
+        
+        try:
+            logger.info(f"Processing file with Docling: {file_path}")
+            logger.info(f"File size: {len(file_data) / 1024 / 1024:.1f}MB")
+            logger.info(f"Using {'API VLM (GPT-4o-mini)' if self.use_api_vlm else 'Local VLM (GraniteDocling)'}")
+            
+            # Write bytes to temporary file
+            suffix = Path(file_path).suffix or '.pdf'
+            
+            # Convert .txt to .md since Docling doesn't support plain text
+            if suffix.lower() == '.txt':
+                suffix = '.md'
+                logger.info("Converting .txt to .md for Docling compatibility")
+            
+            with tempfile.NamedTemporaryFile(mode='wb', suffix=suffix, delete=False) as temp_file:
+                temp_file.write(file_data)
+                temp_path = temp_file.name
+            
+            logger.info(f"Wrote file to temp path: {temp_path}")
+            
+            # For now, use sequential processing to get a single DoclingDocument
+            # TODO: Implement parallel processing that merges DoclingDocuments
+            logger.info("Processing document...")
+            self._initialize_converter()
+            
+            result = self.converter.convert(source=temp_path)
+            document = result.document
+            
+            logger.info(f"Document processed successfully")
+            logger.info(f"Document has {len(document.texts)} text elements")
+            if hasattr(document, 'tables'):
+                logger.info(f"Document has {len(document.tables)} tables")
+            
+            return document
+            
+        except Exception as e:
+            logger.error(f"Error processing with Docling: {e}", exc_info=True)
+            return None
+        finally:
+            # Clean up temp files
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                    logger.debug(f"Cleaned up temp file: {temp_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temp file {temp_path}: {e}")
+    
     def extract_elements(self, file_data: bytes, file_path: str) -> Optional[str]:
         """
         Extract text and structure from document using Docling with parallel processing.

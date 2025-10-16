@@ -146,7 +146,8 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - `embedding` - Generating embeddings for chunks
 - `extracting_graph` - Extracting entities and relationships
 - `ready` - All processing complete
-- `error` - Processing failed
+- `error` - Processing failed, retries remaining
+- `failed` - Processing failed, no retries remaining
 
 **Additional Tracking:**
 - [ ] Add `processing_stage_started_at` timestamp field

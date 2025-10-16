@@ -52,7 +52,7 @@ export async function createDocumentRecord(data: {
       });
       
       const { data: queueData, error: queueError } = await supabase
-        .rpc('pgmq.send', {
+        .rpc('queue_document', {
           queue_name: 'document_processing',
           msg: {
             document_id: documentData.id,

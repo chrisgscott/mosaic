@@ -6,10 +6,10 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Rerank results using Hugging Face BGE-reranker-v2-m3
+// Rerank results using Cohere Rerank API
 async function rerankResults(query: string, results: SearchResult[]): Promise<SearchResult[]> {
-  if (!process.env.HUGGINGFACE_API_KEY) {
-    console.warn("[Rerank] No HUGGINGFACE_API_KEY found, skipping reranking");
+  if (!process.env.COHERE_API_KEY) {
+    console.warn("[Rerank] No COHERE_API_KEY found, skipping reranking");
     return results;
   }
 
@@ -20,19 +20,19 @@ async function rerankResults(query: string, results: SearchResult[]): Promise<Se
   try {
     const startTime = Date.now();
     
-    // BGE reranker expects pairs of [query, text] for each document
-    const pairs = results.map(r => [query, r.content]);
-    
     const response = await fetch(
-      "https://api-inference.huggingface.co/models/BAAI/bge-reranker-v2-m3",
+      "https://api.cohere.com/v2/rerank",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+          Authorization: `Bearer ${process.env.COHERE_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          inputs: pairs,
+          model: "rerank-english-v3.0",
+          query: query,
+          documents: results.map(r => r.content),
+          top_n: results.length, // Return all, we'll slice later
         }),
       }
     );
@@ -47,28 +47,15 @@ async function rerankResults(query: string, results: SearchResult[]): Promise<Se
     const rerankTime = Date.now() - startTime;
     
     console.log(`[Rerank] Completed in ${rerankTime}ms`);
-    console.log(`[Rerank] Response format:`, Array.isArray(responseData) ? 'array' : typeof responseData);
 
-    // Handle response - HF returns array of scores or array of objects with score field
-    let scores: number[];
-    if (Array.isArray(responseData)) {
-      // Could be array of numbers or array of objects
-      scores = responseData.map(item => 
-        typeof item === 'number' ? item : (item.score || item[0] || 0)
-      );
-    } else {
-      console.error("[Rerank] Unexpected response format:", responseData);
-      return results;
-    }
-
-    // Attach rerank scores and sort by them
-    const rerankedResults = results.map((result, i) => ({
-      ...result,
-      rerank_score: scores[i] || 0,
-    })).sort((a, b) => (b.rerank_score || 0) - (a.rerank_score || 0));
+    // Cohere returns: { results: [{ index: 0, relevance_score: 0.95 }, ...] }
+    const rerankedResults = responseData.results.map((item: { index: number; relevance_score: number }) => ({
+      ...results[item.index],
+      rerank_score: item.relevance_score,
+    }));
 
     console.log(`[Rerank] Score changes:`);
-    rerankedResults.slice(0, 3).forEach((result, i) => {
+    rerankedResults.slice(0, 3).forEach((result: SearchResult, i: number) => {
       const originalIndex = results.findIndex(r => r.chunk_id === result.chunk_id);
       console.log(`  ${i + 1}. Rerank: ${result.rerank_score?.toFixed(3)} | RRF: ${result.rrf_score?.toFixed(4)} | Moved from position ${originalIndex + 1}`);
     });

@@ -1,4 +1,4 @@
-# Reranking with BGE-Reranker-v2-m3
+# Reranking with Cohere Rerank API
 
 ## Overview
 
@@ -13,7 +13,7 @@ Embedding Generation (OpenAI text-embedding-3-small)
   ↓
 Hybrid Search (Semantic + BM25 with RRF)
   ↓ (20 candidates)
-Reranking (BGE-reranker-v2-m3)
+Reranking (Cohere rerank-english-v3.0)
   ↓ (Top 10 final results)
 User
 ```
@@ -36,32 +36,25 @@ User
 
 ## Implementation
 
-### Model: BAAI/bge-reranker-v2-m3
+### Cohere Rerank API
 
-**Why this model:**
-- State-of-the-art open-source reranker
-- Multilingual support
-- Excellent performance on MS MARCO benchmark
-- Same model we can self-host later
-
-### Hugging Face Inference API
-
-**Free Tier:**
-- 1000 requests/day
-- Shared infrastructure
-- Cold starts possible (~20s first request)
-- Perfect for testing
-
-**PRO Tier ($9/month):**
-- Unlimited requests
-- Faster inference
+**Why Cohere:**
+- Production-ready reranking API
+- State-of-the-art model (rerank-english-v3.0)
+- Simple integration
+- Reliable performance (~200ms)
 - No cold starts
-- Recommended for production
+
+**Pricing:**
+- **Free Trial:** 100 rerank requests/month
+- **Production:** $1 per 1000 searches
+- Very cost-effective for most use cases
 
 **Get API Key:**
-1. Go to https://huggingface.co/settings/tokens
-2. Create new token with "Read" access
-3. Add to `.env.local`: `HUGGINGFACE_API_KEY=hf_your_key`
+1. Go to https://dashboard.cohere.com/api-keys
+2. Sign up for free account
+3. Create API key
+4. Add to `.env.local`: `COHERE_API_KEY=your_key`
 
 ## Configuration
 
@@ -69,7 +62,7 @@ User
 
 ```bash
 # Required for reranking
-HUGGINGFACE_API_KEY=hf_your_key
+COHERE_API_KEY=your_cohere_key
 
 # If not set, reranking is skipped (graceful degradation)
 ```

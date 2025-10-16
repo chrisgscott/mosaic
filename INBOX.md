@@ -44,22 +44,19 @@ HyDE (Hypothetical Document Embeddings) currently generates hypothetical answers
 - Search configuration - Add HyDE weight parameter
 - Query classifier - Determine when to use HyDE
 
-### Graph Extractor Entity Filtering
-**Priority:** Low  
-**Impact:** Cleaner graph data, fewer spurious warnings
+### Graph Extractor Entity Quality Improvement
+**Priority:** Medium  
+**Impact:** More precise knowledge graph, better relationship discovery, improved graph search quality
 
 **Context:**
-The graph extractor currently extracts relationships to abstract concepts that aren't stored as entities (e.g., "stakeholder alignment", "system-wide coordination"). This generates warnings when trying to create relationships to non-existent entities, cluttering logs with messages like:
-```
-WARNING - Missing entity IDs for relationship: TWS -> stakeholder alignment
-WARNING - Missing entity IDs for relationship: ODA -> stakeholder alignment
-```
+The graph extractor currently extracts relationships to abstract concepts that aren't actual entities (e.g., "stakeholder alignment", "system-wide coordination", "effectiveness"). This dilutes the knowledge graph with low-value relationships and makes it harder to discover meaningful connections between concrete methodologies, tools, and frameworks.
 
 **Current Behavior:**
-- LLM extracts relationships to both concrete entities (methodologies, tools, frameworks) and abstract concepts
-- System attempts to create relationships for all extracted pairs
-- When target entity doesn't exist, logs a WARNING and skips the relationship
-- No performance impact, just noisy logs
+- LLM extracts both concrete entities (methodologies, tools, frameworks, people) and abstract concepts (goals, outcomes, qualities)
+- Abstract concepts aren't stored as entities (correctly)
+- Relationships to these concepts are attempted but fail silently
+- Result: Knowledge graph misses potential connections because LLM "wastes" extraction on non-entities
+- Side effect: Warning logs clutter output
 
 **Proposed Solutions:**
 
@@ -80,10 +77,11 @@ WARNING - Missing entity IDs for relationship: ODA -> stakeholder alignment
    - Quick fix but requires maintenance
 
 **Benefits:**
-- Cleaner, more actionable logs
-- More precise knowledge graph
-- Reduced noise in entity relationships
-- Better understanding of actual methodology connections
+- **Higher quality knowledge graph** - Focus on concrete, actionable entities
+- **Better relationship discovery** - LLM can extract more real connections instead of wasting capacity on abstract concepts
+- **Improved graph search** - Queries find more relevant methodology connections
+- **More precise entity clustering** - Similar entities group together better
+- Bonus: Cleaner logs as a side effect
 
 **Files to Modify:**
 - `apps/backend/ingest/processors/graph_extractor.py` - Update extraction prompt or add validation

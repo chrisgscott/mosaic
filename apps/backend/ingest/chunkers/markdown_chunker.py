@@ -10,6 +10,7 @@ import logging
 import re
 from typing import List, Dict, Any
 from uuid import uuid4
+import tiktoken
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,13 @@ class MarkdownChunker:
         """
         self.chunk_size = chunk_size
         self.overlap = overlap
+        
+        # Initialize tokenizer for token counting
+        try:
+            self.tokenizer = tiktoken.get_encoding("cl100k_base")
+        except Exception as e:
+            logger.warning(f"Failed to load tokenizer: {e}, token counts will be estimated")
+            self.tokenizer = None
     
     def chunk_markdown(self, markdown: str, document_id: str) -> List[Dict[str, Any]]:
         """
@@ -61,21 +69,46 @@ class MarkdownChunker:
         # Convert to database format
         db_chunks = []
         for idx, chunk_text in enumerate(chunks):
+            chunk_content = chunk_text.strip()
+            
+            # Calculate token count
+            token_count = self._count_tokens(chunk_content)
+            
             db_chunks.append({
                 "id": str(uuid4()),
                 "document_id": document_id,
-                "content": chunk_text.strip(),
+                "content": chunk_content,
                 "chunk_index": idx,
+                "token_count": token_count,
                 "metadata": {
                     "processor": "docling",
                     "chunk_size": len(chunk_text),
                     "has_table": "|" in chunk_text,
-                    "has_heading": chunk_text.strip().startswith("#"),
+                    "has_heading": chunk_content.startswith("#"),
                 }
             })
         
         logger.info(f"Created {len(db_chunks)} chunks from markdown")
         return db_chunks
+    
+    def _count_tokens(self, text: str) -> int:
+        """
+        Count tokens in text using tiktoken.
+        
+        Args:
+            text: Text to count tokens for
+            
+        Returns:
+            Number of tokens
+        """
+        if self.tokenizer:
+            try:
+                return len(self.tokenizer.encode(text))
+            except Exception as e:
+                logger.warning(f"Error counting tokens: {e}, using estimate")
+        
+        # Fallback: rough estimate (1 token ≈ 4 characters)
+        return len(text) // 4
     
     def _split_on_headings(self, markdown: str) -> List[str]:
         """

@@ -2,7 +2,75 @@
 
 ## 💡 Enhancements & Ideas
 
-*No items pending - INBOX is clean!*
+### Entity & Relationship Description Synthesis
+**Priority:** Medium  
+**Impact:** Richer knowledge graph with accumulated knowledge across documents
+
+**Current Behavior:**
+When an entity or relationship is mentioned in multiple chunks/documents, we:
+- ✅ Append document_ids and chunk_ids to arrays (correctly accumulating references)
+- ❌ Keep the original description from first mention (losing new information)
+- ❌ Don't merge aliases or update metadata
+
+**Example Problem:**
+```
+First mention: "Strategic Planning is a methodology for long-term planning"
+Second mention: "Strategic Planning involves stakeholder alignment and resource allocation"
+
+Current result: Description stays "A methodology for long-term planning"
+Desired result: Description becomes "A methodology for long-term planning that involves 
+                 stakeholder alignment and resource allocation"
+```
+
+**Proposed Solution:**
+
+1. **Smart Description Synthesis**
+   - When updating existing entity/relationship, compare descriptions
+   - If new description adds information, use LLM to synthesize them
+   - Keep descriptions concise but comprehensive
+   - Track synthesis in metadata (e.g., `synthesis_count`)
+
+2. **Alias Merging**
+   - Merge new aliases into existing alias array
+   - Deduplicate and normalize
+
+3. **Confidence Updates**
+   - Increase extraction_confidence when entity seen multiple times
+   - Track mention count in metadata
+
+4. **Cost Consideration**
+   - Synthesis requires LLM call (~$0.0001 per synthesis)
+   - Only synthesize if descriptions are meaningfully different
+   - Use fast, cheap model (GPT-4o-mini)
+
+**Benefits:**
+- Entities become richer over time as more documents are processed
+- Knowledge graph accumulates understanding across corpus
+- Better search results (more complete entity descriptions)
+- More accurate relationship context
+
+**Implementation Options:**
+
+**Option A: Always Synthesize (Thorough)**
+- Every duplicate mention triggers synthesis
+- Most complete information
+- Higher cost (~$0.01 per document with many entities)
+
+**Option B: Conditional Synthesis (Balanced)**
+- Only synthesize if new description is >50% different
+- Use simple similarity check first
+- Lower cost, still captures new information
+
+**Option C: Periodic Batch Synthesis (Efficient)**
+- Accumulate descriptions in array
+- Synthesize periodically (e.g., after N mentions)
+- Lowest cost, delayed enrichment
+
+**Files to Modify:**
+- `apps/backend/ingest/processors/graph_extractor.py` - Add synthesis logic to `store_entity()` and `store_relationship()`
+- Consider adding `description_history` JSONB field to track evolution
+
+**Recommended Approach:** Start with Option B (Conditional Synthesis) - good balance of quality and cost.
 
 ---
 

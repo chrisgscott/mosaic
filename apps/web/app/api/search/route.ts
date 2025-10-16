@@ -65,13 +65,16 @@ export async function POST(request: NextRequest) {
     const queryEmbedding = embeddingResponse.data[0].embedding;
     console.log(`[Search] Generated embedding (${queryEmbedding.length} dimensions)`);
 
-    // Perform semantic search using the database function
-    console.log(`[Search] Searching with threshold=${match_threshold}, count=${match_count}, user=${user.id}`);
-    const { data, error } = await supabase.rpc("search_chunks_semantic", {
+    // Perform hybrid search using RRF (Reciprocal Rank Fusion)
+    // Combines semantic (vector) search with keyword (BM25) search
+    console.log(`[Search] Hybrid search with threshold=${match_threshold}, count=${match_count}, user=${user.id}`);
+    const { data, error } = await supabase.rpc("search_chunks_hybrid", {
+      query_text: query,
       query_embedding: queryEmbedding,
       match_threshold,
       match_count,
       filter_user_id: user.id,
+      rrf_k: 60,  // RRF constant
     });
 
     if (error) {
@@ -84,8 +87,11 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Search] Found ${data?.length || 0} results`);
     if (data && data.length > 0) {
-      console.log(`[Search] Top result similarity: ${data[0].similarity}`);
-      console.log(`[Search] Top result preview: ${data[0].content.substring(0, 100)}...`);
+      console.log(`[Search] Top 3 results:`);
+      data.slice(0, 3).forEach((result: any, i: number) => {
+        console.log(`  ${i + 1}. Similarity: ${result.similarity.toFixed(3)} | Doc: ${result.document_name}`);
+        console.log(`     Preview: ${result.content.substring(0, 80)}...`);
+      });
     } else {
       // Debug: Try with lower threshold to see if we get ANY results
       console.log(`[Search] No results with threshold ${match_threshold}, trying with 0.0...`);

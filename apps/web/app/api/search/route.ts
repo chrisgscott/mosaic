@@ -14,7 +14,7 @@ async function generateHyDE(query: string): Promise<string> {
     const startTime = Date.now();
     
     const { text } = await generateText({
-      model: openaiProvider("gpt-4o-mini"),
+      model: openaiProvider("gpt-4.1-nano"),
       prompt: `You are an expert assistant. Given a user's question, write a detailed, comprehensive answer that would perfectly answer their question. This hypothetical answer will be used to find similar documents.
 
 Question: ${query}

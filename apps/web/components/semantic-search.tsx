@@ -53,6 +53,7 @@ export function SemanticSearch() {
           query: query.trim(),
           match_threshold: 0.5,  // Lowered from 0.7 for better recall
           match_count: 10,
+          use_hyde: true,  // Enable HyDE for better retrieval
         }),
       });
 

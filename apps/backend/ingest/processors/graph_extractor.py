@@ -295,7 +295,7 @@ Guidelines:
         chunk_id: str
     ) -> bool:
         """
-        Store relationship in database.
+        Store relationship in database, appending to existing arrays if it already exists.
         
         Args:
             relationship: Relationship to store
@@ -315,21 +315,51 @@ Guidelines:
                 logger.warning(f"Missing entity IDs for relationship: {relationship.source} -> {relationship.target}")
                 return False
             
-            # Upsert relationship (will update if exists, insert if new)
-            self.supabase.table("relationships").upsert({
+            # Check if relationship already exists
+            existing = self.supabase.table("relationships").select("id, document_ids, chunk_ids").match({
                 "user_id": user_id,
                 "source_entity_id": source_id,
                 "target_entity_id": target_id,
-                "relationship_type": relationship.type.value,
-                "description": relationship.description,
-                "bidirectional": relationship.bidirectional,
-                "document_ids": [document_id],
-                "chunk_ids": [chunk_id],
-                "extraction_confidence": 0.9
-            }, on_conflict="user_id,source_entity_id,target_entity_id,relationship_type").execute()
+                "relationship_type": relationship.type.value
+            }).execute()
             
-            logger.debug(f"Stored relationship: {relationship.source} -{relationship.type.value}-> {relationship.target}")
-            return True
+            if existing.data and len(existing.data) > 0:
+                # Relationship exists - append to arrays
+                rel = existing.data[0]
+                doc_ids = rel.get("document_ids", []) or []
+                chunk_ids = rel.get("chunk_ids", []) or []
+                
+                # Add new IDs if not present
+                if document_id not in doc_ids:
+                    doc_ids.append(document_id)
+                if chunk_id not in chunk_ids:
+                    chunk_ids.append(chunk_id)
+                
+                # Update relationship
+                self.supabase.table("relationships").update({
+                    "document_ids": doc_ids,
+                    "chunk_ids": chunk_ids,
+                    "updated_at": "now()"
+                }).eq("id", rel["id"]).execute()
+                
+                logger.debug(f"Updated existing relationship: {relationship.source} -{relationship.type.value}-> {relationship.target}")
+                return True
+            else:
+                # New relationship - insert
+                self.supabase.table("relationships").insert({
+                    "user_id": user_id,
+                    "source_entity_id": source_id,
+                    "target_entity_id": target_id,
+                    "relationship_type": relationship.type.value,
+                    "description": relationship.description,
+                    "bidirectional": relationship.bidirectional,
+                    "document_ids": [document_id],
+                    "chunk_ids": [chunk_id],
+                    "extraction_confidence": 0.9
+                }).execute()
+                
+                logger.debug(f"Stored new relationship: {relationship.source} -{relationship.type.value}-> {relationship.target}")
+                return True
             
         except Exception as e:
             logger.error(f"Error storing relationship: {e}")

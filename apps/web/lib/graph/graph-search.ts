@@ -83,14 +83,38 @@ export async function searchEntitiesSemantic(
 
     if (!entities || entities.length === 0) {
       console.log(`[Search Entities] No entities found above threshold ${threshold}`);
-      console.log('[Search Entities] Falling back to get all entities (for debugging)');
+      console.log('[Search Entities] Trying lower threshold (0.3) as fallback');
       
-      // Fallback: Get all entities to see what we have
+      // Try with much lower threshold first
+      const { data: lowerThresholdEntities, error: lowerError } = await supabase.rpc('search_entities_semantic', {
+        query_embedding: queryEmbedding,
+        p_user_id: userId,
+        similarity_threshold: 0.3,
+        result_limit: limit,
+        entity_types: options?.entityTypes || null
+      });
+      
+      if (!lowerError && lowerThresholdEntities && lowerThresholdEntities.length > 0) {
+        console.log(`[Search Entities] Found ${lowerThresholdEntities.length} entities with lower threshold`);
+        return lowerThresholdEntities.map((entity: any) => ({
+          id: entity.id,
+          name: entity.name,
+          type: entity.type,
+          description: entity.description || '',
+          similarity: entity.similarity || 0,
+          documentIds: entity.document_ids || [],
+          chunkIds: entity.chunk_ids || [],
+        }));
+      }
+      
+      console.log('[Search Entities] Still no results, falling back to all entities');
+      
+      // Last resort: Get all entities
       const { data: allEntities, error: fallbackError } = await supabase
         .from('entities')
         .select('id, name, type, description, document_ids, chunk_ids')
         .eq('user_id', userId)
-        .limit(limit);
+        .limit(limit * 5); // Get more to have options
       
       if (fallbackError || !allEntities) {
         console.error('[Search Entities] Fallback error:', fallbackError);
@@ -98,15 +122,9 @@ export async function searchEntitiesSemantic(
       }
       
       console.log(`[Search Entities] Fallback found ${allEntities.length} total entities`);
-      if (allEntities.length > 0) {
-        console.log('[Search Entities] Sample entities:');
-        allEntities.slice(0, 5).forEach((e, i) => {
-          console.log(`  ${i + 1}. ${e.name} (${e.type})`);
-        });
-      }
       
-      // Return them with default similarity
-      return allEntities.map(entity => ({
+      // Return all entities with default similarity
+      return allEntities.slice(0, limit).map(entity => ({
         id: entity.id,
         name: entity.name,
         type: entity.type,
@@ -253,6 +271,7 @@ export async function graphEnhancedSearch(
 
   try {
     console.log(`[Graph Search] Starting search for query: "${query}"`);
+    console.log(`[Graph Search] User ID: ${userId}`);
     console.log(`[Graph Search] Threshold: ${entitySimilarityThreshold}, Limit: ${limit}, MaxHops: ${maxHops}`);
     
     // 1. Generate embedding for query

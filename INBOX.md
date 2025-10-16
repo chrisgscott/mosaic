@@ -44,6 +44,51 @@ HyDE (Hypothetical Document Embeddings) currently generates hypothetical answers
 - Search configuration - Add HyDE weight parameter
 - Query classifier - Determine when to use HyDE
 
+### Graph Extractor Entity Filtering
+**Priority:** Low  
+**Impact:** Cleaner graph data, fewer spurious warnings
+
+**Context:**
+The graph extractor currently extracts relationships to abstract concepts that aren't stored as entities (e.g., "stakeholder alignment", "system-wide coordination"). This generates warnings when trying to create relationships to non-existent entities, cluttering logs with messages like:
+```
+WARNING - Missing entity IDs for relationship: TWS -> stakeholder alignment
+WARNING - Missing entity IDs for relationship: ODA -> stakeholder alignment
+```
+
+**Current Behavior:**
+- LLM extracts relationships to both concrete entities (methodologies, tools, frameworks) and abstract concepts
+- System attempts to create relationships for all extracted pairs
+- When target entity doesn't exist, logs a WARNING and skips the relationship
+- No performance impact, just noisy logs
+
+**Proposed Solutions:**
+
+1. **Improve Entity Extraction Prompt (Recommended)**
+   - Update graph extractor prompt to only extract concrete entities
+   - Define clear criteria: methodologies, tools, frameworks, people, organizations
+   - Exclude abstract concepts: "alignment", "coordination", "effectiveness", etc.
+   - Reduces spurious relationship attempts at the source
+
+2. **Add Entity Type Validation**
+   - Before creating relationships, validate both entities exist
+   - Skip relationship creation silently (or at DEBUG level)
+   - Prevents warnings for expected behavior
+
+3. **Post-Processing Filter**
+   - After LLM extraction, filter out relationships to known abstract concepts
+   - Maintain a list of common abstract terms to exclude
+   - Quick fix but requires maintenance
+
+**Benefits:**
+- Cleaner, more actionable logs
+- More precise knowledge graph
+- Reduced noise in entity relationships
+- Better understanding of actual methodology connections
+
+**Files to Modify:**
+- `apps/backend/ingest/processors/graph_extractor.py` - Update extraction prompt or add validation
+- Consider downgrading log level from WARNING to DEBUG for missing entities
+
 ---
 
 ## 🐛 Bugs & Issues

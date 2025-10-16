@@ -7,7 +7,8 @@ Significantly faster than traditional OCR, especially for table-heavy documents.
 
 import logging
 import os
-from io import BytesIO
+import tempfile
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -115,6 +116,9 @@ class DoclingProcessor:
             this returns a single markdown string. The markdown preserves
             document structure including tables, headings, lists, etc.
         """
+        # Docling requires a file path, not BytesIO
+        # Write bytes to temp file
+        temp_file = None
         try:
             # Initialize converter on first use
             self._initialize_converter()
@@ -123,13 +127,18 @@ class DoclingProcessor:
             logger.info(f"File size: {len(file_data) / 1024 / 1024:.1f}MB")
             logger.info(f"Using {'API VLM (GPT-4o-mini)' if self.use_api_vlm else 'Local VLM (GraniteDocling)'}")
             
-            # Create file-like object from bytes
-            file_obj = BytesIO(file_data)
-            file_obj.name = file_path  # Some processors use the name
+            # Write bytes to temporary file
+            # Docling needs a real file path, not BytesIO
+            suffix = Path(file_path).suffix or '.pdf'
+            with tempfile.NamedTemporaryFile(mode='wb', suffix=suffix, delete=False) as temp_file:
+                temp_file.write(file_data)
+                temp_path = temp_file.name
+            
+            logger.info(f"Wrote file to temp path: {temp_path}")
             
             # Process document
             logger.info("Starting Docling conversion...")
-            result = self.converter.convert(source=file_obj)
+            result = self.converter.convert(source=temp_path)
             
             # Export to markdown
             markdown = result.document.export_to_markdown()
@@ -144,3 +153,11 @@ class DoclingProcessor:
         except Exception as e:
             logger.error(f"Error processing with Docling: {e}", exc_info=True)
             return None
+        finally:
+            # Clean up temp file
+            if temp_file and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                    logger.debug(f"Cleaned up temp file: {temp_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temp file {temp_path}: {e}")

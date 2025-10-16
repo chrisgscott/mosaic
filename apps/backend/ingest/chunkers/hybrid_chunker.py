@@ -113,13 +113,13 @@ class HybridChunker:
             
             if previous_chunks:
                 prev_text = "\n\n".join(previous_chunks)
-                context_parts.append(f"PRECEDING CONTEXT:\n{prev_text}")
+                context_parts.append(f"[PRECEDING CONTEXT - FOR REFERENCE ONLY]:\n{prev_text}")
             
-            context_parts.append(f"CURRENT CHUNK:\n{current_chunk}")
+            context_parts.append(f"[CURRENT CHUNK - SUMMARIZE THIS]:\n{current_chunk}")
             
             if next_chunks:
                 next_text = "\n\n".join(next_chunks)
-                context_parts.append(f"FOLLOWING CONTEXT:\n{next_text}")
+                context_parts.append(f"[FOLLOWING CONTEXT - FOR REFERENCE ONLY]:\n{next_text}")
             
             full_context = "\n\n---\n\n".join(context_parts)
             
@@ -129,7 +129,7 @@ class HybridChunker:
                 messages=[
                     {
                         "role": "system",
-                        "content": f"Analyze the CURRENT CHUNK and write a {summary_guidance} summary. If the chunk is self-contained (a complete concept, framework, or methodology), summarize it directly without forcing connections to neighbors. Only mention relationships to surrounding content if they are genuinely meaningful and evident from the context. For larger chunks, ensure you capture all important concepts and details. Write directly and avoid meta-commentary like 'this chunk describes' or 'the current chunk provides'."
+                        "content": f"You must write a {summary_guidance} summary of ONLY the [CURRENT CHUNK - SUMMARIZE THIS] section. The preceding and following context sections are provided for reference only to help you understand connections, but you must ONLY summarize the current chunk. If the current chunk is self-contained, summarize it directly. Only mention relationships to surrounding content if they are genuinely meaningful and evident. Write directly and avoid meta-commentary."
                     },
                     {
                         "role": "user",

@@ -286,10 +286,13 @@ class DocumentWorker:
         
         self.connect_db()
         
+        logger.info("Entering main polling loop")
         while self.running:
             try:
                 # Poll for next job
+                logger.debug("Polling for jobs...")
                 job = self.poll_queue()
+                logger.debug(f"Poll result: {job is not None}")
                 
                 if job:
                     msg_id = job["msg_id"]

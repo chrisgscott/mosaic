@@ -38,5 +38,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Run the worker
-CMD ["python", "main.py"]
+# Run the worker (unbuffered for real-time logs)
+CMD ["python", "-u", "main.py"]

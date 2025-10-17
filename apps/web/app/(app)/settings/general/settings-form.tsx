@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,10 +41,28 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
     return acc;
   }, {} as SettingsByCategory);
 
+  // Detect the type of a setting value
+  const getSettingType = (value: any): 'boolean' | 'number' | 'string' => {
+    if (typeof value === 'boolean' || value === 'true' || value === 'false') {
+      return 'boolean';
+    }
+    if (typeof value === 'number' || !isNaN(Number(value))) {
+      return 'number';
+    }
+    return 'string';
+  };
+
   const handleToggle = (key: string, currentValue: boolean) => {
     setValues((prev) => ({
       ...prev,
       [key]: !currentValue,
+    }));
+  };
+
+  const handleInputChange = (key: string, value: string, type: 'number' | 'string') => {
+    setValues((prev) => ({
+      ...prev,
+      [key]: type === 'number' ? Number(value) : value,
     }));
   };
 
@@ -87,30 +106,52 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {categorySettings.map((setting) => (
-              <div key={setting.key} className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <Switch
-                    id={setting.key}
-                    checked={values[setting.key] === true || values[setting.key] === "true"}
-                    onCheckedChange={() =>
-                      handleToggle(
-                        setting.key,
-                        values[setting.key] === true || values[setting.key] === "true"
-                      )
-                    }
-                  />
-                  <Label htmlFor={setting.key} className="text-base font-medium cursor-pointer">
-                    {setting.key.split(".").pop()?.replace(/([A-Z])/g, " $1").trim()}
-                  </Label>
+            {categorySettings.map((setting) => {
+              const settingType = getSettingType(setting.value);
+              const displayName = setting.key.split(".").pop()?.replace(/([A-Z])/g, " $1").trim();
+
+              return (
+                <div key={setting.key} className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    {settingType === 'boolean' ? (
+                      <>
+                        <Switch
+                          id={setting.key}
+                          checked={values[setting.key] === true || values[setting.key] === "true"}
+                          onCheckedChange={() =>
+                            handleToggle(
+                              setting.key,
+                              values[setting.key] === true || values[setting.key] === "true"
+                            )
+                          }
+                        />
+                        <Label htmlFor={setting.key} className="text-base font-medium cursor-pointer">
+                          {displayName}
+                        </Label>
+                      </>
+                    ) : (
+                      <div className="flex-1 space-y-2">
+                        <Label htmlFor={setting.key} className="text-base font-medium">
+                          {displayName}
+                        </Label>
+                        <Input
+                          id={setting.key}
+                          type={settingType === 'number' ? 'number' : 'text'}
+                          value={values[setting.key]?.toString() || ''}
+                          onChange={(e) => handleInputChange(setting.key, e.target.value, settingType)}
+                          className="max-w-xs"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {setting.description && (
+                    <p className={`text-sm text-muted-foreground ${settingType === 'boolean' ? 'pl-14' : ''}`}>
+                      {setting.description}
+                    </p>
+                  )}
                 </div>
-                {setting.description && (
-                  <p className="text-sm text-muted-foreground pl-14">
-                    {setting.description}
-                  </p>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       ))}

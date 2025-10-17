@@ -405,6 +405,203 @@ WHERE e.id = $1 GROUP BY e.id;
 
 ---
 
+### Hierarchical Graph Traversal (Graph + Tree Navigation)
+**Priority:** Medium-High  
+**Impact:** Dramatically improved context quality by combining graph relationships with document hierarchy
+
+**Context:**
+Currently, graph search finds relevant entities and returns their associated chunks. But it treats all chunks as flat - no understanding of document structure or hierarchical relationships between chunks.
+
+Docling's HybridChunker already creates hierarchical structure (document → section → subsection → paragraph), but we're not storing or leveraging this hierarchy for retrieval.
+
+**Current Behavior:**
+```
+Query: "How does strategic planning relate to gap analysis?"
+
+Graph Search:
+1. Find entities: "Strategic Planning", "Gap Analysis"
+2. Collect chunk IDs: [chunk1, chunk3, chunk5]
+3. Return those specific chunks (all at same level)
+4. No context about where chunks came from or what surrounds them
+```
+
+**Proposed Behavior:**
+```
+Query: "How does strategic planning relate to gap analysis?"
+
+Graph + Hierarchical Search:
+1. Find entities via graph: "Strategic Planning" → chunk1, "Gap Analysis" → chunk3
+2. Traverse UP: Get parent summaries for broader context
+   - chunk1 → section_summary → document_summary
+3. Traverse DOWN: Get child details for more specificity
+   - section_summary → [chunk1, chunk2, chunk4]
+4. Traverse SIDEWAYS: Get siblings for related details
+   - chunk1.siblings → [chunk2]
+5. Return: [document_summary, section_summary, chunk1, chunk2, chunk3, chunk4]
+6. AI gets both high-level context AND granular details
+```
+
+**Benefits:**
+
+1. **Contextual Zoom In/Out**
+   - Start with detail chunk, zoom out to section/document summaries
+   - Or start with summary, zoom in to specific details
+   - AI understands where information fits in larger context
+
+2. **Related Details Discovery**
+   - Find sibling chunks at same level (related details)
+   - Find child chunks (more specific information)
+   - Comprehensive coverage without explicit queries
+
+3. **Cross-Section Relationships**
+   - Entities in different sections can find common ancestor
+   - Shows how concepts relate within document structure
+   - Better understanding of document organization
+
+4. **RAPTOR-Style Clustering** (Advanced)
+   - Create thematic clusters across documents
+   - "Strategic Planning" chunks from Doc A, B, C → cluster
+   - Cluster summary synthesizes cross-document understanding
+
+**Implementation Requirements:**
+
+**1. Store Hierarchy Metadata in Chunks:**
+```sql
+ALTER TABLE chunks ADD COLUMN level INTEGER;  -- 0=doc, 1=section, 2=subsection, 3=paragraph
+ALTER TABLE chunks ADD COLUMN parent_id UUID REFERENCES chunks(id);
+ALTER TABLE chunks ADD COLUMN sibling_ids UUID[];
+ALTER TABLE chunks ADD COLUMN is_summary BOOLEAN DEFAULT false;
+ALTER TABLE chunks ADD COLUMN hierarchy_path UUID[];  -- Full path from root
+
+CREATE INDEX idx_chunks_parent ON chunks(parent_id);
+CREATE INDEX idx_chunks_level ON chunks(level);
+```
+
+**2. Modify HybridChunker to Track Relationships:**
+```python
+# During chunking, track parent-child relationships
+chunk = {
+    "content": "...",
+    "level": 3,  # Paragraph level
+    "parent_id": section_chunk_id,
+    "sibling_ids": [other_paragraph_ids],
+    "is_summary": False,
+    "hierarchy_path": [doc_id, chapter_id, section_id, chunk_id]
+}
+
+# Also create summary chunks at each level
+section_summary = {
+    "content": "Summary of section...",
+    "level": 2,  # Section level
+    "parent_id": chapter_chunk_id,
+    "children_ids": [paragraph_chunk_ids],
+    "is_summary": True
+}
+```
+
+**3. Add Hierarchy Traversal Functions:**
+```typescript
+async function getParentChunks(chunkId: string, levels: number = 2): Promise<Chunk[]>
+async function getChildChunks(chunkId: string, levels: number = 1): Promise<Chunk[]>
+async function getSiblingChunks(chunkId: string): Promise<Chunk[]>
+async function getHierarchyPath(chunkId: string): Promise<Chunk[]>  // Root to leaf
+```
+
+**4. Integrate with Graph Search:**
+```typescript
+async function graphHierarchicalSearch(query: string) {
+  // 1. Graph search finds relevant entities and chunks
+  const graphResult = await graphEnhancedSearch(query);
+  const seedChunkIds = graphResult.relatedChunkIds;
+  
+  // 2. For each chunk, traverse hierarchy
+  const expandedChunkIds = new Set(seedChunkIds);
+  
+  for (const chunkId of seedChunkIds) {
+    // Traverse UP for context (2 levels)
+    const parents = await getParentChunks(chunkId, 2);
+    parents.forEach(p => expandedChunkIds.add(p.id));
+    
+    // Traverse DOWN for details (1 level)
+    const children = await getChildChunks(chunkId, 1);
+    children.forEach(c => expandedChunkIds.add(c.id));
+    
+    // Get siblings for related details
+    const siblings = await getSiblingChunks(chunkId);
+    siblings.forEach(s => expandedChunkIds.add(s.id));
+  }
+  
+  // 3. Retrieve and sort by level (summaries first, then details)
+  const chunks = await getChunks(Array.from(expandedChunkIds));
+  chunks.sort((a, b) => a.level - b.level);
+  
+  return {
+    entities: graphResult.entities,
+    relationships: graphResult.relationships,
+    chunks: chunks,
+    hierarchyInfo: {
+      summaryChunks: chunks.filter(c => c.is_summary),
+      detailChunks: chunks.filter(c => !c.is_summary),
+      levels: groupBy(chunks, 'level')
+    }
+  };
+}
+```
+
+**Use Cases:**
+
+1. **Broad Question → Zoom In**
+   - "What is strategic planning?" → Start with document summary
+   - User asks "Tell me more" → Zoom to section summaries
+   - User asks "Give me details" → Zoom to paragraph chunks
+
+2. **Specific Question → Zoom Out**
+   - "What does page 42 say about gap analysis?" → Find specific chunk
+   - Also provide section summary for context
+   - Also provide document summary for big picture
+
+3. **Relationship Questions → Cross-Section**
+   - "How does X relate to Y?" → Find entities in different sections
+   - Traverse up to find common ancestor (shared context)
+   - Shows how concepts relate within document structure
+
+**Cost Analysis:**
+- Storage: ~20% increase (hierarchy metadata + summary chunks)
+- Retrieval: Minimal overhead (indexed parent_id lookups)
+- Quality: 40-60% improvement in context relevance (estimated)
+- User Experience: Significantly better for complex queries
+
+**Phased Implementation:**
+
+**Phase 1: Store Hierarchy (1-2 days)**
+- Add columns to chunks table
+- Modify HybridChunker to track parent-child relationships
+- Store hierarchy metadata during ingestion
+
+**Phase 2: Traversal Functions (1 day)**
+- Implement getParentChunks, getChildChunks, getSiblingChunks
+- Add hierarchy path retrieval
+- Test traversal performance
+
+**Phase 3: Integrate with Graph Search (2-3 days)**
+- Modify graphEnhancedSearch to use hierarchy
+- Add hierarchy expansion logic
+- Update search API to return hierarchical context
+
+**Phase 4: RAPTOR Clustering (Optional, 1 week)**
+- Implement cross-document thematic clustering
+- Create cluster summaries
+- Integrate clusters with graph + hierarchy search
+
+**This aligns with:**
+- Docling HybridChunker's hierarchical structure (already creating it, just need to store it)
+- Graph RAG architecture (entities + relationships + hierarchical chunks)
+- Multi-tier intelligence (documents + structure + relationships)
+
+**Recommended Approach:** Implement Phases 1-3 as part of Phase 6 enhancements. Phase 4 (RAPTOR) can be future work when needed.
+
+---
+
 ## 🐛 Bugs & Issues
 
 *No items pending - INBOX is clean!*

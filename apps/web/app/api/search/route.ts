@@ -10,6 +10,44 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Fetch system settings from database
+async function getSystemSettings(supabase: any): Promise<Record<string, boolean>> {
+  try {
+    const { data: settings, error } = await supabase
+      .from("system_settings")
+      .select("key, value")
+      .in("category", ["search"]);
+
+    if (error) {
+      console.warn("[Settings] Error fetching settings, using defaults:", error);
+      return {
+        "search.useHyDE": true,
+        "search.useMultiQuery": true,
+        "search.useReranking": true,
+        "search.useGraphSearch": true,
+      };
+    }
+
+    // Convert to key-value object with boolean values
+    const settingsObj: Record<string, boolean> = {};
+    settings.forEach((setting: any) => {
+      // Handle both boolean and string "true"/"false" values
+      settingsObj[setting.key] = setting.value === true || setting.value === "true";
+    });
+
+    console.log("[Settings] Loaded system settings:", settingsObj);
+    return settingsObj;
+  } catch (error) {
+    console.warn("[Settings] Error fetching settings, using defaults:", error);
+    return {
+      "search.useHyDE": true,
+      "search.useMultiQuery": true,
+      "search.useReranking": true,
+      "search.useGraphSearch": true,
+    };
+  }
+}
+
 // Detect if query is complex enough to benefit from HyDE
 function shouldUseHyDE(query: string): boolean {
   const wordCount = query.trim().split(/\s+/).length;
@@ -182,14 +220,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Fetch system settings
+    const systemSettings = await getSystemSettings(supabase);
+    
     // Parse request body
     const body = await request.json();
     const {
       query,
       match_threshold = 0.5,  // Lowered from 0.7 - semantic search typically gets 0.5-0.8 scores
       match_count = 10,
-      use_hyde = true,  // Enable HyDE by default
-      use_graph = true,  // Enable graph search by default
+      use_hyde = systemSettings["search.useHyDE"] ?? true,  // Use system setting
+      use_multi_query = systemSettings["search.useMultiQuery"] ?? true,  // Use system setting
+      use_reranking = systemSettings["search.useReranking"] ?? true,  // Use system setting
+      use_graph = systemSettings["search.useGraphSearch"] ?? true,  // Use system setting
       graph_hops = 1,    // Number of hops for graph traversal
     } = body;
 
@@ -221,10 +264,13 @@ export async function POST(request: NextRequest) {
       onProgress(createProgressEvent('generating-variations', 'in-progress'));
       onProgress(createProgressEvent('generating-hyde', 'in-progress'));
       
-      // Run HyDE and Multi-Query generation in parallel
+      // Run HyDE and Multi-Query generation in parallel (if enabled)
+      const hydePromise = generateHyDE(query);
+      const multiQueryPromise = use_multi_query ? generateMultiQuery(query) : Promise.resolve([]);
+      
       const [hydeDoc, queryVariations] = await Promise.all([
-        generateHyDE(query),
-        generateMultiQuery(query),
+        hydePromise,
+        multiQueryPromise,
       ]);
       
       onProgress(createProgressEvent('generating-variations', 'completed'));
@@ -364,12 +410,15 @@ export async function POST(request: NextRequest) {
         }
       }
       
-      // Rerank the candidates
-      if (finalResults.length > 0) {
+      // Rerank the candidates (if enabled)
+      if (finalResults.length > 0 && use_reranking) {
         onProgress(createProgressEvent('reranking', 'in-progress'));
         finalResults = await rerankResults(query, finalResults);
         finalResults = finalResults.slice(0, match_count);
         onProgress(createProgressEvent('reranking', 'completed'));
+      } else if (finalResults.length > 0) {
+        // Just limit to match_count if reranking is disabled
+        finalResults = finalResults.slice(0, match_count);
         
         console.log(`[Search] Final top 3 results after reranking:`);
         finalResults.slice(0, 3).forEach((result, i) => {
@@ -423,10 +472,13 @@ export async function POST(request: NextRequest) {
       
       let finalResults: SearchResult[] = data || [];
       
-      // Rerank the candidates to get best final results
-      if (finalResults.length > 0) {
+      // Rerank the candidates to get best final results (if enabled)
+      if (finalResults.length > 0 && use_reranking) {
         finalResults = await rerankResults(query, finalResults);
         // Limit to requested count after reranking
+        finalResults = finalResults.slice(0, match_count);
+      } else if (finalResults.length > 0) {
+        // Just limit to match_count if reranking is disabled
         finalResults = finalResults.slice(0, match_count);
         
         console.log(`[Search] Final top 3 results after reranking:`);

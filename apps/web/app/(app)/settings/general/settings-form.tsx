@@ -13,7 +13,7 @@ import { Loader2 } from "lucide-react";
 type Setting = {
   id: string;
   key: string;
-  value: any;
+  value: string | number | boolean;
   description: string | null;
   category: string;
 };
@@ -25,11 +25,11 @@ type SettingsByCategory = {
 export function SettingsForm({ settings }: { settings: Setting[] }) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
-  const [values, setValues] = useState<{ [key: string]: any }>(
+  const [values, setValues] = useState<{ [key: string]: string | number | boolean }>(
     settings.reduce((acc, setting) => {
       acc[setting.key] = setting.value;
       return acc;
-    }, {} as { [key: string]: any })
+    }, {} as { [key: string]: string | number | boolean })
   );
 
   // Group settings by category with custom ordering
@@ -83,7 +83,7 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
   };
 
   // Detect the type of a setting value
-  const getSettingType = (value: any): 'boolean' | 'number' | 'string' => {
+  const getSettingType = (value: string | number | boolean): 'boolean' | 'number' | 'string' => {
     if (typeof value === 'boolean' || value === 'true' || value === 'false') {
       return 'boolean';
     }

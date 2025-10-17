@@ -11,6 +11,7 @@ from typing import List, Dict, Any, Optional, Tuple, Set
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from enum import Enum
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger(__name__)
 
@@ -406,15 +407,17 @@ Guidelines:
         self,
         chunks: List[Dict[str, Any]],
         document_id: str,
-        user_id: str
+        user_id: str,
+        max_workers: int = 10
     ) -> Tuple[int, int]:
         """
-        Process a batch of chunks for graph extraction.
+        Process a batch of chunks for graph extraction in parallel.
         
         Args:
             chunks: List of chunk dictionaries with 'id' and 'content'
             document_id: Document ID
             user_id: User ID
+            max_workers: Number of parallel workers (default: 10)
             
         Returns:
             Tuple of (total_entities, total_relationships)
@@ -422,27 +425,39 @@ Guidelines:
         total_entities = 0
         total_relationships = 0
         
-        for i, chunk in enumerate(chunks, 1):
-            try:
-                # Always use full content for graph extraction to capture all entities/relationships
-                # Summaries are too compressed and miss important details
-                text = chunk["content"]
-                
-                entity_count, rel_count = self.process_chunk(
+        logger.info(f"Starting parallel graph extraction with {max_workers} workers for {len(chunks)} chunks")
+        
+        # Process chunks in parallel using ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all chunks for processing
+            future_to_chunk = {
+                executor.submit(
+                    self.process_chunk,
                     chunk["id"],
-                    text,
+                    chunk["content"],  # Always use full content
                     document_id,
                     user_id
-                )
-                total_entities += entity_count
-                total_relationships += rel_count
+                ): chunk
+                for chunk in chunks
+            }
+            
+            # Collect results as they complete
+            completed = 0
+            for future in as_completed(future_to_chunk):
+                completed += 1
+                chunk = future_to_chunk[future]
                 
-                if i % 10 == 0:
-                    logger.info(f"Processed {i}/{len(chunks)} chunks for graph extraction")
+                try:
+                    entity_count, rel_count = future.result()
+                    total_entities += entity_count
+                    total_relationships += rel_count
                     
-            except Exception as e:
-                logger.error(f"Error processing chunk {chunk.get('id')}: {e}")
-                continue
+                    if completed % 10 == 0:
+                        logger.info(f"Processed {completed}/{len(chunks)} chunks for graph extraction")
+                        
+                except Exception as e:
+                    logger.error(f"Error processing chunk {chunk.get('id')}: {e}")
+                    continue
         
         logger.info(f"Graph extraction complete: {total_entities} entities, {total_relationships} relationships from {len(chunks)} chunks")
         return total_entities, total_relationships

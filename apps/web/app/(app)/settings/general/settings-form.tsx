@@ -88,27 +88,27 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
           </CardHeader>
           <CardContent className="space-y-6">
             {categorySettings.map((setting) => (
-              <div key={setting.key} className="flex items-start justify-between space-x-4">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor={setting.key} className="text-base">
+              <div key={setting.key} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={setting.key} className="text-base font-medium">
                     {setting.key.split(".").pop()?.replace(/([A-Z])/g, " $1").trim()}
                   </Label>
-                  {setting.description && (
-                    <p className="text-sm text-muted-foreground">
-                      {setting.description}
-                    </p>
-                  )}
+                  <Switch
+                    id={setting.key}
+                    checked={values[setting.key] === true || values[setting.key] === "true"}
+                    onCheckedChange={() =>
+                      handleToggle(
+                        setting.key,
+                        values[setting.key] === true || values[setting.key] === "true"
+                      )
+                    }
+                  />
                 </div>
-                <Switch
-                  id={setting.key}
-                  checked={values[setting.key] === true || values[setting.key] === "true"}
-                  onCheckedChange={() =>
-                    handleToggle(
-                      setting.key,
-                      values[setting.key] === true || values[setting.key] === "true"
-                    )
-                  }
-                />
+                {setting.description && (
+                  <p className="text-sm text-muted-foreground">
+                    {setting.description}
+                  </p>
+                )}
               </div>
             ))}
           </CardContent>

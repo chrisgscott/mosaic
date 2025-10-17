@@ -66,11 +66,74 @@ Desired result: Description becomes "A methodology for long-term planning that i
 - Synthesize periodically (e.g., after N mentions)
 - Lowest cost, delayed enrichment
 
-**Files to Modify:**
-- `apps/backend/ingest/processors/graph_extractor.py` - Add synthesis logic to `store_entity()` and `store_relationship()`
-- Consider adding `description_history` JSONB field to track evolution
+**Option D: Lazy Synthesis on Retrieval (BEST)** ⭐ RECOMMENDED
+- Store all raw extractions in `document_entities` (no synthesis during ingestion)
+- When entity is accessed/retrieved, synthesize on-demand from all mentions
+- Cache synthesized result for performance
+- Only pay synthesis cost for entities that are actually used
+- Aligns perfectly with two-level graph architecture
 
-**Recommended Approach:** Start with Option B (Conditional Synthesis) - good balance of quality and cost.
+**Why Option D is Superior:**
+- ✅ **Zero ingestion overhead** - No synthesis during document processing
+- ✅ **Pay only for what's used** - Only synthesize entities that users access
+- ✅ **Always fresh** - Synthesis happens with latest data
+- ✅ **Scales better** - Most entities never accessed, so never synthesized
+- ✅ **Enables experimentation** - Can change synthesis strategy without reprocessing
+- ✅ **Natural fit** - Synthesis happens during document_entities → global entity resolution
+
+**Implementation with Two-Level Architecture:**
+```python
+# During ingestion: Just store raw extraction
+document_entity = {
+    "document_id": doc_id,
+    "chunk_id": chunk_id,
+    "name": "Strategic Planning",
+    "description": "A methodology involving stakeholder alignment...",
+    "extracted_at": now()
+}
+# No synthesis, no merging - just store
+
+# During retrieval/resolution: Synthesize on demand
+async def get_or_create_global_entity(entity_name):
+    # Check cache first
+    cached = await cache.get(f"entity:{entity_name}")
+    if cached:
+        return cached
+    
+    # Get all document_entities for this entity
+    raw_extractions = await get_document_entities(entity_name)
+    
+    # Synthesize description from all mentions
+    synthesized_description = await synthesize_descriptions([
+        e.description for e in raw_extractions
+    ])
+    
+    # Create/update global entity
+    global_entity = {
+        "name": entity_name,
+        "description": synthesized_description,
+        "document_ids": [e.document_id for e in raw_extractions],
+        "source_count": len(raw_extractions)
+    }
+    
+    # Cache result
+    await cache.set(f"entity:{entity_name}", global_entity, ttl=3600)
+    
+    return global_entity
+```
+
+**Cost Analysis:**
+- 1000 documents with 50 entities each = 50,000 raw extractions
+- But only 500 unique entities accessed by users
+- Synthesis cost: 500 × $0.0001 = $0.05 (vs $5.00 for synthesizing all 50,000)
+- **100x cost reduction** by synthesizing only what's accessed
+
+**Files to Modify:**
+- `apps/backend/ingest/processors/graph_extractor.py` - Keep simple (just store raw)
+- Add entity resolution service that synthesizes on retrieval
+- Implement caching layer for synthesized entities
+
+**Recommended Approach:** Option D (Lazy Synthesis on Retrieval) - best performance, cost, and scalability. Implement as part of two-level graph architecture.
 
 ---
 

@@ -177,6 +177,9 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
                   <div className="flex items-center gap-3">
                     {settingType === 'boolean' ? (
                       <>
+                        <Label htmlFor={setting.key} className="text-base font-medium cursor-pointer flex-1">
+                          {displayName}
+                        </Label>
                         <Switch
                           id={setting.key}
                           checked={values[setting.key] === true || values[setting.key] === "true"}
@@ -187,9 +190,6 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
                             )
                           }
                         />
-                        <Label htmlFor={setting.key} className="text-base font-medium cursor-pointer">
-                          {displayName}
-                        </Label>
                       </>
                     ) : (
                       <div className="flex-1 space-y-2">
@@ -207,7 +207,7 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
                     )}
                   </div>
                   {setting.description && (
-                    <p className={`text-sm text-muted-foreground ${settingType === 'boolean' ? 'pl-14' : ''}`}>
+                    <p className="text-sm text-muted-foreground">
                       {setting.description}
                     </p>
                   )}

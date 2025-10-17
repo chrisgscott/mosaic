@@ -32,7 +32,7 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
     }, {} as { [key: string]: any })
   );
 
-  // Group settings by category
+  // Group settings by category with custom ordering
   const settingsByCategory = settings.reduce((acc, setting) => {
     if (!acc[setting.category]) {
       acc[setting.category] = [];
@@ -40,6 +40,47 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
     acc[setting.category].push(setting);
     return acc;
   }, {} as SettingsByCategory);
+
+  // Custom ordering: group toggles with their related model settings
+  const getOrderedSettings = (categorySettings: Setting[]) => {
+    const ordered: Setting[] = [];
+    const processed = new Set<string>();
+    
+    // Define toggle-model pairs
+    const pairs: { [key: string]: string } = {
+      'search.useGraphSearch': 'search.graphModel',
+      'search.useHyDE': 'search.hydeModel',
+      'search.useMultiQuery': 'search.multiQueryModel',
+      // Note: useReranking uses Cohere API, not an LLM model
+      'processing.useApiVlm': 'processing.vlmModel',
+      // Note: useDocling doesn't have a model setting
+    };
+    
+    // First pass: add toggles and their related models
+    categorySettings.forEach(setting => {
+      if (pairs[setting.key]) {
+        ordered.push(setting);
+        processed.add(setting.key);
+        
+        // Add the related model setting right after
+        const modelKey = pairs[setting.key];
+        const modelSetting = categorySettings.find(s => s.key === modelKey);
+        if (modelSetting) {
+          ordered.push(modelSetting);
+          processed.add(modelKey);
+        }
+      }
+    });
+    
+    // Second pass: add remaining settings
+    categorySettings.forEach(setting => {
+      if (!processed.has(setting.key)) {
+        ordered.push(setting);
+      }
+    });
+    
+    return ordered;
+  };
 
   // Detect the type of a setting value
   const getSettingType = (value: any): 'boolean' | 'number' | 'string' => {
@@ -116,7 +157,7 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {categorySettings.map((setting) => {
+            {getOrderedSettings(categorySettings).map((setting) => {
               const settingType = getSettingType(setting.value);
               // Convert to Title Case with acronym handling: "useApiVlm" -> "Use API VLM"
               const acronyms = ['API', 'VLM', 'LLM', 'PDF'];

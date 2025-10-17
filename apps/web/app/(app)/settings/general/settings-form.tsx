@@ -109,7 +109,14 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
           <CardContent className="space-y-6">
             {categorySettings.map((setting) => {
               const settingType = getSettingType(setting.value);
-              const displayName = setting.key.split(".").pop()?.replace(/([A-Z])/g, " $1").trim();
+              // Convert to Title Case: "useHyDE" -> "Use HyDE"
+              const displayName = setting.key
+                .split(".").pop()
+                ?.replace(/([A-Z])/g, " $1")
+                .trim()
+                .split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
 
               return (
                 <div key={setting.key} className="space-y-2">

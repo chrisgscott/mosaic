@@ -334,7 +334,7 @@ export function DocumentList({
         return (
           <Badge variant="default" className="gap-1">
             <Loader2 className="h-3 w-3 animate-spin" />
-            Starting{showProgress ? ` ${progress}%` : ''}
+            Processing{showProgress ? ` ${progress}%` : ''}
           </Badge>
         );
       case "extracting":
@@ -355,7 +355,7 @@ export function DocumentList({
         return (
           <Badge variant="default" className="gap-1">
             <Loader2 className="h-3 w-3 animate-spin" />
-            Summaries{showProgress ? ` ${progress}%` : ''}
+            Generating{showProgress ? ` ${progress}%` : ''}
           </Badge>
         );
       case "embedding":
@@ -369,7 +369,7 @@ export function DocumentList({
         return (
           <Badge variant="default" className="gap-1">
             <Loader2 className="h-3 w-3 animate-spin" />
-            Graph{showProgress ? ` ${progress}%` : ''}
+            Extracting Graph{showProgress ? ` ${progress}%` : ''}
           </Badge>
         );
       case "ready":

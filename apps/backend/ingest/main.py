@@ -1,8 +1,8 @@
 """
 Document Processing Background Worker
 
-Polls pgmq queue for document processing jobs, extracts text using either
-Unstructured (OCR) or Docling (VLM), chunks the content, and stores it in the database.
+Polls pgmq queue for document processing jobs, extracts text using Docling (VLM),
+chunks the content, and stores it in the database.
 """
 
 import os
@@ -14,9 +14,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from supabase import create_client, Client
 
-from processors.unstructured_processor import UnstructuredProcessor
 from processors.docling_processor import DoclingProcessor
-from processors.chunker import TextChunker
 from chunkers.hybrid_chunker import HybridChunker
 from processors.embeddings_generator import EmbeddingsGenerator
 from processors.graph_extractor import GraphExtractor
@@ -44,8 +42,7 @@ POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "5"))
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", "1"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 
-# Processor selection
-USE_DOCLING = os.getenv("USE_DOCLING", "false").lower() == "true"
+# Docling configuration
 USE_API_VLM = os.getenv("USE_API_VLM", "true").lower() == "true"
 DOCLING_MAX_WORKERS = int(os.getenv("DOCLING_MAX_WORKERS", "10"))
 
@@ -58,15 +55,10 @@ CHUNK_SUMMARY_NEIGHBORS = int(os.getenv("CHUNK_SUMMARY_NEIGHBORS", "2"))
 # Initialize clients
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-# Initialize processor based on configuration
-if USE_DOCLING:
-    processor = DoclingProcessor(use_api_vlm=USE_API_VLM, max_workers=DOCLING_MAX_WORKERS)
-    chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS)
-    logger.info(f"Using Docling processor with HybridChunker (API VLM: {USE_API_VLM}, max_workers: {DOCLING_MAX_WORKERS}, summary_neighbors: {CHUNK_SUMMARY_NEIGHBORS})")
-else:
-    processor = UnstructuredProcessor()
-    chunker = TextChunker()
-    logger.info("Using Unstructured processor")
+# Initialize processor and chunker
+processor = DoclingProcessor(use_api_vlm=USE_API_VLM, max_workers=DOCLING_MAX_WORKERS)
+chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS)
+logger.info(f"Using Docling processor with HybridChunker (API VLM: {USE_API_VLM}, max_workers: {DOCLING_MAX_WORKERS}, summary_neighbors: {CHUNK_SUMMARY_NEIGHBORS})")
 
 
 class DocumentWorker:
@@ -74,7 +66,7 @@ class DocumentWorker:
     
     def __init__(self):
         # Initialize chunker
-        self.chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS) if USE_DOCLING else TextChunker()
+        self.chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS)
         
         # Initialize embeddings generator
         self.embeddings_generator = EmbeddingsGenerator(supabase)
@@ -230,57 +222,36 @@ class DocumentWorker:
             user_id = doc_result.data[0]["user_id"]
             
             # Update status to processing
-            self.update_document_status(document_id, "processing", progress=0)
-            
-            # Clean up temp directories BEFORE downloading (only for Unstructured)
-            if not USE_DOCLING:
-                logger.info("Cleaning up temp directories before processing")
-                processor.cleanup_temp_dirs()
+            self.update_document_status(document_id, "processing")
             
             # Download file from Supabase Storage
             logger.info(f"Downloading file from storage: {file_path}")
             file_data = supabase.storage.from_("documents").download(file_path)
             
-            # Process document based on selected processor
-            if USE_DOCLING:
-                # Docling returns DoclingDocument object
-                self.update_document_status(document_id, "extracting", progress=10)
-                logger.info(f"Extracting document with Docling ({'API VLM' if USE_API_VLM else 'Local VLM'})")
-                docling_doc = processor.extract_document(file_data, file_path)
-                
-                if not docling_doc:
-                    raise ValueError("No document extracted from file")
-                
-                logger.info(f"Extracted DoclingDocument successfully")
-                
-                # Chunk the document using HybridChunker
-                self.update_document_status(document_id, "chunking", progress=30)
-                logger.info("Chunking document with HybridChunker")
-                chunks = self.chunker.chunk_document(docling_doc, document_id)
-                
-                # Add user_id and storage_path to chunks
-                for chunk in chunks:
-                    chunk["user_id"] = user_id
-                    chunk["metadata"]["storage_path"] = file_path
-                
-            else:
-                # Unstructured returns elements
-                logger.info("Extracting elements with Unstructured")
-                elements = processor.extract_elements(file_data, file_path)
-                
-                if not elements:
-                    raise ValueError("No elements extracted from document")
-                
-                logger.info(f"Extracted {len(elements)} elements")
-                
-                # Chunk the elements using by_title strategy
-                logger.info("Chunking elements (respecting section boundaries)")
-                chunks = chunker.chunk_elements(elements, document_id, user_id, storage_path=file_path)
+            # Extract document with Docling
+            self.update_document_status(document_id, "extracting")
+            logger.info(f"Extracting document with Docling ({'API VLM' if USE_API_VLM else 'Local VLM'})")
+            docling_doc = processor.extract_document(file_data, file_path)
+            
+            if not docling_doc:
+                raise ValueError("No document extracted from file")
+            
+            logger.info(f"Extracted DoclingDocument successfully")
+            
+            # Chunk the document using HybridChunker
+            self.update_document_status(document_id, "chunking")
+            logger.info("Chunking document with HybridChunker")
+            chunks = self.chunker.chunk_document(docling_doc, document_id)
+            
+            # Add user_id and storage_path to chunks
+            for chunk in chunks:
+                chunk["user_id"] = user_id
+                chunk["metadata"]["storage_path"] = file_path
             
             logger.info(f"Created {len(chunks)} chunks")
             
             # Store chunks in database in batches and generate embeddings immediately
-            self.update_document_status(document_id, "embedding", progress=60)
+            self.update_document_status(document_id, "embedding")
             logger.info("Storing chunks and generating embeddings")
             CHUNK_BATCH_SIZE = 100
             total_embeddings = 0
@@ -326,7 +297,7 @@ class DocumentWorker:
             
             # Extract graph (entities and relationships) if enabled
             if self.graph_extractor:
-                self.update_document_status(document_id, "extracting_graph", progress=80)
+                self.update_document_status(document_id, "extracting_graph")
                 logger.info("Extracting entities and relationships for knowledge graph")
                 try:
                     # Get stored chunks with IDs for graph extraction
@@ -346,7 +317,7 @@ class DocumentWorker:
                     logger.error(f"Graph extraction failed (non-fatal): {e}")
             
             # Update document status to ready
-            self.update_document_status(document_id, "ready", progress=100)
+            self.update_document_status(document_id, "ready")
             
             logger.info(f"Successfully processed document {document_id}")
             return (True, True)

@@ -7,18 +7,8 @@ storage3==0.7.7
 postgrest==0.15.1
 python-dotenv==1.0.0
 
-# Document processing - Unstructured (OCR-based, legacy)
-# Keep for backward compatibility during transition
-unstructured==0.18.15
-unstructured[pdf]==0.18.15
-unstructured[docx]==0.18.15
-unstructured[xlsx]==0.18.15
-unstructured[pptx]==0.18.15
-unstructured[csv]==0.18.15
-unstructured[md]==0.18.15
-
-# Document processing - Docling (VLM-based, new)
-# Lightweight, faster alternative to Unstructured
+# Document processing - Docling (VLM-based)
+# Fast, accurate document extraction with vision capabilities
 docling  # Use latest version
 transformers  # For HuggingFace tokenizers in HybridChunker
 sentencepiece  # Required by some HuggingFace tokenizers

@@ -17,6 +17,7 @@ from docling.chunking import HybridChunker as DoclingHybridChunker
 from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
 from transformers import AutoTokenizer
 from openai import OpenAI
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger(__name__)
 
@@ -233,38 +234,54 @@ class HybridChunker:
                     "metadata": metadata
                 })
             
-            # Second pass: Generate summaries with neighbor context
+            # Second pass: Generate summaries with neighbor context (in parallel)
             if self.summary_neighbors > 0:
-                logger.info(f"Generating summaries with {self.summary_neighbors} neighbors per chunk")
+                max_workers = int(os.getenv("SUMMARY_GENERATION_WORKERS", "20"))
+                logger.info(f"Generating summaries with {self.summary_neighbors} neighbors per chunk ({max_workers} workers)")
                 
                 successful_summaries = 0
                 failed_summaries = 0
                 
-                for idx, db_chunk in enumerate(db_chunks):
-                    # Get previous chunks
-                    start_prev = max(0, idx - self.summary_neighbors)
-                    previous_chunks = chunk_texts[start_prev:idx]
+                # Process summaries in parallel
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    # Submit all summary generation tasks
+                    future_to_idx = {}
+                    for idx, db_chunk in enumerate(db_chunks):
+                        # Get previous chunks
+                        start_prev = max(0, idx - self.summary_neighbors)
+                        previous_chunks = chunk_texts[start_prev:idx]
+                        
+                        # Get next chunks
+                        end_next = min(len(chunk_texts), idx + self.summary_neighbors + 1)
+                        next_chunks = chunk_texts[idx + 1:end_next]
+                        
+                        # Submit summary generation task
+                        future = executor.submit(
+                            self._generate_chunk_summary,
+                            current_chunk=chunk_texts[idx],
+                            current_chunk_tokens=db_chunk["token_count"],
+                            previous_chunks=previous_chunks,
+                            next_chunks=next_chunks
+                        )
+                        future_to_idx[future] = idx
                     
-                    # Get next chunks
-                    end_next = min(len(chunk_texts), idx + self.summary_neighbors + 1)
-                    next_chunks = chunk_texts[idx + 1:end_next]
-                    
-                    # Generate summary with adaptive length based on chunk size
-                    summary = self._generate_chunk_summary(
-                        current_chunk=chunk_texts[idx],
-                        current_chunk_tokens=db_chunk["token_count"],
-                        previous_chunks=previous_chunks,
-                        next_chunks=next_chunks
-                    )
-                    
-                    if summary:
-                        db_chunk["summary"] = summary
-                        successful_summaries += 1
-                        logger.debug(f"Chunk {idx}: Generated summary ({len(summary)} chars)")
-                    else:
-                        db_chunk["summary"] = None
-                        failed_summaries += 1
-                        logger.warning(f"Chunk {idx}: Failed to generate summary")
+                    # Collect results as they complete
+                    for future in as_completed(future_to_idx):
+                        idx = future_to_idx[future]
+                        try:
+                            summary = future.result()
+                            if summary:
+                                db_chunks[idx]["summary"] = summary
+                                successful_summaries += 1
+                                logger.debug(f"Chunk {idx}: Generated summary ({len(summary)} chars)")
+                            else:
+                                db_chunks[idx]["summary"] = None
+                                failed_summaries += 1
+                                logger.warning(f"Chunk {idx}: Failed to generate summary")
+                        except Exception as e:
+                            db_chunks[idx]["summary"] = None
+                            failed_summaries += 1
+                            logger.error(f"Chunk {idx}: Error generating summary: {e}")
                 
                 logger.info(f"Summary generation complete: {successful_summaries} successful, {failed_summaries} failed")
             

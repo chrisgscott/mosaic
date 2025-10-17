@@ -256,17 +256,28 @@ export async function POST(request: NextRequest) {
     }
 
     // Smart query enhancement: Use HyDE + Multi-Query for complex queries
-    const useHyDE = use_hyde && shouldUseHyDE(query);
+    const isComplexQuery = shouldUseHyDE(query);
+    const useHyDE = use_hyde && isComplexQuery;
+    const useMultiQuery = use_multi_query && isComplexQuery;
     
-    if (useHyDE) {
-      console.log(`[Search] Complex query detected - using HyDE + Multi-Query`);
+    if (isComplexQuery) {
+      const techniques = [];
+      if (useHyDE) techniques.push('HyDE');
+      if (useMultiQuery) techniques.push('Multi-Query');
+      
+      console.log(`[Search] Complex query detected - using ${techniques.join(' + ') || 'basic search'}`);
       onProgress(createProgressEvent('analyzing', 'completed'));
-      onProgress(createProgressEvent('generating-variations', 'in-progress'));
-      onProgress(createProgressEvent('generating-hyde', 'in-progress'));
+      
+      if (useMultiQuery) {
+        onProgress(createProgressEvent('generating-variations', 'in-progress'));
+      }
+      if (useHyDE) {
+        onProgress(createProgressEvent('generating-hyde', 'in-progress'));
+      }
       
       // Run HyDE and Multi-Query generation in parallel (if enabled)
-      const hydePromise = generateHyDE(query);
-      const multiQueryPromise = use_multi_query ? generateMultiQuery(query) : Promise.resolve([]);
+      const hydePromise = useHyDE ? generateHyDE(query) : Promise.resolve(query);
+      const multiQueryPromise = useMultiQuery ? generateMultiQuery(query) : Promise.resolve([]);
       
       const [hydeDoc, queryVariations] = await Promise.all([
         hydePromise,

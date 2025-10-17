@@ -507,20 +507,54 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - Non-fatal errors (logs warning but continues deletion)
 - Preserves shared entities/relationships across documents
 
-### Phase 5.4: Graph Management UI (Medium Priority)
+### Phase 5.4: Graph Management UI (High Priority)
 **Goal**: Give users control over extracted entities and relationships
 
-#### Entity/Relationship Editing
+**Approach**: Corpus-Level Management (chosen over document-level review)
+- ✅ Let automation run without interruption
+- ✅ Provide `/graph` management page for entire corpus
+- ✅ User curates entities when convenient, in batches
+- ✅ See patterns, duplicates, and relationships across all documents
+- ✅ Scales better (works for 10 or 10,000 documents)
+
+#### Phase 1: Basic Entity List (2-3 hours)
 - [ ] Create graph management page (`/graph`)
-- [ ] View all entities with filtering (by type, document, search)
+- [ ] View all entities with search/filter
+- [ ] Filter by type, document, confidence score
+- [ ] Sort by most referenced, newest, confidence
+- [ ] Show entity details: name, type, doc count, chunk count
+- [ ] Basic delete functionality (uses smart cascade)
+- [ ] Smart quality indicators:
+  - 🟢 High confidence (>0.85) + Multiple docs
+  - 🟡 Medium confidence (0.7-0.85) or Single doc
+  - 🔴 Low confidence (<0.7) or Suspicious pattern
+  - ⚠️ Potential duplicate detected
+
+#### Phase 2: Entity Editing & Merging (1-2 days)
+- [ ] Entity details panel
+  - Full description and aliases
+  - Documents and chunks where it appears
+  - Relationships (incoming/outgoing)
+  - View context from source chunks
 - [ ] Edit entity names, types, descriptions
-- [ ] Merge duplicate entities
-- [ ] Delete incorrect entities
-- [ ] Add manual entities
+- [ ] Merge duplicate entities workflow
+  - Automatic duplicate detection
+  - Select multiple entities → merge into one
+  - Choose primary name, combine aliases
+  - Synthesize descriptions
+  - Union document_ids and chunk_ids
+  - Update all relationships
+- [ ] Bulk operations
+  - Select multiple entities → delete
+  - Filter by confidence → bulk delete low-quality
+  - Search pattern → review and clean up
+
+#### Phase 3: Relationship Management (1-2 days)
 - [ ] View all relationships with filtering
 - [ ] Edit relationship types and descriptions
 - [ ] Delete incorrect relationships
 - [ ] Add manual relationships
+- [ ] Relationship quality indicators
 
 #### Type Management
 - [ ] Create type management interface
@@ -556,6 +590,88 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - [ ] Temporal relationships
 - [ ] Cross-document entity linking
 - [ ] Graph-based summarization
+
+### Phase 5.7: Enterprise Graph Architecture (High Priority)
+**Goal**: Enterprise-grade graph with audit trails, multi-source validation, and lazy synthesis
+
+#### Two-Level Graph Architecture
+**Priority**: High (Critical for enterprise requirements)
+
+**Rationale**: Mosaic is an enterprise-grade platform for multi-billion dollar companies requiring:
+- Cross-source entity resolution (documents + structured data + news feeds)
+- Complete audit trails and data lineage
+- Multi-source validation and confidence scoring
+- Temporal tracking of entity evolution
+- Compliance-ready provenance tracking
+
+**Architecture**:
+
+**Level 1: Document Entities (Raw Extractions)**
+- [ ] Create `document_entities` table
+- [ ] Create `document_relationships` table
+- [ ] Store raw extractions without synthesis or merging
+- [ ] Track source_type ('document', 'structured_data', 'news_feed')
+- [ ] Immutable audit trail (never deleted, only marked)
+
+**Level 2: Global Entities (Deduplicated)**
+- [ ] Keep existing `entities` and `relationships` tables
+- [ ] Add `entity_sources` link table for provenance
+- [ ] Add `relationship_sources` link table
+- [ ] Track multi-source metadata (source_count, source_types, confidence)
+- [ ] Add temporal tracking (first_seen, last_updated)
+
+**Benefits**:
+- ✅ Cross-source intelligence (360-degree entity views)
+- ✅ Multi-source validation (confidence from source diversity)
+- ✅ Complete audit trails (immutable extraction records)
+- ✅ Temporal tracking (entity evolution over time)
+- ✅ Flexible entity resolution (re-run with different strategies)
+- ✅ Organization isolation (multi-tenant RLS at both levels)
+
+**Implementation Phases**:
+1. Phase 1 (Tables + RLS): 1 day
+2. Phase 2 (Extractor changes): 1-2 days
+3. Phase 3 (Resolution service): 2-3 days
+4. Phase 4 (Multi-source extension): 2-3 days
+
+**Total Effort**: ~1-2 weeks
+
+#### Entity & Relationship Description Synthesis
+**Priority**: Medium (Implement with two-level architecture)
+
+**Problem**: When entities are mentioned in multiple chunks/documents, we append document_ids and chunk_ids but keep the original description, losing new information from subsequent mentions.
+
+**Solution**: Lazy Synthesis on Retrieval (Option D) ⭐ RECOMMENDED
+
+**Approach**:
+- [ ] Store all raw extractions in `document_entities` (no synthesis during ingestion)
+- [ ] When entity is accessed/retrieved, synthesize on-demand from all mentions
+- [ ] Cache synthesized result for performance
+- [ ] Only pay synthesis cost for entities that are actually used
+
+**Benefits**:
+- ✅ Zero ingestion overhead (no synthesis during processing)
+- ✅ Pay only for what's used (100x cost reduction)
+- ✅ Always fresh (synthesis uses latest data)
+- ✅ Scales better (most entities never accessed)
+- ✅ Enables experimentation (change strategy without reprocessing)
+
+**Cost Analysis**:
+- 1000 documents × 50 entities = 50,000 raw extractions
+- Only 500 unique entities accessed by users
+- Synthesis cost: 500 × $0.0001 = $0.05 (vs $5.00 for all)
+- **100x cost reduction**
+
+**Implementation**:
+- [ ] Add entity resolution service
+- [ ] Implement synthesis function with caching
+- [ ] Integrate with entity retrieval endpoints
+- [ ] Add cache invalidation on new documents
+
+**Files to Modify**:
+- `apps/backend/ingest/processors/graph_extractor.py` - Keep simple (just store raw)
+- Add entity resolution service
+- Implement caching layer
 
 ### Technical Decisions
 - **Storage**: Postgres-native (no Neo4j) following R2R's proven approach
@@ -721,6 +837,74 @@ Race condition between:
 - `apps/backend/ingest/main.py` - Add document existence check
 - `apps/web/app/api/documents/[id]/route.ts` - Clean queue on delete
 - Database migration - Add dead letter queue table (optional)
+
+#### 🌳 Hierarchical Graph Traversal (Medium-High Priority)
+**Goal:** Dramatically improve context quality by combining graph relationships with document hierarchy
+
+**Problem**: Graph search finds relevant entities and returns associated chunks, but treats all chunks as flat with no understanding of document structure or hierarchical relationships.
+
+**Opportunity**: Docling's HybridChunker already creates hierarchical structure (document → section → subsection → paragraph), but we're not storing or leveraging this for retrieval.
+
+**Proposed Solution**: Store hierarchy metadata and traverse the tree during retrieval
+
+**Benefits**:
+- **Contextual Zoom In/Out**: Start with detail, zoom to summaries, or vice versa
+- **Related Details Discovery**: Find sibling chunks and child chunks automatically
+- **Cross-Section Relationships**: Find common ancestors showing how concepts relate
+- **40-60% improvement** in context relevance (estimated)
+
+**Implementation**:
+
+**Phase 1: Store Hierarchy (1-2 days)**
+- [ ] Add columns to chunks table:
+  - `level` INTEGER (0=doc, 1=section, 2=subsection, 3=paragraph)
+  - `parent_id` UUID (references chunks.id)
+  - `sibling_ids` UUID[]
+  - `is_summary` BOOLEAN
+  - `hierarchy_path` UUID[] (full path from root)
+- [ ] Create indexes on parent_id and level
+- [ ] Modify HybridChunker to track parent-child relationships
+- [ ] Store hierarchy metadata during ingestion
+
+**Phase 2: Traversal Functions (1 day)**
+- [ ] Implement `getParentChunks(chunkId, levels)`
+- [ ] Implement `getChildChunks(chunkId, levels)`
+- [ ] Implement `getSiblingChunks(chunkId)`
+- [ ] Implement `getHierarchyPath(chunkId)` (root to leaf)
+- [ ] Test traversal performance with indexes
+
+**Phase 3: Integrate with Graph Search (2-3 days)**
+- [ ] Modify `graphEnhancedSearch` to use hierarchy
+- [ ] For each chunk from graph search:
+  - Traverse UP 2 levels for context
+  - Traverse DOWN 1 level for details
+  - Get siblings for related content
+- [ ] Sort results by level (summaries first, then details)
+- [ ] Update search API to return hierarchical context
+
+**Phase 4: RAPTOR Clustering (Optional, 1 week)**
+- [ ] Implement cross-document thematic clustering
+- [ ] Create cluster summaries
+- [ ] Integrate clusters with graph + hierarchy search
+
+**Use Cases**:
+1. **Broad Question → Zoom In**: "What is strategic planning?" → document summary → section summaries → paragraph details
+2. **Specific Question → Zoom Out**: "What does page 42 say?" → specific chunk + section summary + document summary
+3. **Relationship Questions**: "How does X relate to Y?" → find common ancestor showing shared context
+
+**Cost Analysis**:
+- Storage: ~20% increase (hierarchy metadata + summary chunks)
+- Retrieval: Minimal overhead (indexed lookups)
+- Quality: 40-60% improvement in context relevance
+- User Experience: Significantly better for complex queries
+
+**Files to Modify**:
+- `supabase/migrations/` - Add hierarchy columns to chunks table
+- `apps/backend/ingest/chunkers/hybrid_chunker.py` - Track relationships
+- `apps/web/lib/graph/graph-search.ts` - Add hierarchy traversal
+- `apps/web/app/api/search/route.ts` - Integrate with search
+
+**Total Effort**: 4-5 days for Phases 1-3, optional 1 week for Phase 4
 
 ---
 

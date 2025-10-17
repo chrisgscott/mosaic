@@ -59,6 +59,10 @@ const data = {
           url: "/graph",
         },
         {
+          title: "Visualize",
+          url: "/graph/visualize",
+        },
+        {
           title: "Clean Up Duplicates",
           url: "/graph/cleanup",
         },

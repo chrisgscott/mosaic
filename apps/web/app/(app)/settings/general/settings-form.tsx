@@ -92,6 +92,15 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
   };
 
   const getCategoryTitle = (category: string) => {
+    // Handle known acronyms
+    const acronyms: { [key: string]: string } = {
+      'llm': 'LLM',
+    };
+    
+    if (acronyms[category.toLowerCase()]) {
+      return acronyms[category.toLowerCase()];
+    }
+    
     return category.charAt(0).toUpperCase() + category.slice(1);
   };
 

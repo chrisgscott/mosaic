@@ -112,19 +112,23 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
           <CardHeader>
             <CardTitle>{getCategoryTitle(category)} Settings</CardTitle>
             <CardDescription>
-              Configure {category} behavior for the entire system
+              Configure {getCategoryTitle(category).toLowerCase()} behavior for the entire system
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {categorySettings.map((setting) => {
               const settingType = getSettingType(setting.value);
-              // Convert to Title Case: "useHyDE" -> "Use HyDE"
+              // Convert to Title Case with acronym handling: "useApiVlm" -> "Use API VLM"
+              const acronyms = ['API', 'VLM', 'LLM', 'PDF'];
               const displayName = setting.key
                 .split(".").pop()
                 ?.replace(/([A-Z])/g, " $1")
                 .trim()
                 .split(' ')
-                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .map(word => {
+                  const upperWord = word.toUpperCase();
+                  return acronyms.includes(upperWord) ? upperWord : word.charAt(0).toUpperCase() + word.slice(1);
+                })
                 .join(' ');
 
               return (

@@ -61,16 +61,14 @@ export default async function GeneralSettingsPage() {
         </Breadcrumb>
       </header>
       <div className="flex-1 space-y-4 p-4">
-        <div className="max-w-2xl">
+        <div>
           <h1 className="text-3xl font-bold">General Settings</h1>
           <p className="text-muted-foreground mt-2">
             Configure system-wide settings. These settings affect all users.
           </p>
         </div>
 
-        <div className="max-w-2xl">
-          <SettingsForm settings={settings || []} />
-        </div>
+        <SettingsForm settings={settings || []} />
       </div>
     </>
   );

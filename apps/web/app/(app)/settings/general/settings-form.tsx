@@ -96,9 +96,10 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      {Object.entries(settingsByCategory).map(([category, categorySettings]) => (
-        <Card key={category}>
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {Object.entries(settingsByCategory).map(([category, categorySettings]) => (
+          <Card key={category}>
           <CardHeader>
             <CardTitle>{getCategoryTitle(category)} Settings</CardTitle>
             <CardDescription>
@@ -154,7 +155,8 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
             })}
           </CardContent>
         </Card>
-      ))}
+        ))}
+      </div>
 
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={isSaving}>

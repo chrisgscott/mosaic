@@ -324,7 +324,12 @@ export function DocumentList({
           </Badge>
         );
       case "uploaded":
-        return <Badge variant="secondary">Queued</Badge>;
+        return (
+          <Badge variant="secondary" className="gap-1">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Queued
+          </Badge>
+        );
       case "processing":
         return (
           <Badge variant="default" className="gap-1">

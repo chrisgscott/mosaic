@@ -164,27 +164,30 @@ export async function deleteDocument(documentId: string) {
       .or(`document_ids.cs.{${documentId}},chunk_ids.ov.{${chunkIds.join(",")}}`);
 
     if (!entitiesError && entities) {
-      for (const entity of entities) {
-        // Remove this document_id and chunk_ids from the arrays
-        const updatedDocIds = entity.document_ids.filter((id: string) => id !== documentId);
-        const updatedChunkIds = entity.chunk_ids.filter((id: string) => !chunkIds.includes(id));
-        
-        if (updatedDocIds.length === 0 && updatedChunkIds.length === 0) {
-          // No more documents or chunks reference this entity - delete it
-          await supabase.from("entities").delete().eq("id", entity.id);
-          console.log(`Deleted orphaned entity ${entity.id}`);
-        } else {
-          // Still has other references - update the arrays
-          await supabase
-            .from("entities")
-            .update({ 
-              document_ids: updatedDocIds,
-              chunk_ids: updatedChunkIds 
-            })
-            .eq("id", entity.id);
-          console.log(`Updated entity ${entity.id}, removed document/chunk references`);
-        }
-      }
+      // Process all entity updates/deletes in parallel
+      await Promise.all(
+        entities.map(async (entity) => {
+          // Remove this document_id and chunk_ids from the arrays
+          const updatedDocIds = entity.document_ids.filter((id: string) => id !== documentId);
+          const updatedChunkIds = entity.chunk_ids.filter((id: string) => !chunkIds.includes(id));
+          
+          if (updatedDocIds.length === 0 && updatedChunkIds.length === 0) {
+            // No more documents or chunks reference this entity - delete it
+            await supabase.from("entities").delete().eq("id", entity.id);
+            console.log(`Deleted orphaned entity ${entity.id}`);
+          } else {
+            // Still has other references - update the arrays
+            await supabase
+              .from("entities")
+              .update({ 
+                document_ids: updatedDocIds,
+                chunk_ids: updatedChunkIds 
+              })
+              .eq("id", entity.id);
+            console.log(`Updated entity ${entity.id}, removed document/chunk references`);
+          }
+        })
+      );
     }
 
     // Now handle relationships (reuse chunkIds from above)
@@ -195,27 +198,30 @@ export async function deleteDocument(documentId: string) {
       .or(`document_ids.cs.{${documentId}},chunk_ids.ov.{${chunkIds.join(",")}}`);
 
     if (!relsError && relationships) {
-      for (const rel of relationships) {
-        // Remove this document_id and chunk_ids from the arrays
-        const updatedDocIds = rel.document_ids.filter((id: string) => id !== documentId);
-        const updatedChunkIds = rel.chunk_ids.filter((id: string) => !chunkIds.includes(id));
-        
-        if (updatedDocIds.length === 0 && updatedChunkIds.length === 0) {
-          // No more documents or chunks reference this relationship - delete it
-          await supabase.from("relationships").delete().eq("id", rel.id);
-          console.log(`Deleted orphaned relationship ${rel.id}`);
-        } else {
-          // Still has other references - update the arrays
-          await supabase
-            .from("relationships")
-            .update({ 
-              document_ids: updatedDocIds,
-              chunk_ids: updatedChunkIds 
-            })
-            .eq("id", rel.id);
-          console.log(`Updated relationship ${rel.id}, removed document/chunk references`);
-        }
-      }
+      // Process all relationship updates/deletes in parallel
+      await Promise.all(
+        relationships.map(async (rel) => {
+          // Remove this document_id and chunk_ids from the arrays
+          const updatedDocIds = rel.document_ids.filter((id: string) => id !== documentId);
+          const updatedChunkIds = rel.chunk_ids.filter((id: string) => !chunkIds.includes(id));
+          
+          if (updatedDocIds.length === 0 && updatedChunkIds.length === 0) {
+            // No more documents or chunks reference this relationship - delete it
+            await supabase.from("relationships").delete().eq("id", rel.id);
+            console.log(`Deleted orphaned relationship ${rel.id}`);
+          } else {
+            // Still has other references - update the arrays
+            await supabase
+              .from("relationships")
+              .update({ 
+                document_ids: updatedDocIds,
+                chunk_ids: updatedChunkIds 
+              })
+              .eq("id", rel.id);
+            console.log(`Updated relationship ${rel.id}, removed document/chunk references`);
+          }
+        })
+      );
     }
 
     console.log(`Graph cleanup complete for document ${documentId}`);

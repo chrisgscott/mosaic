@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class DoclingProcessor:
     """Document processor using Docling with VLM support."""
     
-    def __init__(self, use_api_vlm: bool = True, max_workers: int = 10):
+    def __init__(self, use_api_vlm: bool = True, max_workers: int = 10, settings_service=None):
         """
         Initialize Docling processor.
         
@@ -26,9 +26,11 @@ class DoclingProcessor:
             use_api_vlm: If True, use API-based VLM (GPT-4o-mini).
                         If False, use local VLM (GraniteDocling).
             max_workers: Number of parallel workers for page processing (default: 10).
+            settings_service: Optional settings service for reading model configuration.
         """
         self.use_api_vlm = use_api_vlm
         self.max_workers = max_workers
+        self.settings_service = settings_service
         self.converter = None
         
         # Lazy initialization - only import and configure when needed
@@ -56,10 +58,15 @@ class DoclingProcessor:
                 if not api_key:
                     raise ValueError("OPENAI_API_KEY environment variable required for API VLM")
                 
+                # Get VLM model from settings (default to gpt-4o-mini)
+                vlm_model = "gpt-4o-mini"
+                if self.settings_service:
+                    vlm_model = self.settings_service.get_string('processing.vlmModel', 'gpt-4o-mini')
+                
                 vlm_options = ApiVlmOptions(
                     url="https://api.openai.com/v1/chat/completions",
                     params=dict(
-                        model="gpt-4o-mini",
+                        model=vlm_model,
                         max_tokens=4096,
                     ),
                     headers={"Authorization": f"Bearer {api_key}"},
@@ -69,12 +76,13 @@ class DoclingProcessor:
                     response_format=ResponseFormat.MARKDOWN,
                 )
                 
+                logger.info(f"Configured Docling with API VLM ({vlm_model})")
+                
                 pipeline_options = VlmPipelineOptions(
                     vlm_options=vlm_options,
                     enable_remote_services=True
                 )
                 
-                logger.info("Configured Docling with API VLM (GPT-4o-mini)")
             else:
                 # Local VLM (GraniteDocling)
                 from docling.datamodel import vlm_model_specs

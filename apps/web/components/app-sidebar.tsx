@@ -50,21 +50,17 @@ const data = {
       ],
     },
     {
-      title: "Graph RAG",
-      url: "#",
+      title: "Knowledge Graph",
+      url: "/graph",
       icon: "Network",
       items: [
         {
-          title: "Entities",
-          url: "#",
+          title: "View Graph",
+          url: "/graph",
         },
         {
-          title: "Relations",
-          url: "#",
-        },
-        {
-          title: "Visualize",
-          url: "#",
+          title: "Clean Up Duplicates",
+          url: "/graph/cleanup",
         },
       ],
     },

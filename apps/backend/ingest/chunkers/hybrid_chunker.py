@@ -29,7 +29,8 @@ class HybridChunker:
                  embedding_model: str = "text-embedding-3-small",
                  max_tokens: int = 512,
                  merge_peers: bool = True,
-                 summary_neighbors: int = 2):
+                 summary_neighbors: int = 2,
+                 settings_service=None):
         """
         Initialize HybridChunker with embedding model tokenizer.
         
@@ -38,11 +39,13 @@ class HybridChunker:
             max_tokens: Maximum tokens per chunk
             merge_peers: Whether to merge undersized successive chunks with same headings
             summary_neighbors: Number of neighboring chunks to include in summary generation (0 to disable)
+            settings_service: Optional settings service for reading model configuration
         """
         self.embedding_model = embedding_model
         self.max_tokens = max_tokens
         self.merge_peers = merge_peers
         self.summary_neighbors = summary_neighbors
+        self.settings_service = settings_service
         
         # Initialize OpenAI client for summary generation
         if summary_neighbors > 0:
@@ -124,9 +127,14 @@ class HybridChunker:
             
             full_context = "\n\n---\n\n".join(context_parts)
             
-            # Generate summary using GPT-4o-mini (better at complex multi-topic chunks)
+            # Get summary model from settings (default to gpt-4o-mini)
+            summary_model = "gpt-4o-mini"
+            if self.settings_service:
+                summary_model = self.settings_service.get_string('processing.summaryModel', 'gpt-4o-mini')
+            
+            # Generate summary
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=summary_model,
                 messages=[
                     {
                         "role": "system",
@@ -236,7 +244,11 @@ class HybridChunker:
             
             # Second pass: Generate summaries with neighbor context (in parallel)
             if self.summary_neighbors > 0:
-                max_workers = int(os.getenv("SUMMARY_GENERATION_WORKERS", "20"))
+                # Get parallel workers from settings (with ENV fallback)
+                if self.settings_service:
+                    max_workers = self.settings_service.get_int('processing.summaryParallelWorkers', 20, 'SUMMARY_GENERATION_WORKERS')
+                else:
+                    max_workers = int(os.getenv("SUMMARY_GENERATION_WORKERS", "20"))
                 logger.info(f"Generating summaries with {self.summary_neighbors} neighbors per chunk ({max_workers} workers)")
                 
                 successful_summaries = 0

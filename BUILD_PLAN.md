@@ -767,41 +767,85 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - `apps/web/app/api/search/route.ts`
 
 #### 🕸️ Graph Extractor Entity Quality Improvement (Medium Priority)
-**Goal:** Higher quality knowledge graph with better relationship discovery
+**Goal:** Higher quality knowledge graph with better entity extraction and relationship discovery
 
-**Problem:**
-- LLM extracts relationships to abstract concepts that aren't entities (e.g., "stakeholder alignment", "effectiveness")
-- Abstract concepts aren't stored as entities (correctly)
-- Relationships to these concepts fail silently
-- LLM "wastes" extraction capacity on non-entities instead of finding real connections
+**Problems:**
+1. LLM extracts relationships to abstract concepts that aren't entities (e.g., "stakeholder alignment", "effectiveness")
+2. Abstract concepts aren't stored as entities (correctly)
+3. Relationships to these concepts fail silently
+4. LLM "wastes" extraction capacity on non-entities instead of finding real connections
+5. Entity descriptions are often generic or hallucinated (not grounded in source text)
+6. Abbreviations are expanded incorrectly or invented
+
+**Lessons from Entity Description Enhancement Work:**
+- **RAG-grounded prompts work**: Using search results to ground AI descriptions prevents hallucination
+- **Explicit constraints matter**: "DO NOT expand abbreviations unless they appear in source" is critical
+- **Chunk labeling helps**: Marking chunks as `[Chunk 1 - MOST RELEVANT]` guides AI to prioritize
+- **Lower temperature helps**: 0.1 vs 0.2 reduces creative hallucination
+- **Reranking is key**: Top reranked chunk is usually the best source of truth
 
 **Proposed Solutions:**
 
-1. **Improve Entity Extraction Prompt (Recommended)**
-   - [ ] Update prompt to only extract concrete entities
-   - [ ] Define clear criteria: methodologies, tools, frameworks, people, organizations
-   - [ ] Exclude abstract concepts: "alignment", "coordination", "effectiveness"
-   - [ ] Reduces spurious relationship attempts at source
+1. **Improve Entity Extraction Prompt with RAG Grounding (Recommended)**
+   - [ ] Use similar approach to entity description enhancement
+   - [ ] For each potential entity, search "What is {entity_name}" in current chunk context
+   - [ ] Only extract entities that have clear definitions in the source text
+   - [ ] Add explicit rules:
+     * "ONLY extract entities explicitly mentioned in the text"
+     * "DO NOT invent or expand abbreviations"
+     * "DO NOT extract abstract concepts like 'alignment', 'coordination', 'effectiveness'"
+     * "PRIORITIZE concrete entities: methodologies, tools, frameworks, people, organizations"
+   - [ ] Lower temperature to 0.1 for more deterministic extraction
+   - [ ] Label source chunks clearly: `[Source Chunk]: "..."`
 
-2. **Add Entity Type Validation**
+2. **Add Verification Step**
+   - [ ] After extraction, verify each entity appears in source text
+   - [ ] Check if entity name is substring of chunk content
+   - [ ] Filter out entities that don't pass verification
+   - [ ] Log filtered entities for prompt tuning
+
+3. **Add Entity Type Validation**
    - [ ] Validate both entities exist before creating relationships
    - [ ] Skip relationship creation silently (or at DEBUG level)
    - [ ] Prevents warnings for expected behavior
 
-3. **Post-Processing Filter**
+4. **Post-Processing Filter**
    - [ ] Filter out relationships to known abstract concepts after extraction
    - [ ] Maintain list of common abstract terms to exclude
    - [ ] Quick fix but requires maintenance
 
+**Specific Prompt Improvements:**
+```python
+# Add to extraction prompt
+ENTITY EXTRACTION RULES - FOLLOW STRICTLY:
+- ONLY extract entities that are explicitly mentioned in the source text below
+- Use EXACT names as they appear in the text - do not modify or expand
+- CRITICAL: If an abbreviation's full form does NOT appear in the text, keep it as an abbreviation
+  * Example: If text says "WTPS" but never defines it, extract "WTPS" NOT "Workforce Training Planning System"
+- DO NOT extract abstract concepts (alignment, coordination, effectiveness, etc.)
+- DO extract concrete entities: specific methodologies, tools, frameworks, people, organizations, programs
+- Provide descriptions using ONLY information from the source text
+- When in doubt, DON'T extract - better to miss an entity than hallucinate one
+
+SOURCE TEXT:
+[Chunk]: "{chunk_content}"
+
+Extract entities that appear in the source text above.
+```
+
 **Benefits:**
-- Higher quality knowledge graph (focus on concrete entities)
+- Higher quality knowledge graph (focus on concrete, verified entities)
 - Better relationship discovery (LLM extracts more real connections)
 - Improved graph search (queries find relevant methodology connections)
 - More precise entity clustering
+- Accurate entity names (no hallucinated abbreviation expansions)
+- Grounded descriptions (based on source text)
 - Bonus: Cleaner logs
 
 **Files to Modify:**
 - `apps/backend/ingest/processors/graph_extractor.py`
+
+**Estimated Effort:** 1-2 days (prompt refinement + verification step)
 
 #### 🐛 PGMQ Queue State Corruption Fix (High Priority)
 **Goal:** Prevent database restart requirement when deleting documents in error state
@@ -1907,6 +1951,77 @@ mosaic/
 
 ---
 
+## Phase 8: Settings Management System ✅ COMPLETE
+
+### Goals
+- Move configuration from hardcoded ENV vars to database
+- Enable real-time settings changes without deployments
+- Provide admin UI for system configuration
+- Add infrastructure-aware recommendations
+
+### Completed Tasks
+
+#### ⚙️ Settings Service
+- [x] Create `SettingsService` class with 60-second TTL cache
+- [x] Type-safe getters: `get_bool()`, `get_int()`, `get_float()`, `get_string()`
+- [x] Automatic fallback to ENV variables if DB unavailable
+- [x] Cache refresh on stale reads (60s TTL)
+
+#### 🔌 Backend Integration
+- [x] Update `main.py` to use SettingsService instead of ENV vars
+- [x] Update DoclingProcessor to read VLM model from settings
+- [x] Update HybridChunker to read summary model/workers from settings
+- [x] Update GraphExtractor to read graph model/workers from settings
+- [x] Update EmbeddingsGenerator to read embedding model from settings
+- [x] Add consolidated settings log on startup for easy verification
+
+#### 🧪 Testing
+- [x] Create comprehensive test suite (23 tests)
+  - 14 unit tests for SettingsService
+  - 9 integration tests for processor settings
+- [x] Mock heavy dependencies to avoid requiring full stack
+- [x] Verify cache behavior, type conversions, fallbacks
+- [x] Test end-to-end: Settings change → Cache refresh → New value used
+
+#### 📝 Settings Configuration
+- [x] Add infrastructure-aware recommendations to descriptions
+  - OpenAI Tier 4: 10,000 RPM limit
+  - Render Standard: 1 CPU, 2GB RAM constraints
+- [x] Rename `processing.summaryWorkers` → `processing.summaryNeighbors` (clearer naming)
+- [x] Add `processing.summaryParallelWorkers` setting (was missing)
+- [x] All 4 worker settings properly configured:
+  - `processing.pdfWorkers` - Parallel workers for PDF processing (10-20 recommended)
+  - `processing.summaryNeighbors` - Neighboring chunks for context (2-3 recommended)
+  - `processing.summaryParallelWorkers` - Parallel workers for summaries (10-20 recommended)
+  - `processing.graphWorkers` - Parallel workers for graph extraction (10-20 recommended)
+
+### Technical Decisions
+- **Cache TTL**: 60 seconds (balance freshness vs DB load)
+- **Fallback strategy**: ENV vars → Default values (graceful degradation)
+- **Storage**: `system_settings` table with JSONB values
+- **Testing**: Mocked dependencies for fast, reliable tests
+
+### Files Created/Modified
+- `apps/backend/ingest/settings_service.py` - Core settings service
+- `apps/backend/ingest/main.py` - Use settings service
+- `apps/backend/ingest/processors/docling_processor.py` - Read VLM model
+- `apps/backend/ingest/chunkers/hybrid_chunker.py` - Read summary settings
+- `apps/backend/ingest/processors/graph_extractor.py` - Read graph model
+- `apps/backend/ingest/processors/embeddings_generator.py` - Read embedding model
+- `apps/backend/ingest/tests/test_settings_service.py` - Unit tests
+- `apps/backend/ingest/tests/test_settings_integration.py` - Integration tests
+- `apps/backend/ingest/TESTING.md` - Updated with settings testing guide
+
+### Benefits
+- ✅ No code deployments for configuration changes
+- ✅ Real-time updates (60s cache refresh)
+- ✅ Infrastructure-aware recommendations
+- ✅ Type-safe configuration
+- ✅ Comprehensive test coverage
+- ✅ Graceful fallbacks
+
+---
+
 ## Future Enhancements
 
 ### Short Term (1-3 months)
@@ -1982,6 +2097,18 @@ mosaic/
   - ~$0.23 per 200-page document, ~$0.0001 per search
 - 🎯 **System Status: Production-ready with Graph RAG for real-world use**
 
+### 2025-10-17
+- ✅ **Phase 8 Complete: Settings Management System**
+- ✅ Created SettingsService with 60s TTL cache and type-safe getters
+- ✅ Connected all backend processors to database settings
+- ✅ Comprehensive test suite (23 passing tests)
+- ✅ Verified end-to-end: Settings changes picked up within 60s
+- ✅ Added infrastructure-aware recommendations (OpenAI T4: 10k RPM, Render: 1 CPU/2GB)
+- ✅ Renamed settings for clarity (`summaryWorkers` → `summaryNeighbors`)
+- ✅ Added missing `summaryParallelWorkers` setting
+- ✅ Consolidated settings log on startup for easy verification
+- 🎯 **System Status: Production-ready with database-driven configuration**
+
 ### 2025-10-15
 - ✅ Completed Phase 1: Core Upload Infrastructure
 - ✅ Completed Phase 2: Real-time status updates
@@ -1991,4 +2118,4 @@ mosaic/
 
 ---
 
-**Next Phase**: Phase 5 - Knowledge Graph Extraction (Graph RAG)
+**Next Phase**: Phase 5.4 - Graph Management UI or Phase 6 - Hybrid Search Enhancements

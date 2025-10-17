@@ -141,12 +141,104 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Settings Integration Tests
+
+### Automated Testing
+
+We have comprehensive automated tests for the settings system:
+
+```bash
+# Run all tests
+./run_tests.sh
+
+# Run only unit tests (fast)
+./run_tests.sh --unit
+
+# Run only integration tests
+./run_tests.sh --integration
+
+# Generate coverage report
+./run_tests.sh --coverage
+```
+
+### What Gets Tested
+
+#### Unit Tests (`test_settings_service.py`)
+- ✅ Settings cache initialization
+- ✅ Type conversion (int, bool, float, string)
+- ✅ Default value fallbacks
+- ✅ Environment variable fallbacks
+- ✅ Cache TTL and refresh behavior
+- ✅ Error handling (database failures)
+- ✅ Cache invalidation
+
+#### Integration Tests (`test_settings_integration.py`)
+- ✅ DoclingProcessor reads VLM model from settings
+- ✅ HybridChunker reads summary model from settings
+- ✅ GraphExtractor reads graph model from settings
+- ✅ EmbeddingsGenerator reads embedding model from settings
+- ✅ Settings changes detected after cache refresh
+- ✅ Fallback to defaults when settings service not provided
+
+### Manual End-to-End Test
+
+To verify settings work end-to-end:
+
+1. **Start the backend:**
+   ```bash
+   ./start.sh
+   ```
+
+2. **Check initial settings in logs:**
+   ```
+   INFO - Using Docling processor with HybridChunker (API VLM: True, max_workers: 10, ...)
+   INFO - Configured Docling with API VLM (gpt-4o-mini)
+   ```
+
+3. **Change a setting in the UI:**
+   - Go to Settings → General
+   - Change "VLM Model" from `gpt-4o-mini` to `gpt-4o`
+   - Click "Save Settings"
+
+4. **Wait 60 seconds** (cache TTL)
+
+5. **Upload a document** and watch logs:
+   ```
+   INFO - Configured Docling with API VLM (gpt-4o)  # ← Should show new model
+   ```
+
+6. **Verify the change took effect!**
+
+### Test Coverage
+
+Current test coverage includes:
+- **SettingsService**: 100% coverage
+- **Processor Integration**: All major code paths
+- **Cache Behavior**: TTL, refresh, invalidation
+- **Type Safety**: All getter methods
+- **Error Handling**: Database failures, invalid types
+
+### Running Tests in CI/CD
+
+Add to your CI pipeline:
+
+```yaml
+# .github/workflows/test.yml
+- name: Run Backend Tests
+  run: |
+    cd apps/backend/ingest
+    pip install -r requirements.txt
+    pip install -r requirements-test.txt
+    ./run_tests.sh --coverage
+```
+
 ## Next Steps
 
 Once testing works:
 1. ✅ Apply database migration
 2. ✅ Set up `.env` file
 3. ✅ Test full worker with `python main.py`
-4. ✅ Deploy to Render.com
+4. ✅ Run automated tests with `./run_tests.sh`
+5. ✅ Deploy to Render.com
 
 See `SETUP.md` for deployment instructions.

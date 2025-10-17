@@ -23,14 +23,16 @@ class EmbeddingsGenerator:
     Handles batch processing and rate limiting automatically.
     """
     
-    def __init__(self, supabase_client: Client):
+    def __init__(self, supabase_client: Client, settings_service=None):
         """
         Initialize the embeddings generator.
         
         Args:
             supabase_client: Supabase client for database operations
+            settings_service: Optional settings service for reading model configuration
         """
         self.supabase = supabase_client
+        self.settings_service = settings_service
         
         # Initialize OpenAI client
         api_key = os.getenv('OPENAI_API_KEY')
@@ -38,7 +40,12 @@ class EmbeddingsGenerator:
             raise ValueError("OPENAI_API_KEY environment variable is required")
         
         self.client = OpenAI(api_key=api_key)
+        
+        # Get embedding model from settings (default to text-embedding-3-small)
         self.model = "text-embedding-3-small"
+        if settings_service:
+            self.model = settings_service.get_string('llm.embeddingModel', 'text-embedding-3-small')
+        
         self.dimensions = 1536
         
         # Rate limiting configuration

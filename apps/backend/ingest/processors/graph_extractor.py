@@ -83,16 +83,18 @@ class ExtractionResult(BaseModel):
 class GraphExtractor:
     """Extracts entities and relationships from text chunks"""
     
-    def __init__(self, supabase_client, openai_api_key: Optional[str] = None):
+    def __init__(self, supabase_client, openai_api_key: Optional[str] = None, settings_service=None):
         """
         Initialize the graph extractor.
         
         Args:
             supabase_client: Supabase client for database operations
             openai_api_key: OpenAI API key (defaults to OPENAI_API_KEY env var)
+            settings_service: Optional settings service for reading model configuration
         """
         self.supabase = supabase_client
         self.openai = OpenAI(api_key=openai_api_key or os.getenv("OPENAI_API_KEY"))
+        self.settings_service = settings_service
         self.similarity_threshold = float(os.getenv("ENTITY_SIMILARITY_THRESHOLD", "0.85"))
         self.max_workers = int(os.getenv("GRAPH_EXTRACTION_WORKERS", "20"))
         
@@ -109,10 +111,15 @@ class GraphExtractor:
         Returns:
             ExtractionResult with entities and relationships
         """
+        # Get graph model from settings (default to gpt-4o-mini)
+        graph_model = "gpt-4o-mini"
+        if self.settings_service:
+            graph_model = self.settings_service.get_string('processing.graphModel', 'gpt-4o-mini')
+        
         for attempt in range(max_retries):
             try:
                 response = self.openai.beta.chat.completions.parse(
-                    model="gpt-4o-mini",
+                    model=graph_model,
                     messages=[
                         {
                             "role": "system",

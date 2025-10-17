@@ -312,9 +312,6 @@ export function DocumentList({
   };
 
   const getStatusBadge = (status: string, doc?: Document) => {
-    const progress = doc?.processing_progress;
-    const showProgress = progress !== undefined && progress > 0 && progress < 100;
-    
     switch (status) {
       case "uploading":
         return (
@@ -334,42 +331,42 @@ export function DocumentList({
         return (
           <Badge variant="default" className="gap-1">
             <Loader2 className="h-3 w-3 animate-spin" />
-            Processing{showProgress ? ` ${progress}%` : ''}
+            Processing
           </Badge>
         );
       case "extracting":
         return (
           <Badge variant="default" className="gap-1">
             <Loader2 className="h-3 w-3 animate-spin" />
-            Extracting{showProgress ? ` ${progress}%` : ''}
+            Extracting
           </Badge>
         );
       case "chunking":
         return (
           <Badge variant="default" className="gap-1">
             <Loader2 className="h-3 w-3 animate-spin" />
-            Chunking{showProgress ? ` ${progress}%` : ''}
+            Chunking
           </Badge>
         );
       case "generating_summaries":
         return (
           <Badge variant="default" className="gap-1">
             <Loader2 className="h-3 w-3 animate-spin" />
-            Generating{showProgress ? ` ${progress}%` : ''}
+            Generating
           </Badge>
         );
       case "embedding":
         return (
           <Badge variant="default" className="gap-1">
             <Loader2 className="h-3 w-3 animate-spin" />
-            Embedding{showProgress ? ` ${progress}%` : ''}
+            Embedding
           </Badge>
         );
       case "extracting_graph":
         return (
           <Badge variant="default" className="gap-1">
             <Loader2 className="h-3 w-3 animate-spin" />
-            Extracting Graph{showProgress ? ` ${progress}%` : ''}
+            Extracting Graph
           </Badge>
         );
       case "ready":

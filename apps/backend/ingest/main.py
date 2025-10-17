@@ -230,7 +230,7 @@ class DocumentWorker:
             user_id = doc_result.data[0]["user_id"]
             
             # Update status to processing
-            self.update_document_status(document_id, "processing", progress=0)
+            self.update_document_status(document_id, "processing")
             
             # Clean up temp directories BEFORE downloading (only for Unstructured)
             if not USE_DOCLING:
@@ -244,7 +244,7 @@ class DocumentWorker:
             # Process document based on selected processor
             if USE_DOCLING:
                 # Docling returns DoclingDocument object
-                self.update_document_status(document_id, "extracting", progress=10)
+                self.update_document_status(document_id, "extracting")
                 logger.info(f"Extracting document with Docling ({'API VLM' if USE_API_VLM else 'Local VLM'})")
                 docling_doc = processor.extract_document(file_data, file_path)
                 
@@ -254,7 +254,7 @@ class DocumentWorker:
                 logger.info(f"Extracted DoclingDocument successfully")
                 
                 # Chunk the document using HybridChunker
-                self.update_document_status(document_id, "chunking", progress=30)
+                self.update_document_status(document_id, "chunking")
                 logger.info("Chunking document with HybridChunker")
                 chunks = self.chunker.chunk_document(docling_doc, document_id)
                 
@@ -280,7 +280,7 @@ class DocumentWorker:
             logger.info(f"Created {len(chunks)} chunks")
             
             # Store chunks in database in batches and generate embeddings immediately
-            self.update_document_status(document_id, "embedding", progress=60)
+            self.update_document_status(document_id, "embedding")
             logger.info("Storing chunks and generating embeddings")
             CHUNK_BATCH_SIZE = 100
             total_embeddings = 0
@@ -326,7 +326,7 @@ class DocumentWorker:
             
             # Extract graph (entities and relationships) if enabled
             if self.graph_extractor:
-                self.update_document_status(document_id, "extracting_graph", progress=80)
+                self.update_document_status(document_id, "extracting_graph")
                 logger.info("Extracting entities and relationships for knowledge graph")
                 try:
                     # Get stored chunks with IDs for graph extraction
@@ -346,7 +346,7 @@ class DocumentWorker:
                     logger.error(f"Graph extraction failed (non-fatal): {e}")
             
             # Update document status to ready
-            self.update_document_status(document_id, "ready", progress=100)
+            self.update_document_status(document_id, "ready")
             
             logger.info(f"Successfully processed document {document_id}")
             return (True, True)

@@ -7,8 +7,9 @@ Implements deduplication via pgvector similarity and canonical name matching.
 
 import os
 import logging
+import time
 from typing import List, Dict, Any, Optional, Tuple, Set
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
 from pydantic import BaseModel, Field
 from enum import Enum
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -93,26 +94,29 @@ class GraphExtractor:
         self.supabase = supabase_client
         self.openai = OpenAI(api_key=openai_api_key or os.getenv("OPENAI_API_KEY"))
         self.similarity_threshold = float(os.getenv("ENTITY_SIMILARITY_THRESHOLD", "0.85"))
+        self.max_workers = int(os.getenv("GRAPH_EXTRACTION_WORKERS", "6"))
         
-        logger.info(f"Initialized GraphExtractor (similarity_threshold={self.similarity_threshold})")
+        logger.info(f"Initialized GraphExtractor (similarity_threshold={self.similarity_threshold}, max_workers={self.max_workers})")
     
-    def extract_from_chunk(self, text: str) -> ExtractionResult:
+    def extract_from_chunk(self, text: str, max_retries: int = 3) -> ExtractionResult:
         """
         Extract entities and relationships from a single text chunk.
         
         Args:
             text: The text to extract from
+            max_retries: Maximum number of retries for rate limit errors
             
         Returns:
             ExtractionResult with entities and relationships
         """
-        try:
-            response = self.openai.beta.chat.completions.parse(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """You are an expert at extracting entities and relationships from text for knowledge graph construction.
+        for attempt in range(max_retries):
+            try:
+                response = self.openai.beta.chat.completions.parse(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": """You are an expert at extracting entities and relationships from text for knowledge graph construction.
 
 Analyze the text and extract:
 1. **Entities**: Important concepts, people, organizations, methodologies, frameworks, tools, etc.
@@ -125,24 +129,37 @@ Guidelines:
 - Use descriptive relationship types that capture the nature of the connection
 - Focus on meaningful entities (not common words or generic concepts)
 - Descriptions should be concise but informative"""
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Text to analyze:\n\n{text}"
-                    }
-                ],
-                response_format=ExtractionResult,
-                temperature=0.3
-            )
-            
-            result = response.choices[0].message.parsed
-            logger.debug(f"Extracted {len(result.entities)} entities and {len(result.relationships)} relationships")
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error extracting entities/relationships: {e}")
-            # Return empty result on error (graceful degradation)
-            return ExtractionResult(entities=[], relationships=[])
+                        },
+                        {
+                            "role": "user",
+                            "content": f"Text to analyze:\n\n{text}"
+                        }
+                    ],
+                    response_format=ExtractionResult,
+                    temperature=0.3
+                )
+                
+                result = response.choices[0].message.parsed
+                logger.debug(f"Extracted {len(result.entities)} entities and {len(result.relationships)} relationships")
+                return result
+                
+            except RateLimitError as e:
+                if attempt < max_retries - 1:
+                    # Exponential backoff: 2s, 4s, 8s
+                    wait_time = 2 ** (attempt + 1)
+                    logger.warning(f"Rate limit hit, retrying after {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"Rate limit exceeded after {max_retries} attempts")
+                    return ExtractionResult(entities=[], relationships=[])
+                    
+            except Exception as e:
+                logger.error(f"Error extracting entities/relationships: {e}")
+                # Return empty result on error (graceful degradation)
+                return ExtractionResult(entities=[], relationships=[])
+        
+        # Should never reach here, but just in case
+        return ExtractionResult(entities=[], relationships=[])
     
     def normalize_entity_name(self, name: str) -> str:
         """Normalize entity name for deduplication"""
@@ -408,7 +425,7 @@ Guidelines:
         chunks: List[Dict[str, Any]],
         document_id: str,
         user_id: str,
-        max_workers: int = 10
+        max_workers: Optional[int] = None
     ) -> Tuple[int, int]:
         """
         Process a batch of chunks for graph extraction in parallel.
@@ -417,7 +434,7 @@ Guidelines:
             chunks: List of chunk dictionaries with 'id' and 'content'
             document_id: Document ID
             user_id: User ID
-            max_workers: Number of parallel workers (default: 10)
+            max_workers: Number of parallel workers (default: from GRAPH_EXTRACTION_WORKERS env var, or 6)
             
         Returns:
             Tuple of (total_entities, total_relationships)
@@ -425,10 +442,13 @@ Guidelines:
         total_entities = 0
         total_relationships = 0
         
-        logger.info(f"Starting parallel graph extraction with {max_workers} workers for {len(chunks)} chunks")
+        # Use configured max_workers if not specified
+        workers = max_workers if max_workers is not None else self.max_workers
+        
+        logger.info(f"Starting parallel graph extraction with {workers} workers for {len(chunks)} chunks")
         
         # Process chunks in parallel using ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
             # Submit all chunks for processing
             future_to_chunk = {
                 executor.submit(

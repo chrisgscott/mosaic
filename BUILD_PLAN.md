@@ -767,41 +767,85 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - `apps/web/app/api/search/route.ts`
 
 #### 🕸️ Graph Extractor Entity Quality Improvement (Medium Priority)
-**Goal:** Higher quality knowledge graph with better relationship discovery
+**Goal:** Higher quality knowledge graph with better entity extraction and relationship discovery
 
-**Problem:**
-- LLM extracts relationships to abstract concepts that aren't entities (e.g., "stakeholder alignment", "effectiveness")
-- Abstract concepts aren't stored as entities (correctly)
-- Relationships to these concepts fail silently
-- LLM "wastes" extraction capacity on non-entities instead of finding real connections
+**Problems:**
+1. LLM extracts relationships to abstract concepts that aren't entities (e.g., "stakeholder alignment", "effectiveness")
+2. Abstract concepts aren't stored as entities (correctly)
+3. Relationships to these concepts fail silently
+4. LLM "wastes" extraction capacity on non-entities instead of finding real connections
+5. Entity descriptions are often generic or hallucinated (not grounded in source text)
+6. Abbreviations are expanded incorrectly or invented
+
+**Lessons from Entity Description Enhancement Work:**
+- **RAG-grounded prompts work**: Using search results to ground AI descriptions prevents hallucination
+- **Explicit constraints matter**: "DO NOT expand abbreviations unless they appear in source" is critical
+- **Chunk labeling helps**: Marking chunks as `[Chunk 1 - MOST RELEVANT]` guides AI to prioritize
+- **Lower temperature helps**: 0.1 vs 0.2 reduces creative hallucination
+- **Reranking is key**: Top reranked chunk is usually the best source of truth
 
 **Proposed Solutions:**
 
-1. **Improve Entity Extraction Prompt (Recommended)**
-   - [ ] Update prompt to only extract concrete entities
-   - [ ] Define clear criteria: methodologies, tools, frameworks, people, organizations
-   - [ ] Exclude abstract concepts: "alignment", "coordination", "effectiveness"
-   - [ ] Reduces spurious relationship attempts at source
+1. **Improve Entity Extraction Prompt with RAG Grounding (Recommended)**
+   - [ ] Use similar approach to entity description enhancement
+   - [ ] For each potential entity, search "What is {entity_name}" in current chunk context
+   - [ ] Only extract entities that have clear definitions in the source text
+   - [ ] Add explicit rules:
+     * "ONLY extract entities explicitly mentioned in the text"
+     * "DO NOT invent or expand abbreviations"
+     * "DO NOT extract abstract concepts like 'alignment', 'coordination', 'effectiveness'"
+     * "PRIORITIZE concrete entities: methodologies, tools, frameworks, people, organizations"
+   - [ ] Lower temperature to 0.1 for more deterministic extraction
+   - [ ] Label source chunks clearly: `[Source Chunk]: "..."`
 
-2. **Add Entity Type Validation**
+2. **Add Verification Step**
+   - [ ] After extraction, verify each entity appears in source text
+   - [ ] Check if entity name is substring of chunk content
+   - [ ] Filter out entities that don't pass verification
+   - [ ] Log filtered entities for prompt tuning
+
+3. **Add Entity Type Validation**
    - [ ] Validate both entities exist before creating relationships
    - [ ] Skip relationship creation silently (or at DEBUG level)
    - [ ] Prevents warnings for expected behavior
 
-3. **Post-Processing Filter**
+4. **Post-Processing Filter**
    - [ ] Filter out relationships to known abstract concepts after extraction
    - [ ] Maintain list of common abstract terms to exclude
    - [ ] Quick fix but requires maintenance
 
+**Specific Prompt Improvements:**
+```python
+# Add to extraction prompt
+ENTITY EXTRACTION RULES - FOLLOW STRICTLY:
+- ONLY extract entities that are explicitly mentioned in the source text below
+- Use EXACT names as they appear in the text - do not modify or expand
+- CRITICAL: If an abbreviation's full form does NOT appear in the text, keep it as an abbreviation
+  * Example: If text says "WTPS" but never defines it, extract "WTPS" NOT "Workforce Training Planning System"
+- DO NOT extract abstract concepts (alignment, coordination, effectiveness, etc.)
+- DO extract concrete entities: specific methodologies, tools, frameworks, people, organizations, programs
+- Provide descriptions using ONLY information from the source text
+- When in doubt, DON'T extract - better to miss an entity than hallucinate one
+
+SOURCE TEXT:
+[Chunk]: "{chunk_content}"
+
+Extract entities that appear in the source text above.
+```
+
 **Benefits:**
-- Higher quality knowledge graph (focus on concrete entities)
+- Higher quality knowledge graph (focus on concrete, verified entities)
 - Better relationship discovery (LLM extracts more real connections)
 - Improved graph search (queries find relevant methodology connections)
 - More precise entity clustering
+- Accurate entity names (no hallucinated abbreviation expansions)
+- Grounded descriptions (based on source text)
 - Bonus: Cleaner logs
 
 **Files to Modify:**
 - `apps/backend/ingest/processors/graph_extractor.py`
+
+**Estimated Effort:** 1-2 days (prompt refinement + verification step)
 
 #### 🐛 PGMQ Queue State Corruption Fix (High Priority)
 **Goal:** Prevent database restart requirement when deleting documents in error state

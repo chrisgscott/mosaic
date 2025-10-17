@@ -29,6 +29,10 @@ import { MergeEntitiesDialog } from "@/components/merge-entities-dialog";
 type SortColumn = "created_at" | "name" | "confidence" | "docs" | "type" | "relationships";
 type SortDirection = "asc" | "desc";
 
+const capitalizeFirst = (str: string) => {
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+};
+
 const getQualityIndicator = (entity: Entity) => {
   const confidence = entity.extraction_confidence || 0;
   const docCount = entity.document_ids?.length || 0;
@@ -456,7 +460,7 @@ export function EntityList({
                       onClick={() => router.push(`/graph/${entity.id}`)}
                       className="flex items-center gap-2 hover:underline text-left w-full"
                     >
-                      <span className="font-medium">{entity.name}</span>
+                      <span className="font-medium">{entity.name.charAt(0).toUpperCase() + entity.name.slice(1)}</span>
                     </button>
                     {entity.description && (
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
@@ -465,7 +469,7 @@ export function EntityList({
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">{entity.type}</Badge>
+                    <Badge variant="outline">{capitalizeFirst(entity.type)}</Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     <div className="flex items-center gap-1">

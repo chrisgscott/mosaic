@@ -197,8 +197,26 @@ export async function mergeEntities(
     }
   });
 
-  // First, clear canonical names of entities to be merged to avoid constraint violation
-  for (const entityId of entityIdsToMerge) {
+  // Check if canonical name is already in use by another entity
+  const targetCanonicalName = mergedData.name.toLowerCase().trim();
+  const allEntityIds = [primaryEntityId, ...entityIdsToMerge];
+  
+  const { data: existingEntity } = await supabase
+    .from("entities")
+    .select("id, name")
+    .eq("user_id", user.id)
+    .eq("canonical_name", targetCanonicalName)
+    .not("id", "in", `(${allEntityIds.join(",")})`)
+    .maybeSingle();
+
+  if (existingEntity) {
+    return { 
+      error: `Cannot merge: Another entity "${existingEntity.name}" already has this name. Please merge with that entity first, or choose a different name.` 
+    };
+  }
+
+  // First, clear canonical names of ALL entities (including primary) to avoid constraint violation
+  for (const entityId of allEntityIds) {
     await supabase
       .from("entities")
       .update({ canonical_name: null })

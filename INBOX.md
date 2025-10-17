@@ -332,6 +332,106 @@ CREATE TABLE document_versions (
 
 ---
 
+### Generic Entity Detection & Cleanup
+**Context:** Graph extraction sometimes creates overly generic entities that provide little semantic value and create noise in the knowledge graph. Examples include "Residents", "Technology", "Local Businesses", "Community", "Stakeholders" - terms that are too broad to be useful as distinct entities.
+
+**Problem:**
+- Generic entities appear in many documents but lack specificity
+- They dilute graph quality and search relevance
+- Create weak, meaningless relationships
+- Hard to distinguish from legitimate entities during extraction
+- Manual identification is time-consuming
+
+**Examples of Generic Entities:**
+- "Technology" - Too broad, no specific meaning
+- "Residents" - Common term, appears everywhere
+- "Local Businesses" - Category, not a specific entity
+- "Community" - Vague, context-dependent
+- "Stakeholders" - Generic term
+- "Services" - Too general
+- "Organizations" - Meta-category
+
+**Detection Strategies:**
+
+**1. Frequency-Based Detection**
+- Entities appearing in >30% of documents are likely generic
+- High chunk count but low relationship quality
+- Many weak relationships vs. few strong ones
+
+**2. Pattern-Based Detection**
+```typescript
+const genericPatterns = [
+  /^(the\s+)?community$/i,
+  /^residents?$/i,
+  /^stakeholders?$/i,
+  /^technology$/i,
+  /^businesses?$/i,
+  /^people$/i,
+  /^organizations?$/i,
+  /^services?$/i,
+  /^programs?$/i,
+  /^projects?$/i,
+];
+```
+
+**3. AI-Based Scoring**
+- Ask LLM: "Is '{entity_name}' too generic to be useful in a knowledge graph?"
+- Provide context from entity description and relationships
+- Score 0-1 for genericness
+- Batch processing for efficiency
+
+**4. Context-Based Heuristics**
+- Low extraction confidence + high document frequency = likely generic
+- Many relationships but low average relationship confidence
+- Short name (<2 words) + common English word = suspicious
+- Type is "concept" or "category" = higher generic probability
+
+**Proposed Solution:**
+
+**Phase 1: Detection & Flagging (1-2 days)**
+- [ ] Create `detect_generic_entities` function
+- [ ] Combine frequency, pattern, and context-based detection
+- [ ] Add `is_generic` flag to entities table
+- [ ] Add `generic_score` (0-1) to track confidence
+- [ ] Create "Generic Entities" section in cleanup UI
+
+**Phase 2: Review & Cleanup UI (1 day)**
+- [ ] Add "Generic Entities" tab to cleanup page
+- [ ] Show flagged entities with:
+  - Generic score
+  - Document frequency
+  - Reason for flagging (pattern match, frequency, etc.)
+  - Sample contexts
+- [ ] Bulk delete workflow
+- [ ] "Keep" option to mark false positives
+- [ ] Filter by generic score threshold
+
+**Phase 3: AI-Assisted Validation (Optional)**
+- [ ] Use LLM to validate generic entity candidates
+- [ ] Provide reasoning for generic classification
+- [ ] Learn from user keep/delete decisions
+- [ ] Improve detection accuracy over time
+
+**Benefits:**
+- ✅ Cleaner, higher-quality knowledge graph
+- ✅ Better search results (less noise)
+- ✅ More meaningful relationships
+- ✅ Reduced manual curation effort
+- ✅ Improved graph semantic value
+
+**Technical Considerations:**
+- Need configurable thresholds (frequency %, generic score)
+- Pattern list should be user-customizable
+- Consider domain-specific generic terms
+- May need "protected entities" list (never flag as generic)
+- Deletion should be reversible (soft delete or audit trail)
+
+**Priority:** Medium (Nice-to-have after duplicate detection is solid)
+
+**Estimated Effort:** 2-3 days (Phases 1-2)
+
+---
+
 ## 🐛 Bugs & Issues
 
 *No items pending - INBOX is clean!*

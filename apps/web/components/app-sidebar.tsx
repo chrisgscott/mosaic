@@ -53,6 +53,16 @@ const data = {
       title: "Knowledge Graph",
       url: "/graph",
       icon: "Network",
+      items: [
+        {
+          title: "View Graph",
+          url: "/graph",
+        },
+        {
+          title: "Clean Up Duplicates",
+          url: "/graph/cleanup",
+        },
+      ],
     },
     {
       title: "Settings",

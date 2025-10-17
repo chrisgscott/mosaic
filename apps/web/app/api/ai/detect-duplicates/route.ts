@@ -125,18 +125,12 @@ export async function POST() {
       );
     }
 
-    const duplicateGroups: DuplicateGroup[] = [];
-    const processedIds = new Set<string>();
-
-    // Find potential duplicates across all entities (including different types)
+    // Build similarity graph - compare ALL pairs
+    const similarityEdges: Map<string, Set<string>> = new Map();
+    const entityMap = new Map(entities.map(e => [e.id, e]));
+    
     for (let i = 0; i < entities.length; i++) {
-      if (processedIds.has(entities[i].id)) continue;
-
-      const potentialDuplicates: Entity[] = [entities[i]];
-
       for (let j = i + 1; j < entities.length; j++) {
-        if (processedIds.has(entities[j].id)) continue;
-
         const similarity = calculateNameSimilarity(
           entities[i].name,
           entities[j].name
@@ -144,28 +138,69 @@ export async function POST() {
 
         // High similarity threshold for name matching
         if (similarity >= 0.75) {
-          potentialDuplicates.push(entities[j]);
+          // Add bidirectional edges
+          if (!similarityEdges.has(entities[i].id)) {
+            similarityEdges.set(entities[i].id, new Set());
+          }
+          if (!similarityEdges.has(entities[j].id)) {
+            similarityEdges.set(entities[j].id, new Set());
+          }
+          similarityEdges.get(entities[i].id)!.add(entities[j].id);
+          similarityEdges.get(entities[j].id)!.add(entities[i].id);
         }
       }
+    }
 
-      // If we found potential duplicates, add to groups
-      if (potentialDuplicates.length >= 2) {
-        // Calculate average similarity for the group
-        const avgSimilarity =
-          potentialDuplicates.reduce((sum, entity) => {
-            return (
-              sum +
-              calculateNameSimilarity(potentialDuplicates[0].name, entity.name)
-            );
-          }, 0) / potentialDuplicates.length;
+    // Find connected components using DFS (transitive closure)
+    const visited = new Set<string>();
+    const duplicateGroups: DuplicateGroup[] = [];
 
-        duplicateGroups.push({
-          entities: potentialDuplicates,
-          similarityScore: avgSimilarity,
-        });
+    function dfs(entityId: string, component: Entity[]) {
+      if (visited.has(entityId)) return;
+      visited.add(entityId);
+      
+      const entity = entityMap.get(entityId);
+      if (entity) {
+        component.push(entity);
+      }
+      
+      const neighbors = similarityEdges.get(entityId);
+      if (neighbors) {
+        for (const neighborId of neighbors) {
+          dfs(neighborId, component);
+        }
+      }
+    }
 
-        // Mark these entities as processed
-        potentialDuplicates.forEach((e) => processedIds.add(e.id));
+    // Find all connected components
+    for (const entity of entities) {
+      if (!visited.has(entity.id)) {
+        const component: Entity[] = [];
+        dfs(entity.id, component);
+        
+        // Only add groups with 2+ entities
+        if (component.length >= 2) {
+          // Calculate average similarity for the group
+          let totalSimilarity = 0;
+          let comparisons = 0;
+          
+          for (let i = 0; i < component.length; i++) {
+            for (let j = i + 1; j < component.length; j++) {
+              totalSimilarity += calculateNameSimilarity(
+                component[i].name,
+                component[j].name
+              );
+              comparisons++;
+            }
+          }
+          
+          const avgSimilarity = comparisons > 0 ? totalSimilarity / comparisons : 0;
+
+          duplicateGroups.push({
+            entities: component,
+            similarityScore: avgSimilarity,
+          });
+        }
       }
     }
 

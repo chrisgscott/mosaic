@@ -229,12 +229,14 @@ export async function POST(request: NextRequest) {
       query,
       match_threshold = 0.5,  // Lowered from 0.7 - semantic search typically gets 0.5-0.8 scores
       match_count = 10,
-      use_hyde = systemSettings["search.useHyDE"] ?? true,  // Use system setting
-      use_multi_query = systemSettings["search.useMultiQuery"] ?? true,  // Use system setting
-      use_reranking = systemSettings["search.useReranking"] ?? true,  // Use system setting
-      use_graph = systemSettings["search.useGraphSearch"] ?? true,  // Use system setting
       graph_hops = 1,    // Number of hops for graph traversal
     } = body;
+    
+    // System settings take precedence over request body
+    const use_hyde = systemSettings["search.useHyDE"] ?? true;
+    const use_multi_query = systemSettings["search.useMultiQuery"] ?? true;
+    const use_reranking = systemSettings["search.useReranking"] ?? true;
+    const use_graph = systemSettings["search.useGraphSearch"] ?? true;
 
     if (!query || typeof query !== "string") {
       return NextResponse.json(
@@ -259,6 +261,9 @@ export async function POST(request: NextRequest) {
     const isComplexQuery = shouldUseHyDE(query);
     const useHyDE = use_hyde && isComplexQuery;
     const useMultiQuery = use_multi_query && isComplexQuery;
+    
+    console.log(`[Settings] use_hyde=${use_hyde}, use_multi_query=${use_multi_query}, isComplexQuery=${isComplexQuery}`);
+    console.log(`[Settings] Final: useHyDE=${useHyDE}, useMultiQuery=${useMultiQuery}`);
     
     if (isComplexQuery) {
       const techniques = [];

@@ -175,25 +175,25 @@ class DocumentWorker:
         except Exception as e:
             logger.error(f"Error deleting message {msg_id}: {e}")
     
-    def update_document_status(self, document_id: str, status: str, error_message: str = None, retry_count: int = None):
+    def update_document_status(self, document_id: str, status: str, error_message: str = None, retry_count: int = None, progress: int = None):
         """Update document status in database."""
         try:
             update_data = {
                 "status": status,
-                "updated_at": "now()"
+                "updated_at": "now()",
+                "processing_stage_started_at": "now()"  # Track when this stage started
             }
-            
-            if error_message is not None:
+            if error_message:
                 update_data["error_message"] = error_message
-                update_data["last_error_at"] = "now()"
-            
             if retry_count is not None:
                 update_data["retry_count"] = retry_count
+            if progress is not None:
+                update_data["processing_progress"] = progress
             
             supabase.table("documents").update(update_data).eq("id", document_id).execute()
-            logger.info(f"Updated document {document_id} status to {status}")
+            logger.info(f"Updated document {document_id} status to {status}" + (f" ({progress}%)" if progress else ""))
         except Exception as e:
-            logger.error(f"Failed to update document status: {e}")
+            logger.error(f"Error updating document status: {e}")
     
     def process_document(self, job: Dict[str, Any]) -> tuple[bool, bool]:
         """
@@ -230,7 +230,7 @@ class DocumentWorker:
             user_id = doc_result.data[0]["user_id"]
             
             # Update status to processing
-            self.update_document_status(document_id, "processing")
+            self.update_document_status(document_id, "processing", progress=0)
             
             # Clean up temp directories BEFORE downloading (only for Unstructured)
             if not USE_DOCLING:
@@ -244,6 +244,7 @@ class DocumentWorker:
             # Process document based on selected processor
             if USE_DOCLING:
                 # Docling returns DoclingDocument object
+                self.update_document_status(document_id, "extracting", progress=10)
                 logger.info(f"Extracting document with Docling ({'API VLM' if USE_API_VLM else 'Local VLM'})")
                 docling_doc = processor.extract_document(file_data, file_path)
                 
@@ -253,6 +254,7 @@ class DocumentWorker:
                 logger.info(f"Extracted DoclingDocument successfully")
                 
                 # Chunk the document using HybridChunker
+                self.update_document_status(document_id, "chunking", progress=30)
                 logger.info("Chunking document with HybridChunker")
                 chunks = self.chunker.chunk_document(docling_doc, document_id)
                 
@@ -278,6 +280,7 @@ class DocumentWorker:
             logger.info(f"Created {len(chunks)} chunks")
             
             # Store chunks in database in batches and generate embeddings immediately
+            self.update_document_status(document_id, "embedding", progress=60)
             logger.info("Storing chunks and generating embeddings")
             CHUNK_BATCH_SIZE = 100
             total_embeddings = 0
@@ -323,6 +326,7 @@ class DocumentWorker:
             
             # Extract graph (entities and relationships) if enabled
             if self.graph_extractor:
+                self.update_document_status(document_id, "extracting_graph", progress=80)
                 logger.info("Extracting entities and relationships for knowledge graph")
                 try:
                     # Get stored chunks with IDs for graph extraction
@@ -342,7 +346,7 @@ class DocumentWorker:
                     logger.error(f"Graph extraction failed (non-fatal): {e}")
             
             # Update document status to ready
-            self.update_document_status(document_id, "ready")
+            self.update_document_status(document_id, "ready", progress=100)
             
             logger.info(f"Successfully processed document {document_id}")
             return (True, True)

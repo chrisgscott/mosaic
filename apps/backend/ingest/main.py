@@ -17,7 +17,7 @@ from supabase import create_client, Client
 from processors.unstructured_processor import UnstructuredProcessor
 from processors.docling_processor import DoclingProcessor
 from processors.chunker import TextChunker
-from chunkers.markdown_chunker import MarkdownChunker
+from chunkers.hybrid_chunker import HybridChunker
 from processors.embeddings_generator import EmbeddingsGenerator
 from processors.graph_extractor import GraphExtractor
 
@@ -52,14 +52,17 @@ DOCLING_MAX_WORKERS = int(os.getenv("DOCLING_MAX_WORKERS", "10"))
 # Graph extraction configuration
 ENABLE_GRAPH_EXTRACTION = os.getenv("ENABLE_GRAPH_EXTRACTION", "true").lower() == "true"
 
+# Chunk summary configuration
+CHUNK_SUMMARY_NEIGHBORS = int(os.getenv("CHUNK_SUMMARY_NEIGHBORS", "2"))
+
 # Initialize clients
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 # Initialize processor based on configuration
 if USE_DOCLING:
     processor = DoclingProcessor(use_api_vlm=USE_API_VLM, max_workers=DOCLING_MAX_WORKERS)
-    chunker = MarkdownChunker()
-    logger.info(f"Using Docling processor (API VLM: {USE_API_VLM}, max_workers: {DOCLING_MAX_WORKERS})")
+    chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS)
+    logger.info(f"Using Docling processor with HybridChunker (API VLM: {USE_API_VLM}, max_workers: {DOCLING_MAX_WORKERS}, summary_neighbors: {CHUNK_SUMMARY_NEIGHBORS})")
 else:
     processor = UnstructuredProcessor()
     chunker = TextChunker()
@@ -71,7 +74,7 @@ class DocumentWorker:
     
     def __init__(self):
         # Initialize chunker
-        self.chunker = MarkdownChunker() if USE_DOCLING else TextChunker()
+        self.chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS) if USE_DOCLING else TextChunker()
         
         # Initialize embeddings generator
         self.embeddings_generator = EmbeddingsGenerator(supabase)
@@ -240,18 +243,18 @@ class DocumentWorker:
             
             # Process document based on selected processor
             if USE_DOCLING:
-                # Docling returns markdown directly
-                logger.info(f"Extracting text with Docling ({'API VLM' if USE_API_VLM else 'Local VLM'})")
-                markdown_text = processor.extract_elements(file_data, file_path)
+                # Docling returns DoclingDocument object
+                logger.info(f"Extracting document with Docling ({'API VLM' if USE_API_VLM else 'Local VLM'})")
+                docling_doc = processor.extract_document(file_data, file_path)
                 
-                if not markdown_text:
-                    raise ValueError("No text extracted from document")
+                if not docling_doc:
+                    raise ValueError("No document extracted from file")
                 
-                logger.info(f"Extracted {len(markdown_text):,} characters of markdown")
+                logger.info(f"Extracted DoclingDocument successfully")
                 
-                # Chunk the markdown
-                logger.info("Chunking markdown text")
-                chunks = chunker.chunk_markdown(markdown_text, document_id)
+                # Chunk the document using HybridChunker
+                logger.info("Chunking document with HybridChunker")
+                chunks = self.chunker.chunk_document(docling_doc, document_id)
                 
                 # Add user_id and storage_path to chunks
                 for chunk in chunks:
@@ -292,7 +295,12 @@ class DocumentWorker:
                 stored_chunks = result.data
                 
                 # Prepare batch for embeddings (OpenAI supports up to 2048 inputs per request)
-                chunk_texts = [chunk["content"] for chunk in stored_chunks]
+                # Always embed full content for maximum search precision
+                # Summaries are metadata only, not for embedding
+                chunk_texts = [
+                    chunk["content"] 
+                    for chunk in stored_chunks
+                ]
                 embeddings = self.embeddings_generator.generate_embeddings_batch(chunk_texts)
                 
                 # Store embeddings
@@ -318,7 +326,7 @@ class DocumentWorker:
                 logger.info("Extracting entities and relationships for knowledge graph")
                 try:
                     # Get stored chunks with IDs for graph extraction
-                    chunks_result = supabase.table("chunks").select("id, content").eq("document_id", document_id).execute()
+                    chunks_result = supabase.table("chunks").select("id, content, summary").eq("document_id", document_id).execute()
                     stored_chunks_for_graph = chunks_result.data
                     
                     # Process chunks for graph extraction

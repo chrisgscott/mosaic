@@ -146,7 +146,8 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - `embedding` - Generating embeddings for chunks
 - `extracting_graph` - Extracting entities and relationships
 - `ready` - All processing complete
-- `error` - Processing failed
+- `error` - Processing failed, retries remaining
+- `failed` - Processing failed, no retries remaining
 
 **Additional Tracking:**
 - [ ] Add `processing_stage_started_at` timestamp field
@@ -487,22 +488,24 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - [x] Show entity/relationship results in search UI
 - [x] Add progress tracking for graph operations
 
-### Phase 5.3: Smart Cascade Delete & Data Integrity (High Priority)
+### Phase 5.3: Smart Cascade Delete & Data Integrity ✅ COMPLETE
 **Goal**: Ensure graph data is properly cleaned up when documents are deleted
 
-- [ ] Implement smart cascade delete for entities
+- [x] Implement smart cascade delete for entities
   - Check if entity has multiple `document_ids` in array
-  - If yes: Remove only the deleted document_id
+  - If yes: Remove only the deleted document_id and chunk_ids
   - If no: Delete the entity entirely
-- [ ] Implement smart cascade delete for relationships
+- [x] Implement smart cascade delete for relationships
   - Same logic as entities for `document_ids` and `chunk_ids`
-- [ ] Add database trigger or function for automatic cleanup
-- [ ] Add tests for cascade delete logic
-- [ ] Update delete endpoint to handle graph cleanup
+- [x] Update delete endpoint to handle graph cleanup
+- [ ] Add database trigger or function for automatic cleanup (optional optimization)
+- [ ] Add tests for cascade delete logic (future)
 
-**Files to modify:**
-- Database migration for trigger/function
-- `apps/web/app/api/documents/[id]/route.ts`
+**Implementation:**
+- Smart cascade logic in `apps/web/app/(app)/documents/actions.ts`
+- Handles both `document_ids` and `chunk_ids` arrays
+- Non-fatal errors (logs warning but continues deletion)
+- Preserves shared entities/relationships across documents
 
 ### Phase 5.4: Graph Management UI (Medium Priority)
 **Goal**: Give users control over extracted entities and relationships
@@ -608,6 +611,116 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - [ ] Monitor search performance
 - [ ] Identify common queries
 - [ ] Improve based on user behavior
+
+### Phase 6 Enhancements
+
+#### 🎯 HyDE Query Enhancement Tuning (Medium Priority)
+**Goal:** Improve HyDE accuracy and reduce hallucination impact
+
+**Current Behavior:**
+- HyDE occasionally generates incorrect hypothetical documents (e.g., "SDA" as "Seventh-day Adventist" vs "Strategic Design Approaches")
+- Multi-Query + Graph Search + Reranking compensate effectively
+- Final results remain accurate (reranking buries bad HyDE results)
+- Overall search time: ~14s for complex queries
+
+**Proposed Improvements:**
+
+1. **Lower HyDE Weight in RRF Scoring**
+   - [ ] Reduce HyDE's influence in Reciprocal Rank Fusion
+   - [ ] Give more weight to Multi-Query and Graph Search results
+   - [ ] Prevents bad HyDE guesses from skewing initial rankings
+
+2. **Add HyDE Validation**
+   - [ ] Compare HyDE result against original query embedding
+   - [ ] If similarity below threshold (e.g., 0.6), discard HyDE result
+   - [ ] Only use HyDE when semantically aligned with query
+   - [ ] Prevents hallucinated content from entering pipeline
+
+3. **Make HyDE Optional by Query Type**
+   - [ ] Use HyDE for broad conceptual queries
+   - [ ] Skip HyDE for specific factual queries (names, dates, etc.)
+   - [ ] Add query classification to determine when HyDE helps
+
+**Benefits:**
+- Reduced hallucination risk
+- Faster search when HyDE is skipped
+- More predictable search behavior
+- Better resource utilization
+
+**Files to Modify:**
+- `apps/web/app/api/search/route.ts`
+
+#### 🕸️ Graph Extractor Entity Quality Improvement (Medium Priority)
+**Goal:** Higher quality knowledge graph with better relationship discovery
+
+**Problem:**
+- LLM extracts relationships to abstract concepts that aren't entities (e.g., "stakeholder alignment", "effectiveness")
+- Abstract concepts aren't stored as entities (correctly)
+- Relationships to these concepts fail silently
+- LLM "wastes" extraction capacity on non-entities instead of finding real connections
+
+**Proposed Solutions:**
+
+1. **Improve Entity Extraction Prompt (Recommended)**
+   - [ ] Update prompt to only extract concrete entities
+   - [ ] Define clear criteria: methodologies, tools, frameworks, people, organizations
+   - [ ] Exclude abstract concepts: "alignment", "coordination", "effectiveness"
+   - [ ] Reduces spurious relationship attempts at source
+
+2. **Add Entity Type Validation**
+   - [ ] Validate both entities exist before creating relationships
+   - [ ] Skip relationship creation silently (or at DEBUG level)
+   - [ ] Prevents warnings for expected behavior
+
+3. **Post-Processing Filter**
+   - [ ] Filter out relationships to known abstract concepts after extraction
+   - [ ] Maintain list of common abstract terms to exclude
+   - [ ] Quick fix but requires maintenance
+
+**Benefits:**
+- Higher quality knowledge graph (focus on concrete entities)
+- Better relationship discovery (LLM extracts more real connections)
+- Improved graph search (queries find relevant methodology connections)
+- More precise entity clustering
+- Bonus: Cleaner logs
+
+**Files to Modify:**
+- `apps/backend/ingest/processors/graph_extractor.py`
+
+#### 🐛 PGMQ Queue State Corruption Fix (High Priority)
+**Goal:** Prevent database restart requirement when deleting documents in error state
+
+**Problem:**
+- Deleting a document in error state corrupts the `document_processing` queue
+- Queue cannot be purged using standard PGMQ commands
+- Messages remain stuck in queue
+- Only solution is database restart
+
+**Root Cause:**
+Race condition between:
+1. Document deletion (CASCADE deletes chunks/embeddings)
+2. Worker retrying the failed job
+3. PGMQ message visibility timeout
+
+**Proposed Solutions:**
+
+1. **Immediate: Queue Cleanup on Document Deletion**
+   - [ ] Before deleting document, archive/delete pending queue messages
+   - [ ] Use `pgmq.archive()` or `pgmq.delete()` for document's job
+   
+2. **Short-term: Improve Error Handling**
+   - [ ] Check if document exists before processing
+   - [ ] If document not found, delete message immediately (don't retry)
+   
+3. **Long-term: Dead Letter Queue**
+   - [ ] Move permanently failed messages to separate queue
+   - [ ] Prevents main queue corruption
+   - [ ] Allows manual inspection/cleanup
+
+**Files to Modify:**
+- `apps/backend/ingest/main.py` - Add document existence check
+- `apps/web/app/api/documents/[id]/route.ts` - Clean queue on delete
+- Database migration - Add dead letter queue table (optional)
 
 ---
 

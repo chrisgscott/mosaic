@@ -89,10 +89,7 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
           <CardContent className="space-y-6">
             {categorySettings.map((setting) => (
               <div key={setting.key} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor={setting.key} className="text-base font-medium">
-                    {setting.key.split(".").pop()?.replace(/([A-Z])/g, " $1").trim()}
-                  </Label>
+                <div className="flex items-center gap-3">
                   <Switch
                     id={setting.key}
                     checked={values[setting.key] === true || values[setting.key] === "true"}
@@ -103,9 +100,12 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
                       )
                     }
                   />
+                  <Label htmlFor={setting.key} className="text-base font-medium cursor-pointer">
+                    {setting.key.split(".").pop()?.replace(/([A-Z])/g, " $1").trim()}
+                  </Label>
                 </div>
                 {setting.description && (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground pl-14">
                     {setting.description}
                   </p>
                 )}

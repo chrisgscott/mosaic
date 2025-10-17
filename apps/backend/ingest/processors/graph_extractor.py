@@ -94,7 +94,7 @@ class GraphExtractor:
         self.supabase = supabase_client
         self.openai = OpenAI(api_key=openai_api_key or os.getenv("OPENAI_API_KEY"))
         self.similarity_threshold = float(os.getenv("ENTITY_SIMILARITY_THRESHOLD", "0.85"))
-        self.max_workers = int(os.getenv("GRAPH_EXTRACTION_WORKERS", "6"))
+        self.max_workers = int(os.getenv("GRAPH_EXTRACTION_WORKERS", "20"))
         
         logger.info(f"Initialized GraphExtractor (similarity_threshold={self.similarity_threshold}, max_workers={self.max_workers})")
     

@@ -18,6 +18,7 @@ from processors.docling_processor import DoclingProcessor
 from chunkers.hybrid_chunker import HybridChunker
 from processors.embeddings_generator import EmbeddingsGenerator
 from processors.graph_extractor import GraphExtractor
+from settings_service import SettingsService
 
 # Load environment variables
 load_dotenv()
@@ -42,23 +43,45 @@ POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "5"))
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", "1"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 
-# Docling configuration
-USE_API_VLM = os.getenv("USE_API_VLM", "true").lower() == "true"
-DOCLING_MAX_WORKERS = int(os.getenv("DOCLING_MAX_WORKERS", "10"))
-
-# Graph extraction configuration
-ENABLE_GRAPH_EXTRACTION = os.getenv("ENABLE_GRAPH_EXTRACTION", "true").lower() == "true"
-
-# Chunk summary configuration
-CHUNK_SUMMARY_NEIGHBORS = int(os.getenv("CHUNK_SUMMARY_NEIGHBORS", "2"))
-
 # Initialize clients
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
+# Initialize settings service
+settings_service = SettingsService(supabase)
+
+# Read configuration from settings (with ENV fallbacks)
+USE_API_VLM = settings_service.get_bool('processing.useApiVlm', True, 'USE_API_VLM')
+DOCLING_MAX_WORKERS = settings_service.get_int('processing.pdfWorkers', 10, 'DOCLING_MAX_WORKERS')
+ENABLE_GRAPH_EXTRACTION = settings_service.get_bool('search.useGraphSearch', True, 'ENABLE_GRAPH_EXTRACTION')
+CHUNK_SUMMARY_NEIGHBORS = settings_service.get_int('processing.summaryNeighbors', 2, 'CHUNK_SUMMARY_NEIGHBORS')
+
+# Get model settings for logging
+VLM_MODEL = settings_service.get_string('processing.vlmModel', 'gpt-4o-mini')
+SUMMARY_MODEL = settings_service.get_string('processing.summaryModel', 'gpt-4o-mini')
+GRAPH_MODEL = settings_service.get_string('processing.graphModel', 'gpt-4o-mini')
+EMBEDDING_MODEL = settings_service.get_string('llm.embeddingModel', 'text-embedding-3-small')
+TEMPERATURE = settings_service.get_float('llm.temperature', 0.7)
+
+# Log consolidated settings summary
+logger.info("=" * 70)
+logger.info("ACTIVE SETTINGS")
+logger.info("=" * 70)
+logger.info("Processing:")
+logger.info(f"  • API VLM: {USE_API_VLM}")
+logger.info(f"  • VLM Model: {VLM_MODEL}")
+logger.info(f"  • PDF Workers: {DOCLING_MAX_WORKERS}")
+logger.info(f"  • Summary Workers: {CHUNK_SUMMARY_NEIGHBORS}")
+logger.info(f"  • Summary Model: {SUMMARY_MODEL}")
+logger.info(f"  • Graph Model: {GRAPH_MODEL}")
+logger.info(f"  • Graph Extraction: {ENABLE_GRAPH_EXTRACTION}")
+logger.info("LLM:")
+logger.info(f"  • Embedding Model: {EMBEDDING_MODEL}")
+logger.info(f"  • Temperature: {TEMPERATURE}")
+logger.info("=" * 70)
+
 # Initialize processor and chunker
-processor = DoclingProcessor(use_api_vlm=USE_API_VLM, max_workers=DOCLING_MAX_WORKERS)
-chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS)
-logger.info(f"Using Docling processor with HybridChunker (API VLM: {USE_API_VLM}, max_workers: {DOCLING_MAX_WORKERS}, summary_neighbors: {CHUNK_SUMMARY_NEIGHBORS})")
+processor = DoclingProcessor(use_api_vlm=USE_API_VLM, max_workers=DOCLING_MAX_WORKERS, settings_service=settings_service)
+chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS, settings_service=settings_service)
 
 
 class DocumentWorker:
@@ -66,15 +89,15 @@ class DocumentWorker:
     
     def __init__(self):
         # Initialize chunker
-        self.chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS)
+        self.chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS, settings_service=settings_service)
         
         # Initialize embeddings generator
-        self.embeddings_generator = EmbeddingsGenerator(supabase)
+        self.embeddings_generator = EmbeddingsGenerator(supabase, settings_service=settings_service)
         logger.info("Initialized embeddings generator")
         
         # Initialize graph extractor
         if ENABLE_GRAPH_EXTRACTION:
-            self.graph_extractor = GraphExtractor(supabase)
+            self.graph_extractor = GraphExtractor(supabase, settings_service=settings_service)
             logger.info("Initialized graph extractor")
         else:
             self.graph_extractor = None

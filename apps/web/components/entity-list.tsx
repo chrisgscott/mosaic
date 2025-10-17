@@ -1,6 +1,6 @@
 "use client";
 
-import { Network, Trash2, MoreHorizontal, Loader2, FileText, ArrowUpDown } from "lucide-react";
+import { Network, Trash2, MoreHorizontal, Loader2, FileText, ArrowUpDown, GitMerge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -24,6 +24,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { MergeEntitiesDialog } from "@/components/merge-entities-dialog";
 
 type SortColumn = "created_at" | "name" | "confidence" | "docs" | "type" | "relationships";
 type SortDirection = "asc" | "desc";
@@ -44,9 +45,11 @@ const getQualityIndicator = (entity: Entity) => {
 export function EntityList({
   entities: externalEntities,
   onEntitiesChange,
+  allEntityTypes = [],
 }: {
   entities: Entity[];
   onEntitiesChange?: (updater: (prev: Entity[]) => Entity[]) => void;
+  allEntityTypes?: string[];
 }) {
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -56,6 +59,7 @@ export function EntityList({
   const [searchQuery, setSearchQuery] = useState("");
   const [sortColumn, setSortColumn] = useState<SortColumn>("created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
 
   // Use external or internal entities
   const entities = onEntitiesChange ? externalEntities : internalEntities;
@@ -299,24 +303,36 @@ export function EntityList({
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Knowledge Graph</h2>
           {selectedIds.size > 0 && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleBulkDelete}
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete {selectedIds.size}
-                </>
+            <div className="flex gap-2">
+              {selectedIds.size >= 2 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowMergeDialog(true)}
+                >
+                  <GitMerge className="mr-2 h-4 w-4" />
+                  Merge {selectedIds.size}
+                </Button>
               )}
-            </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleBulkDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete {selectedIds.size}
+                  </>
+                )}
+              </Button>
+            </div>
           )}
         </div>
 
@@ -508,6 +524,18 @@ export function EntityList({
           </TableBody>
         </Table>
       </div>
+
+      {/* Merge Dialog */}
+      <MergeEntitiesDialog
+        open={showMergeDialog}
+        onOpenChange={setShowMergeDialog}
+        entities={entities.filter((e) => selectedIds.has(e.id))}
+        allEntityTypes={allEntityTypes}
+        onMergeComplete={() => {
+          setSelectedIds(new Set());
+          router.refresh();
+        }}
+      />
     </div>
   );
 }

@@ -149,3 +149,131 @@ export async function updateEntity(
 
   return { success: true };
 }
+
+export async function mergeEntities(
+  primaryEntityId: string,
+  entityIdsToMerge: string[],
+  mergedData: {
+    name: string;
+    type: string;
+    description: string | null;
+    aliases: string[];
+  }
+) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  // Verify all entities exist and belong to user
+  const { data: entitiesToMerge, error: fetchError } = await supabase
+    .from("entities")
+    .select("*")
+    .in("id", [primaryEntityId, ...entityIdsToMerge])
+    .eq("user_id", user.id);
+
+  if (fetchError || !entitiesToMerge || entitiesToMerge.length !== entityIdsToMerge.length + 1) {
+    return { error: "One or more entities not found" };
+  }
+
+  // Collect all document_ids and chunk_ids
+  const allDocumentIds = new Set<string>();
+  const allChunkIds = new Set<string>();
+  const allAliases = new Set<string>(mergedData.aliases);
+
+  entitiesToMerge.forEach((entity) => {
+    entity.document_ids?.forEach((id: string) => allDocumentIds.add(id));
+    entity.chunk_ids?.forEach((id: string) => allChunkIds.add(id));
+    entity.aliases?.forEach((alias: string) => allAliases.add(alias));
+    // Add the entity names as aliases
+    if (entity.name !== mergedData.name) {
+      allAliases.add(entity.name);
+    }
+  });
+
+  // First, clear canonical names of entities to be merged to avoid constraint violation
+  for (const entityId of entityIdsToMerge) {
+    await supabase
+      .from("entities")
+      .update({ canonical_name: null })
+      .eq("id", entityId);
+  }
+
+  // Update primary entity with merged data
+  const { error: updateError } = await supabase
+    .from("entities")
+    .update({
+      name: mergedData.name,
+      type: mergedData.type,
+      description: mergedData.description,
+      aliases: Array.from(allAliases),
+      document_ids: Array.from(allDocumentIds),
+      chunk_ids: Array.from(allChunkIds),
+      canonical_name: mergedData.name.toLowerCase().trim(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", primaryEntityId);
+
+  if (updateError) {
+    return { error: `Failed to update primary entity: ${updateError.message}` };
+  }
+
+  // Update all relationships pointing to merged entities to point to primary entity
+  for (const entityId of entityIdsToMerge) {
+    // Update source relationships
+    await supabase
+      .from("relationships")
+      .update({ source_entity_id: primaryEntityId })
+      .eq("source_entity_id", entityId);
+
+    // Update target relationships
+    await supabase
+      .from("relationships")
+      .update({ target_entity_id: primaryEntityId })
+      .eq("target_entity_id", entityId);
+  }
+
+  // Delete duplicate relationships (same source, target, and type)
+  const { data: relationships } = await supabase
+    .from("relationships")
+    .select("id, source_entity_id, target_entity_id, relationship_type")
+    .or(`source_entity_id.eq.${primaryEntityId},target_entity_id.eq.${primaryEntityId}`);
+
+  if (relationships) {
+    const seen = new Set<string>();
+    const duplicateIds: string[] = [];
+
+    relationships.forEach((rel) => {
+      const key = `${rel.source_entity_id}-${rel.target_entity_id}-${rel.relationship_type}`;
+      if (seen.has(key)) {
+        duplicateIds.push(rel.id);
+      } else {
+        seen.add(key);
+      }
+    });
+
+    if (duplicateIds.length > 0) {
+      await supabase.from("relationships").delete().in("id", duplicateIds);
+    }
+  }
+
+  // Delete the merged entities
+  const { error: deleteError } = await supabase
+    .from("entities")
+    .delete()
+    .in("id", entityIdsToMerge);
+
+  if (deleteError) {
+    return { error: `Failed to delete merged entities: ${deleteError.message}` };
+  }
+
+  revalidatePath("/graph");
+
+  return { success: true, primaryEntityId };
+}

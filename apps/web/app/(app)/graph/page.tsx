@@ -22,6 +22,9 @@ export default async function GraphPage() {
   // Fetch entities
   const { entities = [] } = await getEntities();
 
+  // Get all unique entity types for the merge dialog
+  const allEntityTypes = Array.from(new Set(entities.map((e) => e.type))).sort();
+
   return (
     <>
       <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
@@ -36,7 +39,7 @@ export default async function GraphPage() {
         </Breadcrumb>
       </header>
       <div className="flex-1 space-y-4 p-4">
-        <GraphPageClient initialEntities={entities} />
+        <GraphPageClient initialEntities={entities} allEntityTypes={allEntityTypes} />
       </div>
     </>
   );

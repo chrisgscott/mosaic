@@ -4,45 +4,6 @@ This document contains items from INBOX that need additional decisions or resear
 
 ---
 
-## 🐛 Frontend Display Issues
-
-### 1. Chunk Display Limit Issue
-
-**Problem:** The document details page shows "Chunks (1000)" even when documents have more chunks (e.g., 1972 chunks). The query includes `.limit(10000)` but appears to be capped at 1000.
-
-**Investigation Needed:**
-- Verify Supabase query is actually using the limit parameter
-- Check if there's a separate Supabase configuration limiting results
-- Investigate Next.js caching behavior
-- Consider if there's a PostgREST limit configuration
-
-**Workaround Options:**
-- Paginate the chunks table (load 100 at a time)
-- Show accurate count without loading all chunks
-- Use a separate count query: `select count(*) from chunks where document_id = ?`
-
-**Priority:** Low - The chunks are all stored correctly in the database. This is purely a display issue that doesn't affect functionality.
-
-**Decision Needed:** Choose pagination strategy or investigate Supabase limit configuration.
-
----
-
-### 2. Upload Modal Filename Truncation Not Working
-
-**Problem:** Long filenames in the upload modal overflow their container instead of truncating with ellipsis, despite having the correct CSS classes applied.
-
-**Investigation Needed:**
-- Check if there's a conflicting CSS rule from shadcn/ui Dialog component
-- Inspect computed styles in browser to see what's overriding truncation
-- Test if the issue is specific to the Dialog component's rendering
-- Verify that the text element has an actual width constraint from its parent
-
-**Priority:** Low - Cosmetic issue only. Filenames are still readable and the tooltip shows the full name on hover.
-
-**Decision Needed:** Allocate time for CSS debugging or accept current behavior.
-
----
-
 ## 🧹 Infrastructure Cleanup & Optimization
 
 ### 1. Reduce Render Persistent Disk Size
@@ -64,49 +25,9 @@ This document contains items from INBOX that need additional decisions or resear
 
 ---
 
-### 2. Remove Unstructured Processor & Dependencies
-
-**Current State:** Both Unstructured and Docling processors exist in codebase. Unstructured is no longer used but code remains.
-
-**Benefits of Removal:**
-- Smaller Docker image
-- Faster builds
-- Simpler codebase
-- Reduced maintenance burden
-- Lower memory requirements
-
-**Prerequisites:**
-- ✅ Docling proven stable in production
-- ✅ Process at least 50-100 documents successfully
-- ✅ No critical bugs or edge cases discovered
-- ✅ Performance meets requirements
-
-**Timeline:** 
-- **Wait period**: 1-2 weeks of production usage
-- **Cleanup effort**: ~1-2 hours
-- **Testing**: Verify builds and deployments work
-
-**Priority:** Medium - Wait for Docling stability confirmation before removing Unstructured as fallback.
-
-**Decision Needed:** Set date to evaluate Docling stability and proceed with cleanup.
-
----
-
 ## 🤖 Advanced RAG Patterns (Evaluation Needed)
 
-### 1. Agentic/LLM-Based Chunking
-
-**Concept:** Let an LLM decide chunk boundaries based on semantic meaning rather than fixed sizes.
-
-**Trade-offs:**
-- **Pros:** More semantically coherent chunks, better preservation of meaning
-- **Cons:** Expensive (LLM call per chunk decision), time-consuming, ROI unclear
-
-**Decision Needed:** Evaluate ROI before implementing. Consider for high-value documents only, or as optional "premium" processing mode.
-
----
-
-### 2. Lazy Processing Pattern
+### 1. Lazy Processing Pattern
 
 **Concept:** Move expensive operations from ingestion → retrieval to only process what's actually used.
 
@@ -130,26 +51,149 @@ This document contains items from INBOX that need additional decisions or resear
 
 ---
 
-### 3. Structured Data & Spreadsheet Chunking
+### 3. Structured Data & Spreadsheet Intelligence
 
-**Concept:** Specialized chunking strategy for spreadsheets, CSV files, and other structured/tabular data.
+**Current State:**
+- ✅ CSV/XLSX files are processed by Docling
+- ✅ Tables extracted and converted to markdown
+- ✅ Basic chunking preserves table structure
+- ❌ No semantic understanding of data
+- ❌ No statistical analysis or narratives
+- ❌ Queries like "What was average revenue?" don't work well
 
-**Approaches:**
-1. **Narrative Generation:** Transform structured data into natural language narratives
-2. **Long-Table Format:** Convert wide tables into long-format with descriptive keys
-3. **Hybrid:** Store original + generate narratives + long-table format
+**The Problem:**
+Traditional RAG struggles with structured data because:
+- Tables chunked row-by-row lose context
+- Column headers separated from data lose meaning
+- Semantic search on raw CSV data performs poorly
+- Users can't ask analytical questions about the data
 
-**Trade-offs:**
-- **Narrative Generation:** Expensive (LLM calls), slower, may introduce interpretation
-- **Long-Table Format:** Storage explosion, complexity, transformation overhead
+**Proposed Solution: Lightweight CSV Intelligence**
 
-**Research Needed:**
-1. ROI Analysis - Cost vs. benefit for your use cases
-2. Volume Assessment - How many spreadsheets will you process?
-3. Query Patterns - What types of questions will users ask?
-4. Accuracy Testing - How well do narratives preserve meaning?
+**Phase 1: Document-Level Narratives Only** (2-3 days, ~$0.05/CSV)
+- [ ] Detect CSV/XLSX uploads
+- [ ] Generate single document-level summary:
+  - What the data represents
+  - Key columns and their purposes
+  - Data quality observations (missing values, outliers)
+  - Notable patterns or characteristics
+  - Potential use cases
+- [ ] Embed summary alongside table chunks
+- [ ] Cost: ~$0.05 per CSV (one LLM call)
+- [ ] Skip: Column narratives, trends, anomalies (too expensive)
+- [ ] Skip: Long-table format (storage explosion)
 
-**Decision Needed:** Evaluate if structured data processing is needed for Mosaic's use case. Consider starting simple (store as-is) and adding complexity only if users demand it.
+**Phase 2: Optional Deep Analysis** (User-triggered, 1-2 days)
+- [ ] Add "Analyze Data" button for CSVs
+- [ ] User can trigger expensive analysis on-demand:
+  - Statistical analysis
+  - Trend detection
+  - Anomaly identification
+  - Column-specific narratives
+- [ ] Show cost estimate before processing
+- [ ] Cost: ~$0.20-0.50 per CSV (multiple LLM calls)
+
+**Phase 3: Query-Time Analysis** (Future, 2-3 days)
+- [ ] When user asks analytical question:
+  - Detect it's about structured data
+  - Fetch raw CSV data
+  - Run analysis on-the-fly
+  - Return answer with data context
+- [ ] Cost: Pay only when users ask questions
+- [ ] More flexible than pre-generating everything
+
+**Implementation Approach:**
+
+```python
+# Lightweight approach
+def process_csv(file_path, document_id):
+    # 1. Load CSV
+    df = pd.read_csv(file_path)
+    
+    # 2. Generate single summary
+    summary = generate_csv_summary(df)  # One LLM call
+    
+    # 3. Create summary chunk
+    create_chunk(summary, metadata={'type': 'csv_summary'})
+    
+    # 4. Store original table as markdown (current approach)
+    table_markdown = df.to_markdown()
+    create_chunks(table_markdown)
+    
+    return {'summary_generated': True, 'cost': 0.05}
+```
+
+**Cost Analysis:**
+
+**Current Approach (Free):**
+- Just store table as markdown
+- No semantic understanding
+- Poor for analytical queries
+
+**Phase 1 (Cheap):**
+- $0.05 per CSV
+- At 100 CSVs/month: **$5/month**
+- Significant improvement for discovery
+- Users can find relevant CSVs via summaries
+
+**Full "Long Table + Narrative" (Expensive):**
+- $0.50+ per CSV
+- At 100 CSVs/month: **$50/month**
+- Overkill for most use cases
+- Complex to maintain
+
+**Decision Criteria:**
+
+**Implement Phase 1 if:**
+- ✅ Users upload >10 CSVs/month
+- ✅ Users search for "data about X" and can't find CSVs
+- ✅ Current table handling isn't discoverable enough
+
+**Implement Phase 2 if:**
+- ✅ Users ask analytical questions ("What's the average?")
+- ✅ Users need trend analysis or anomaly detection
+- ✅ Willing to pay $0.20-0.50 per analysis
+
+**Don't implement if:**
+- ❌ Users rarely upload CSVs (<5/month)
+- ❌ Users don't ask analytical questions
+- ❌ Current table handling is sufficient
+
+**Recommended Action:**
+
+1. **Monitor CSV usage** for 1-2 months:
+   - Track: How many CSVs uploaded?
+   - Track: How often are they searched?
+   - Track: What questions do users ask?
+
+2. **Start with Phase 1** if usage justifies it:
+   - Low cost ($5/month for 100 CSVs)
+   - Clear value (better discovery)
+   - Simple to implement (2-3 days)
+
+3. **Add Phase 2** only if users demand it:
+   - User-triggered (they control cost)
+   - Show value before implementing
+   - Validate with user feedback
+
+**Alternative: Query-Time Processing**
+
+Instead of pre-processing all CSVs, process on-demand:
+- User asks: "What was Q3 revenue in this spreadsheet?"
+- System fetches raw CSV data
+- Runs analysis on-the-fly
+- Returns answer with context
+- Cost: Only pay when users ask questions
+- More flexible, less upfront cost
+
+**Priority:** Low (Wait for user demand signal)
+
+**Estimated Effort:**
+- Phase 1: 2-3 days
+- Phase 2: 1-2 days
+- Phase 3: 2-3 days
+
+**Reference:** Full implementation details in `docs/structured-data-approch.md`
 
 ---
 

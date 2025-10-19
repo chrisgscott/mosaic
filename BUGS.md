@@ -90,3 +90,94 @@ The graph visualization extends beyond the viewport width, causing horizontal sc
 
 ### Priority
 Medium - Feature works but UX is poor with horizontal scrolling
+
+---
+
+## Chunk Display Limit Issue
+
+**Date:** October 19, 2025  
+**Component:** Document details page (`/documents/[id]`)  
+**Status:** 🔴 Open
+
+### Problem
+The document details page shows "Chunks (1000)" even when documents have more chunks (e.g., 1972 chunks). The query includes `.limit(10000)` but appears to be capped at 1000.
+
+### Context
+- Chunks are stored correctly in the database
+- The issue is purely display/query related
+- Doesn't affect functionality - all chunks are processed and searchable
+- Likely a Supabase/PostgREST default limit
+
+### Investigation Needed
+- Verify Supabase query is actually using the limit parameter
+- Check if there's a separate Supabase configuration limiting results
+- Investigate Next.js caching behavior
+- Consider if there's a PostgREST limit configuration (default is 1000 rows)
+
+### Possible Solutions
+
+1. **Fix the count (Quick - 30 min)**
+   - Use separate count query: `select count(*) from chunks where document_id = ?`
+   - Show accurate count without loading all chunks
+   - Recommended: Solves user-facing issue immediately
+
+2. **Implement pagination (Medium - 1-2 hours)**
+   - Load chunks 100 at a time with "Load More" button
+   - Better UX for documents with many chunks
+   - Reduces initial load time
+
+3. **Fix Supabase limit (Proper - 2-3 hours)**
+   - Investigate PostgREST configuration
+   - May need to set `max-rows` in Supabase settings
+   - Could be client-side limit in Supabase JS library
+
+### Related Files
+- `/apps/web/app/(app)/documents/[id]/page.tsx` - Document details page
+- Supabase query for chunks
+
+### Priority
+Low - Cosmetic issue only. Chunks are stored correctly and all functionality works.
+
+---
+
+## Upload Modal Filename Truncation Not Working
+
+**Date:** October 19, 2025  
+**Component:** Document upload modal  
+**Status:** 🔴 Open
+
+### Problem
+Long filenames in the upload modal overflow their container instead of truncating with ellipsis, despite having the correct CSS classes applied.
+
+### Context
+- Filenames are still readable
+- Tooltip shows the full name on hover
+- Purely cosmetic issue
+- CSS classes for truncation are applied but not working
+
+### Investigation Needed
+- Check if there's a conflicting CSS rule from shadcn/ui Dialog component
+- Inspect computed styles in browser to see what's overriding truncation
+- Test if the issue is specific to the Dialog component's rendering
+- Verify that the text element has an actual width constraint from its parent
+
+### Possible Solutions
+
+1. **Add explicit width constraint**
+   - Ensure parent container has defined width
+   - May need `max-w-[XXXpx]` instead of relative width
+
+2. **Use CSS override**
+   - Add `!important` to truncation styles if Dialog component is overriding
+   - Or use more specific CSS selector
+
+3. **Check Dialog component props**
+   - shadcn/ui Dialog may have props to control content overflow
+   - Review Dialog documentation for overflow handling
+
+### Related Files
+- Document upload modal component
+- shadcn/ui Dialog component
+
+### Priority
+Low - Cosmetic issue only. Filenames are still readable and the tooltip shows the full name on hover.

@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { RelationshipSentence } from "./relationship-sentence";
 import { RelationshipEditForm } from "./relationship-edit-form";
 import type { Entity } from "@/app/(app)/graph/actions";
 import { toast } from "sonner";
-import { updateRelationship, deleteRelationship } from "@/app/(app)/graph/actions";
+import { updateRelationship, deleteRelationship, getEntities } from "@/app/(app)/graph/actions";
 
 interface Relationship {
   id: string;
@@ -20,7 +20,6 @@ interface RelationshipsCardProps {
   currentEntityId: string;
   outgoingRelationships: Relationship[];
   incomingRelationships: Relationship[];
-  allEntities: Entity[];
   onRelationshipUpdated: () => void;
 }
 
@@ -40,10 +39,21 @@ export function RelationshipsCard({
   currentEntityId,
   outgoingRelationships,
   incomingRelationships,
-  allEntities,
   onRelationshipUpdated,
 }: RelationshipsCardProps) {
   const [editingRelationshipId, setEditingRelationshipId] = useState<string | null>(null);
+  const [allEntities, setAllEntities] = useState<Entity[]>([]);
+
+  // Load all entities for relationship editing
+  useEffect(() => {
+    const loadEntities = async () => {
+      const result = await getEntities();
+      if (result.entities) {
+        setAllEntities(result.entities);
+      }
+    };
+    loadEntities();
+  }, []);
 
   // Combine all relationships
   const allRelationships = [...outgoingRelationships, ...incomingRelationships];

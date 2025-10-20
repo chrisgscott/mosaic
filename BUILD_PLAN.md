@@ -1,7 +1,7 @@
 # Mosaic RAG Platform - Build Plan
 
-**Last Updated:** October 16, 2025  
-**Status:** Phase 1-4 Complete + Phase 7.1-7.4 Complete - **Production-ready end-to-end pipeline: Upload → Processing → Embeddings → Search working across all document types (PDF, PPTX, TXT, CSV, MD)**
+**Last Updated:** October 19, 2025  
+**Status:** Phases 1-5 Core Complete + Phase 7.1-7.4 Complete + Phase 8 Complete - **Production-ready end-to-end pipeline: Upload → Processing → Embeddings → Graph RAG → Search working across all document types (PDF, PPTX, TXT, CSV, MD)**
 
 ---
 
@@ -46,85 +46,14 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 ---
 
 ## Phase 1: Core Upload Infrastructure ✅ COMPLETE
-
-### Goals
-- Enable users to upload documents
-- Store files securely in Supabase Storage
-- Track document metadata in database
-- Implement background processing queue
-
-### Completed Tasks
-
-#### ✅ Document Upload System
-- [x] Direct client-side uploads to Supabase Storage (bypasses Next.js)
-- [x] Support for PDF, TXT, MD, DOC, DOCX formats
-- [x] File size validation (50MB limit for free tier)
-- [x] File type validation
-- [x] Progress bar UI with simulated progress
-- [x] Session refresh for long uploads
-- [x] Resumable uploads for files > 6MB
-
-#### ✅ Database Schema
-- [x] `documents` table with RLS policies
-- [x] User-isolated storage (files stored in `user_id/` folders)
-- [x] Status tracking: `uploaded`, `processing`, `ready`, `error`
-- [x] Metadata: file name, size, type, timestamps
-
-#### ✅ Background Processing Queue
-- [x] Enabled `pgmq` extension (Postgres Message Queue)
-- [x] Created `document_processing` queue
-- [x] Automatic job creation after upload
-- [x] Edge Function worker to process jobs
-- [x] Cron job (runs every minute) to trigger worker
-- [x] Status updates: `uploaded` → `processing` → `ready`
-
-### Files Created/Modified
-- `apps/web/app/(app)/documents/page.tsx` - Documents management page
-- `apps/web/app/(app)/documents/actions.ts` - Server actions for CRUD + queue
-- `apps/web/components/document-upload.tsx` - Upload dialog with progress
-- `apps/web/components/document-list.tsx` - Document table with actions
-- `supabase/migrations/20241014_create_documents_table.sql` - DB schema
-- `supabase/functions/process-documents/index.ts` - Background worker
-
-### Technical Decisions
-- **Direct uploads**: Bypasses Next.js server for better performance and no size limits
-- **pgmq over external queue**: Postgres-native, simpler, no extra services
-- **Edge Functions**: Serverless processing, scales automatically
-- **Free tier limits**: 50MB per file, 1GB total storage (upgrade to Pro for 5GB files)
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+Document upload, storage, background processing queue with pgmq
 
 ---
 
 ## Phase 2: Real-Time Status Updates & UX Improvements ✅ COMPLETE
-
-### Goals
-- Users see document status changes without refreshing
-- Live updates as documents move through processing pipeline
-- Better UX with instant feedback
-- Support multiple file uploads
-
-### Completed Tasks
-
-#### ✅ Supabase Realtime Integration
-- [x] Subscribe to `documents` table changes
-- [x] Update UI when status changes (INSERT, UPDATE, DELETE)
-- [x] Show processing progress indicators with animated spinners
-- [x] Handle connection states
-
-#### ✅ UI Enhancements
-- [x] Add status badges with animations (Uploading, Processing, Ready)
-- [x] Show "Processing..." spinner for active documents
-- [x] Toast notifications for status changes (upload start, complete, ready)
-- [x] Optimistic updates for instant feedback
-- [x] Non-blocking upload (modal closes immediately)
-- [x] Multiple file selection and parallel uploads
-- [x] Shared state management via DocumentsPageClient wrapper
-
-### Key Features Implemented
-- **Optimistic UI**: Files appear in table instantly with "Uploading" status
-- **Real-time updates**: Status changes reflected immediately via Supabase Realtime
-- **Multiple uploads**: Select and upload multiple files simultaneously
-- **Toast notifications**: Clear feedback at each stage
-- **Non-blocking**: Users can continue working while uploads happen
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+Supabase Realtime integration, optimistic UI, multiple file uploads
 
 ### Phase 2 Improvements (Future Enhancement)
 
@@ -172,230 +101,17 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - Database migration for status enum
 - `apps/backend/ingest/main.py` - Update status at each stage
 - Frontend status components
-
-**Priority:** Low - Nice to have but not critical
-
 ---
 
 ## Phase 3: Document Processing Pipeline ✅ COMPLETE
-
-### Goals
-- Extract text from various document formats
-- Implement intelligent chunking strategies
-- Store chunks with metadata for retrieval
-
-### Completed Tasks
-
-#### 📄 Text Extraction
-- [x] Integrate Unstructured.io OSS (legacy)
-- [x] Integrate Docling with VLM support (primary processor)
-- [x] Support PDF text extraction with parallel page processing
-- [x] Support DOCX text extraction
-- [x] Support TXT/MD direct reading
-- [x] Preserve document structure (headers, sections)
-- [x] Extract tables and maintain formatting
-- [x] Handle multi-column layouts
-- [x] Create Python background worker service
-- [x] Deploy to Render.com with Docker
-- [x] Test with real documents (200+ page PDFs)
-- [x] Implement API VLM (GPT-4o-mini) for fast processing
-- [x] Implement local VLM (GraniteDocling) for privacy-first processing
-
-#### ✂️ Text Chunking
-- [x] Implement markdown-based chunking strategy
-- [x] Respect section boundaries (never split titles)
-- [x] Configurable chunk size (1200 char soft max, 2000 char hard max)
-- [x] Configurable overlap (100 characters)
-- [x] Token counting with tiktoken
-- [x] Extract comprehensive metadata:
-  - Page numbers for citations
-  - Element types (Title, NarrativeText, Table, etc.)
-  - Table HTML for structured data
-  - PDF coordinates for deep linking
-  - File metadata (source, last modified)
-  - Links from HTML/web documents
-- [x] Parallel page processing (10 workers default, configurable)
-
-#### 🗄️ Chunks Database
-- [x] Create `chunks` table migration
-  - `id`, `document_id`, `user_id`
-  - `content`, `chunk_index`, `token_count`
-  - `metadata` (JSONB: page, section, etc.)
-  - `created_at`
-- [x] Add RLS policies for user isolation
-- [x] Create indexes for efficient querying
-- [x] Apply migration to Supabase
-- [x] Verify chunks are being stored (tested with 1972+ chunk documents)
-
-### Technical Decisions
-
-#### Text Extraction Strategy: VLM-First Approach
-- **Primary Processor: Docling with VLM**
-  - Why: 20-40x faster than OCR for table-heavy documents (3-7 min vs 2-4 hours for 200 pages)
-  - Features: Vision Language Model, parallel page processing, superior table extraction
-  - Options:
-    - **API VLM (GPT-4o-mini)**: Fastest, ~$0.005/document, recommended for production
-    - **Local VLM (GraniteDocling)**: Privacy-first, free, slower but still faster than OCR
-  - Best for: All document types, especially PDFs with tables, charts, complex layouts
-  
-- **Legacy Processor: Unstructured.io OSS**
-  - Why: Kept as fallback option, traditional OCR approach
-  - Use when: Docling unavailable or specific edge cases
-  - Features: OCR, table extraction, layout detection, spreadsheet handling
-  - Note: Significantly slower, higher temp disk usage
-  
-- **Future Enhancement: Multimodal LLM (GPT-4V/Claude 3 Vision)**
-  - Why: Extract from complex diagrams, images, or layouts that parsers fail on
-  - Use when: Docling fails on specific pages/documents
-  - Note: Most expensive option, use sparingly
-
-#### Service Architecture
-- **Background Worker**: Python service deployed on Render.com (2GB RAM, $25/mo Standard plan)
-  - **Environment**: Docker (for system package support)
-  - **System Dependencies**: Minimal (Docling handles most internally)
-  - **Retry Logic**: Max 3 attempts with exponential backoff
-  - **Error Tracking**: Stores error messages, retry counts, timestamps in database
-  - **Parallel Processing**: 10 concurrent page workers (configurable via DOCLING_MAX_WORKERS)
-- **Queue**: pgmq (Postgres-based message queue)
-- **Processing Flow**:
-  1. Server action adds job to pgmq queue
-  2. Python worker polls queue every 5 seconds
-  3. Downloads file from Supabase Storage
-  4. Splits PDF into individual pages (for parallel processing)
-  5. Processes pages in parallel with Docling VLM (10 workers)
-  6. Combines page results into full markdown
-  7. Chunks markdown with MarkdownChunker
-  8. Extracts comprehensive metadata (pages, coordinates, tables, links)
-  9. Stores chunks in Postgres
-  10. Updates document status
-  11. Real-time UI update via Supabase Realtime
-  12. Orphaned job cleanup (deletes jobs for deleted documents)
-
-#### Other Decisions
-- **Chunking strategy**: Markdown-based with heading preservation (respects section boundaries)
-- **Chunk size**: 1200 char soft max, 2000 char hard max (balance context and precision)
-- **Overlap**: 100 characters between chunks
-- **Deployment**: Render.com Background Worker with 2GB RAM, Docker container
-- **File types**: PDF (primary), DOC, DOCX, TXT, MD, HTML, XML, CSV, XLSX, PPTX
-- **Processor selection**: Environment variable `USE_DOCLING` (default: true)
-- **VLM mode**: Environment variable `USE_API_VLM` (default: true for speed)
-
-### Phase 3 Improvements (Future Enhancements)
-
-#### 🧠 Hierarchical Chunking for Better Retrieval (High Priority)
-**Goal**: Implement parent-child chunking strategy to balance precision and context
-
-**Current State**: 
-- ✅ Using Docling with layout-aware processing (structure preserved)
-- ✅ Tables extracted and formatted
-- ❌ Single-level chunks (no parent-child hierarchy)
-- ❌ Context loss when retrieving small chunks
-
-**Problem**: Small chunks give precise retrieval but lack context. Large chunks preserve context but reduce precision.
-
-**Solution: Hierarchical/Parent-Child Chunking**
-
-**Phase 1: Parent-Child Architecture (3-4 days)**
-- [ ] Create parent chunks (1000-2000 tokens):
-  - Full sections with all context
-  - Complete tables with surrounding explanations
-  - Entire procedures/lists with headers
-- [ ] Create child chunks (200-500 tokens):
-  - Individual paragraphs
-  - Table rows (with headers preserved)
-  - List items (with list title preserved)
-- [ ] Database schema:
-  ```sql
-  ALTER TABLE chunks ADD COLUMN parent_chunk_id UUID REFERENCES chunks(id);
-  ALTER TABLE chunks ADD COLUMN chunk_level TEXT; -- 'parent' or 'child'
-  CREATE INDEX idx_chunks_parent ON chunks(parent_chunk_id);
-  ```
-- [ ] Retrieval strategy:
-  - Index child chunks for precise matching
-  - Return parent chunks to LLM for generation
-  - Best of both: precision + context
-
-**Phase 2: Context Preservation Enhancements (2-3 days)**
-- [ ] **Table Context**:
-  - Include paragraph before table (table title/explanation)
-  - Include paragraph after table (interpretation/notes)
-  - Store in chunk metadata: `table_context_before`, `table_context_after`
-- [ ] **List Context**:
-  - Preserve list header with every list item chunk
-  - Store list type (ordered, unordered, checklist)
-  - Maintain list hierarchy (nested lists)
-- [ ] **Merged Cell Handling**:
-  - Detect merged cells during Docling processing
-  - Unmerge and duplicate values
-  - Ensure row-by-row chunking doesn't lose info
-
-**Phase 3: Chunk Summaries (2-3 days)**
-- [ ] Generate parent chunk summaries:
-  - 2-3 sentence summary of section content
-  - Key topics covered
-  - Main entities mentioned
-- [ ] Use summaries for:
-  - Better embedding quality
-  - Graph extraction context
-  - Document-level intelligence
-- [ ] Store in `chunks.metadata.summary` field
-
-**Benefits:**
-- ✅ Precise retrieval (child chunks)
-- ✅ Full context for generation (parent chunks)
-- ✅ Tables never lose their explanations
-- ✅ Lists never lose their headers
-- ✅ Better entity extraction (more context)
-- ✅ Improved search results (summaries + content)
-
-**Research Validation:**
-- Hierarchical chunking is proven effective in production RAG systems
-- "Small chunks for retrieval, large chunks for context" is best practice
-- Table context preservation is critical for financial/technical docs
-- List header preservation prevents orphaned items
-
-**Implementation Approach:**
-1. Extend Docling processor to create parent-child hierarchy
-2. Update chunking logic to preserve table/list context
-3. Modify retrieval to search children, return parents
-4. Add chunk summary generation as post-processing
-5. Measure retrieval accuracy improvement
-
-**Priority:** High - Directly addresses retrieval quality issues
-
-**Estimated Effort:** 7-10 days total
-
----
-
-#### 🔧 OpenAI API Timeout Handling
-- [ ] Increase API timeout from 60s to 120s
-- [ ] Implement retry logic for failed pages (3 attempts with exponential backoff)
-- [ ] Track failed pages in document metadata
-- [ ] Display failed pages in frontend document details
-- [ ] Add "Reprocess Failed Pages" action
-
-**Current Issue:** Occasional OpenAI API timeouts cause individual pages to fail during parallel processing. Failed pages are skipped, rest of document continues.
-
-**Recommended Implementation:**
-1. **Phase 1 (Immediate):** Increase timeout to 120s
-2. **Phase 2 (Next sprint):** Add retry logic with exponential backoff
-3. **Phase 3 (Future):** Track and display failed pages to users
-
-**Priority:** Medium-High - Affects document completeness
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+Docling integration with VLM, parallel page processing, support for all major document types
 
 ---
 
 ## Phase 4: Vector Embeddings & Semantic Search ✅ COMPLETE
-
-### Goals
-- ✅ Generate embeddings for all text chunks
-- ✅ Enable semantic search across documents
-- ✅ Implement efficient vector similarity search
-- Optional: LLM-enhanced chunk summaries for better retrieval (future enhancement)
-
-### Completed Tasks
-
-#### 🧮 Embeddings Generation ✅
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+OpenAI embeddings, pgvector storage, semantic search API
 - [x] Setup pgvector extension
 - [x] Create `embeddings` table with vector(1536) column
 - [x] Integrate OpenAI Embeddings API (text-embedding-3-small)
@@ -451,11 +167,8 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 ---
 
 ## Phase 5: Graph RAG - Knowledge Extraction ✅ CORE COMPLETE
-
-### Goals
-- ✅ Extract entities and relationships from documents
-- ✅ Build knowledge graph for advanced querying
-- ✅ Enable graph-based retrieval
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+Entity/relationship extraction, graph database, semantic entity search, smart cascade delete
 
 ### Phase 5.1: Core Implementation ✅ COMPLETE
 
@@ -1000,6 +713,179 @@ Race condition between:
 
 ---
 
+## Phase 6.5: RAG Answer Generation & Chat Interface
+
+### Overview
+Complete the RAG pipeline by connecting retrieved chunks to an LLM for answer generation. This is the critical missing piece that transforms search results into conversational answers.
+
+### Goals
+- Generate natural language answers from retrieved chunks
+- Provide source attribution for transparency
+- Stream responses for better UX
+- Handle context window limits intelligently
+- Support follow-up questions with conversation history
+
+### Tasks
+
+#### 🤖 LLM Integration
+- [ ] Create answer generation service
+- [ ] Integrate OpenAI API (GPT-4o or GPT-4o-mini)
+- [ ] Implement streaming responses
+- [ ] Add error handling and fallbacks
+- [ ] Configure model settings (temperature, max_tokens)
+- [ ] Add cost tracking and monitoring
+
+#### 📝 Prompt Engineering
+- [ ] Design system prompt for RAG context
+- [ ] Create prompt template with retrieved chunks
+- [ ] Add instructions for source citation
+- [ ] Handle cases with no relevant results
+- [ ] Optimize for accuracy vs conciseness
+- [ ] Test with various query types
+
+#### 💬 Chat Interface
+- [ ] Create chat UI component
+- [ ] Display streaming responses with typing indicator
+- [ ] Show source chunks inline or as expandable cards
+- [ ] Add "Copy" and "Regenerate" buttons
+- [ ] Implement conversation history
+- [ ] Add "Clear conversation" action
+- [ ] Support markdown formatting in responses
+
+#### 🔗 Source Attribution
+- [ ] Link each answer claim to source chunks
+- [ ] Display chunk metadata (document, page, confidence)
+- [ ] Enable click-through to full document
+- [ ] Highlight relevant text in source chunks
+- [ ] Show multiple sources when available
+- [ ] Add "View all sources" expansion
+
+#### 🧠 Context Management
+- [ ] Implement context window management (8K-128K tokens)
+- [ ] Prioritize most relevant chunks when over limit
+- [ ] Use chunk summaries for context compression
+- [ ] Add "Load more context" option for complex queries
+- [ ] Track token usage per query
+- [ ] Optimize chunk selection strategy
+
+#### 💾 Conversation History
+- [ ] Store conversation threads in database
+- [ ] Associate conversations with users
+- [ ] Enable conversation search and filtering
+- [ ] Add conversation sharing (optional)
+- [ ] Implement conversation export
+- [ ] Add conversation deletion
+
+#### 📊 Analytics & Monitoring
+- [ ] Track answer quality metrics
+- [ ] Monitor LLM costs per query
+- [ ] Log failed generations
+- [ ] Track average response time
+- [ ] Measure user satisfaction (thumbs up/down)
+- [ ] A/B test different prompts
+
+### Implementation Phases
+
+**Phase 6.5.1: Basic Answer Generation (2-3 days)**
+- [ ] LLM integration with OpenAI
+- [ ] Simple prompt template
+- [ ] Basic chat UI
+- [ ] Source attribution
+- [ ] Streaming responses
+
+**Phase 6.5.2: Enhanced Context Management (2 days)**
+- [ ] Smart context window management
+- [ ] Chunk prioritization
+- [ ] Context compression with summaries
+- [ ] Multi-turn conversation support
+
+**Phase 6.5.3: Conversation Features (2-3 days)**
+- [ ] Conversation history storage
+- [ ] Thread management UI
+- [ ] Conversation search
+- [ ] Export functionality
+
+**Phase 6.5.4: Polish & Optimization (1-2 days)**
+- [ ] Prompt optimization
+- [ ] Cost optimization
+- [ ] Analytics dashboard
+- [ ] User feedback collection
+
+### Technical Decisions
+
+**LLM Selection:**
+- **GPT-4o-mini**: Fast, cost-effective ($0.15/1M input, $0.60/1M output)
+- **GPT-4o**: Higher quality for complex queries ($2.50/1M input, $10/1M output)
+- **Strategy**: Start with GPT-4o-mini, upgrade to GPT-4o for specific use cases
+
+**Context Strategy:**
+- Retrieve top 10-20 chunks (semantic + graph + keyword)
+- Rerank to top 5-10 most relevant
+- Include chunk summaries for context
+- Total context: ~4K-8K tokens (fits in most models)
+
+**Streaming:**
+- Use OpenAI streaming API
+- Update UI incrementally as tokens arrive
+- Show typing indicator during generation
+- Handle connection errors gracefully
+
+**Source Attribution:**
+- Include chunk IDs in prompt
+- Parse LLM response for citations
+- Link citations to source chunks
+- Display sources below answer
+
+### Cost Estimates
+
+**Per Query (GPT-4o-mini):**
+- Input: ~5K tokens (chunks + prompt) = $0.00075
+- Output: ~500 tokens (answer) = $0.0003
+- **Total: ~$0.001 per query**
+
+**At Scale:**
+- 1,000 queries/day = $1/day = $30/month
+- 10,000 queries/day = $10/day = $300/month
+
+**Optimization Strategies:**
+- Cache common queries
+- Use chunk summaries to reduce input tokens
+- Implement query deduplication
+- Set max_tokens limits
+
+### Files to Create/Modify
+
+**Backend:**
+- `apps/web/lib/llm/answer-generator.ts` - Core answer generation
+- `apps/web/app/api/chat/route.ts` - Chat API endpoint
+- `apps/web/app/api/chat/stream/route.ts` - Streaming endpoint
+
+**Frontend:**
+- `apps/web/components/chat-interface.tsx` - Main chat UI
+- `apps/web/components/chat-message.tsx` - Message component
+- `apps/web/components/source-attribution.tsx` - Source display
+- `apps/web/app/(app)/chat/page.tsx` - Chat page
+
+**Database:**
+- `supabase/migrations/YYYYMMDD_create_conversations.sql` - Conversation storage
+- `supabase/migrations/YYYYMMDD_create_messages.sql` - Message storage
+
+### Success Criteria
+
+- [ ] Users can ask questions and get accurate answers
+- [ ] Answers include source citations
+- [ ] Response time < 5 seconds for most queries
+- [ ] Cost per query < $0.002
+- [ ] User satisfaction > 80% (thumbs up)
+- [ ] Answers are grounded in retrieved chunks (no hallucination)
+
+### Priority
+**High** - This is the core RAG functionality. Without it, we're just a search engine, not a RAG system.
+
+**Estimated Effort:** 7-10 days total (1.5-2 weeks)
+
+---
+
 ## Phase 7: Document Details & Management
 
 ### Goals
@@ -1154,8 +1040,10 @@ WHERE id = $1;
 ---
 
 ## Phase 7.3: Shared Corpus & Access Control ✅ COMPLETE
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+Public/private documents, RLS policies for shared access
 
-### Goals
+### Goals (Summary)
 - Enable admin users to share documents across organization
 - Implement public/private document controls
 - Support bulk operations for sharing
@@ -1191,8 +1079,10 @@ WHERE id = $1;
 ---
 
 ## Phase 7.4: Error Tracking & Retry Logic ✅ COMPLETE
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+Error tracking, retry logic (max 3 retries), error display in UI
 
-### Goals
+### Goals (Summary)
 - Track processing failures with detailed error messages
 - Implement retry limits to prevent infinite loops
 - Surface error information to users
@@ -1320,7 +1210,7 @@ CREATE TABLE document_processing_log (
 
 ---
 
-## Phase 8: Collaborative Annotations & Comments
+## Phase 11: Collaborative Annotations & Comments
 
 ### Goals
 - Enable inline discussions on document chunks
@@ -1407,14 +1297,14 @@ CREATE TABLE document_collaborators (
 ```
 
 ### Implementation Phases
-1. **Phase 8.1**: Basic annotations (text selection, simple comments)
-2. **Phase 8.2**: Collaboration (@mentions, threading, notifications)
-3. **Phase 8.3**: Advanced features (realtime, rich text, presence)
-4. **Phase 8.4**: Polish (search, export, analytics)
+1. **Phase 11.1**: Basic annotations (text selection, simple comments)
+2. **Phase 11.2**: Collaboration (@mentions, threading, notifications)
+3. **Phase 11.3**: Advanced features (realtime, rich text, presence)
+4. **Phase 11.4**: Polish (search, export, analytics)
 
 ---
 
-## Phase 9: Polish & Production Readiness
+## Phase 12: Polish & Production Readiness
 
 ### Goals
 - Improve user experience
@@ -1459,7 +1349,7 @@ CREATE TABLE document_collaborators (
 
 ---
 
-## Phase 10: Platform Migration & Enterprise Scaling
+## Phase 13: Platform Migration & Enterprise Scaling
 
 ### Overview
 Strategic plan for migrating from Render to enterprise-grade infrastructure when scaling demands it. This phase is triggered by growth milestones, not time-based.
@@ -2000,8 +1890,10 @@ mosaic/
 ---
 
 ## Phase 8: Settings Management System ✅ COMPLETE
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+Database-driven configuration, SettingsService with 60s cache, comprehensive test suite
 
-### Goals
+### Goals (Summary)
 - Move configuration from hardcoded ENV vars to database
 - Enable real-time settings changes without deployments
 - Provide admin UI for system configuration
@@ -2794,6 +2686,22 @@ Enhance graph quality, document organization, and intelligent automation feature
   - ~$0.23 per 200-page document, ~$0.0001 per search
 - 🎯 **System Status: Production-ready with Graph RAG for real-world use**
 
+### 2025-10-19
+- ✅ **BUILD_PLAN Reorganization**
+- ✅ Fixed duplicate phase numbers (old Phases 8-10 renumbered to 11-13)
+- ✅ Added Phase 9: Living Entities (CrewAI-powered knowledge pages)
+- ✅ Added Phase 10: Advanced Graph & Document Intelligence (9 sub-phases)
+- ✅ Cleaned up INBOX.md (all items migrated to BUILD_PLAN or TO_PROCESS)
+- ✅ Cleaned up TO_PROCESS.md (moved bugs to BUGS.md, removed completed items)
+- 📋 **Current Structure:**
+  - Phases 1-5: Core RAG pipeline ✅ COMPLETE
+  - Phase 6: Hybrid Search & Query Interface (in progress)
+  - Phase 7: Document Details & Management (mostly complete)
+  - Phase 8: Settings Management System ✅ COMPLETE
+  - Phase 9: Living Entities (future)
+  - Phase 10: Advanced Graph & Document Intelligence (future)
+  - Phases 11-13: Collaborative features, polish, enterprise scaling (future)
+
 ### 2025-10-17
 - ✅ **Phase 8 Complete: Settings Management System**
 - ✅ Created SettingsService with 60s TTL cache and type-safe getters
@@ -2815,4 +2723,4 @@ Enhance graph quality, document organization, and intelligent automation feature
 
 ---
 
-**Next Phase**: Phase 5.4 - Graph Management UI or Phase 6 - Hybrid Search Enhancements
+**Next Phase**: Phase 6 - Hybrid Search Enhancements or Phase 9 - Living Entities

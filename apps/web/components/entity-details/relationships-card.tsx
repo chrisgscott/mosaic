@@ -62,8 +62,19 @@ export function RelationshipsCard({
     loadEntities();
   }, []);
 
-  // Combine all relationships
-  const allRelationships = [...outgoingRelationships, ...incomingRelationships];
+  // Combine all relationships with A->Z sorting within groups
+  // Outgoing: sort by target entity name; Incoming: sort by source entity name
+  const outgoingSorted = [...outgoingRelationships].sort((a, b) =>
+    (a.target?.name || "").localeCompare(b.target?.name || "", undefined, {
+      sensitivity: "base",
+    })
+  );
+  const incomingSorted = [...incomingRelationships].sort((a, b) =>
+    (a.source?.name || "").localeCompare(b.source?.name || "", undefined, {
+      sensitivity: "base",
+    })
+  );
+  const allRelationships = [...outgoingSorted, ...incomingSorted];
 
   const handleEdit = (relationshipId: string) => {
     setEditingRelationshipId(relationshipId);

@@ -54,11 +54,11 @@ export function EntityDetailsClient({
   const [isSaving, setIsSaving] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Edit form state
-  const [editName, setEditName] = useState(entity.name);
-  const [editType, setEditType] = useState(entity.type);
-  const [editDescription, setEditDescription] = useState(entity.description || "");
-  const [editAliases, setEditAliases] = useState(entity.aliases?.join(", ") || "");
+  // Edit form state (derive from initialEntity to prevent undefined during updates)
+  const [editName, setEditName] = useState(initialEntity?.name ?? "");
+  const [editType, setEditType] = useState(initialEntity?.type ?? "");
+  const [editDescription, setEditDescription] = useState(initialEntity?.description ?? "");
+  const [editAliases, setEditAliases] = useState(initialEntity?.aliases?.join(", ") ?? "");
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -72,7 +72,14 @@ export function EntityDetailsClient({
 
     if (result.success) {
       toast.success("Entity updated successfully");
-      setEntity(result.entity);
+      // Locally merge the updated fields to avoid undefined result.entity
+      setEntity((prev) => ({
+        ...(prev as Entity),
+        name: editName,
+        type: editType as any,
+        description: editDescription,
+        aliases: editAliases.split(",").map((a) => a.trim()).filter(Boolean),
+      }));
       setIsEditing(false);
     } else {
       toast.error(result.error || "Failed to update entity");

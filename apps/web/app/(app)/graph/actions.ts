@@ -380,6 +380,8 @@ export async function updateRelationship(
   updates: {
     relationship_type?: string;
     description?: string | null;
+    source_entity_id?: string;
+    target_entity_id?: string;
   }
 ) {
   const supabase = await createClient();
@@ -396,7 +398,7 @@ export async function updateRelationship(
   // Get the relationship to verify ownership
   const { data: relationship, error: fetchError } = await supabase
     .from("relationships")
-    .select("user_id")
+    .select("user_id, source_entity_id, target_entity_id")
     .eq("id", relationshipId)
     .single();
 
@@ -407,6 +409,44 @@ export async function updateRelationship(
   // Verify ownership
   if (relationship.user_id !== user.id) {
     return { error: "Unauthorized" };
+  }
+
+  // If changing entities, verify they exist and belong to user
+  if (updates.source_entity_id || updates.target_entity_id) {
+    const entityIds = [
+      updates.source_entity_id || relationship.source_entity_id,
+      updates.target_entity_id || relationship.target_entity_id,
+    ];
+
+    const { data: entities, error: entitiesError } = await supabase
+      .from("entities")
+      .select("id, user_id")
+      .in("id", entityIds)
+      .eq("user_id", user.id);
+
+    if (entitiesError || !entities || entities.length !== 2) {
+      return { error: "One or both entities not found" };
+    }
+
+    // Check for duplicate relationship with new entities
+    const sourceId = updates.source_entity_id || relationship.source_entity_id;
+    const targetId = updates.target_entity_id || relationship.target_entity_id;
+    const relType = updates.relationship_type;
+
+    if (relType) {
+      const { data: existing } = await supabase
+        .from("relationships")
+        .select("id")
+        .eq("source_entity_id", sourceId)
+        .eq("target_entity_id", targetId)
+        .eq("relationship_type", relType)
+        .neq("id", relationshipId)
+        .maybeSingle();
+
+      if (existing) {
+        return { error: "A relationship with this type already exists between these entities" };
+      }
+    }
   }
 
   // Update the relationship

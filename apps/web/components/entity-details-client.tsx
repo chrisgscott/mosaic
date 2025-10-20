@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Edit2, Trash2, Save, X, ArrowRight, ArrowLeft, Check, ChevronsUpDown } from "lucide-react";
+import { FileText, Edit2, Trash2, Save, X, ArrowRight, ArrowLeft, Check, ChevronsUpDown, ArrowLeftRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,6 +85,7 @@ export function EntityDetailsClient({
   const [editRelType, setEditRelType] = useState("");
   const [editRelDesc, setEditRelDesc] = useState("");
   const [editTargetEntityId, setEditTargetEntityId] = useState("");
+  const [editSourceEntityId, setEditSourceEntityId] = useState("");
   const [allEntities, setAllEntities] = useState<Entity[]>([]);
   const [openCombobox, setOpenCombobox] = useState(false);
 
@@ -204,26 +205,34 @@ export function EntityDetailsClient({
     setEditingRelationshipId(rel.id);
     setEditRelType(rel.relationship_type);
     setEditRelDesc(rel.description || "");
-    // Set the target entity ID (for outgoing) or source entity ID (for incoming)
-    setEditTargetEntityId(isOutgoing ? rel.target?.id || "" : rel.source?.id || "");
+    // Set both source and target for full editing capability
+    setEditSourceEntityId(rel.source?.id || "");
+    setEditTargetEntityId(rel.target?.id || "");
+  };
+
+  const handleReverseDirection = () => {
+    // Swap source and target
+    const temp = editSourceEntityId;
+    setEditSourceEntityId(editTargetEntityId);
+    setEditTargetEntityId(temp);
   };
 
   const handleSaveRelationship = async (relationshipId: string, isOutgoing: boolean) => {
-    // For now, we can only update type and description
-    // Changing target/source entity requires deleting and recreating the relationship
-    // TODO: Add this functionality if needed
     const result = await updateRelationship(relationshipId, {
       relationship_type: editRelType,
       description: editRelDesc || null,
+      source_entity_id: editSourceEntityId,
+      target_entity_id: editTargetEntityId,
     });
 
     if (result.error) {
-      toast.error("Failed to update relationship");
+      toast.error(result.error);
       return;
     }
 
     toast.success("Relationship updated");
     setEditingRelationshipId(null);
+    setEditSourceEntityId("");
     setEditTargetEntityId("");
     router.refresh();
   };
@@ -232,6 +241,7 @@ export function EntityDetailsClient({
     setEditingRelationshipId(null);
     setEditRelType("");
     setEditRelDesc("");
+    setEditSourceEntityId("");
     setEditTargetEntityId("");
     setOpenCombobox(false);
   };
@@ -420,28 +430,28 @@ export function EntityDetailsClient({
                     {outgoingRelationships.map((rel) => (
                       <div key={rel.id} className="space-y-2">
                         {editingRelationshipId === rel.id ? (
-                          <div className="flex flex-col gap-3 p-3 border rounded">
-                            <div className="grid grid-cols-2 gap-2">
-                              {/* Relationship Type Select */}
-                              <div>
-                                <Label className="text-xs text-muted-foreground">Type</Label>
-                                <Select value={editRelType} onValueChange={setEditRelType}>
-                                  <SelectTrigger className="text-sm">
-                                    <SelectValue placeholder="Select type" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {relationshipTypes.map((type) => (
-                                      <SelectItem key={type} value={type}>
-                                        {type}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                          <div className="flex flex-col gap-3 p-3 border rounded bg-muted/30">
+                            {/* Source → Target with Reverse Button */}
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1">
+                                <Label className="text-xs text-muted-foreground">Source</Label>
+                                <div className="text-sm font-medium p-2 bg-background rounded border">
+                                  {allEntities.find((e) => e.id === editSourceEntityId)?.name || entity.name}
+                                </div>
                               </div>
+                              
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={handleReverseDirection}
+                                className="mt-5"
+                                title="Reverse direction"
+                              >
+                                <ArrowLeftRight className="h-4 w-4" />
+                              </Button>
 
-                              {/* Target Entity Combobox */}
-                              <div>
-                                <Label className="text-xs text-muted-foreground">Target Entity</Label>
+                              <div className="flex-1">
+                                <Label className="text-xs text-muted-foreground">Target</Label>
                                 <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
                                   <PopoverTrigger asChild>
                                     <Button
@@ -462,35 +472,50 @@ export function EntityDetailsClient({
                                       <CommandList>
                                         <CommandEmpty>No entity found.</CommandEmpty>
                                         <CommandGroup>
-                                          {allEntities
-                                            .filter((e) => e.id !== entity.id)
-                                            .map((e) => (
-                                              <CommandItem
-                                                key={e.id}
-                                                value={e.name}
-                                                onSelect={() => {
-                                                  setEditTargetEntityId(e.id);
-                                                  setOpenCombobox(false);
-                                                }}
-                                              >
-                                                <Check
-                                                  className={cn(
-                                                    "mr-2 h-4 w-4",
-                                                    editTargetEntityId === e.id ? "opacity-100" : "opacity-0"
-                                                  )}
-                                                />
-                                                <div className="flex flex-col">
-                                                  <span>{e.name}</span>
-                                                  <span className="text-xs text-muted-foreground">{e.type}</span>
-                                                </div>
-                                              </CommandItem>
-                                            ))}
+                                          {allEntities.map((e) => (
+                                            <CommandItem
+                                              key={e.id}
+                                              value={e.name}
+                                              onSelect={() => {
+                                                setEditTargetEntityId(e.id);
+                                                setOpenCombobox(false);
+                                              }}
+                                            >
+                                              <Check
+                                                className={cn(
+                                                  "mr-2 h-4 w-4",
+                                                  editTargetEntityId === e.id ? "opacity-100" : "opacity-0"
+                                                )}
+                                              />
+                                              <div className="flex flex-col">
+                                                <span>{e.name}</span>
+                                                <span className="text-xs text-muted-foreground">{e.type}</span>
+                                              </div>
+                                            </CommandItem>
+                                          ))}
                                         </CommandGroup>
                                       </CommandList>
                                     </Command>
                                   </PopoverContent>
                                 </Popover>
                               </div>
+                            </div>
+
+                            {/* Relationship Type */}
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Relationship Type</Label>
+                              <Select value={editRelType} onValueChange={setEditRelType}>
+                                <SelectTrigger className="text-sm">
+                                  <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {relationshipTypes.map((type) => (
+                                    <SelectItem key={type} value={type}>
+                                      {type}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
 
                             {/* Description */}

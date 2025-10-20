@@ -144,8 +144,8 @@ export function EntityDetailsClient({
           onAliasesChange={setEditAliases}
         />
       ) : (
-        <div className="grid gap-6 md:grid-cols-4">
-          {/* Entity Information - 25% */}
+        <div className="grid gap-6 md:grid-cols-3">
+          {/* Entity Information - 33% */}
           <div className="md:col-span-1">
             <EntityInfoCard
               description={entity.description}
@@ -156,8 +156,8 @@ export function EntityDetailsClient({
             />
           </div>
 
-          {/* Relationships - 75% */}
-          <div className="md:col-span-3">
+          {/* Relationships - 66% */}
+          <div className="md:col-span-2">
             <RelationshipsCard
               key={refreshKey}
               currentEntityId={entity.id}

@@ -10,13 +10,15 @@ POST https://cqtxfjcpgaudugkqjpdc.supabase.co/functions/v1/search
 
 ## Authentication
 
-Include both the Supabase anon key (for JWT verification) and the custom API key:
+Include the custom API key in the `x-api-key` header:
 
 **Headers:**
 ```
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxdHhmamNwZ2F1ZHVna3FqcGRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5MDYyMzQsImV4cCI6MjA3NTQ4MjIzNH0.OSqWKKAzUCFo_XKJ_5To_0p0kITjVNJLmhQgvCkmx_U
-x-api-key: 671138ec6e414f9065ae9c5171addfcd48c0fc8955a19f70a1c7a3a2214a969f
+x-api-key: test-api-key-12345
+Content-Type: application/json
 ```
+
+**Note:** JWT verification is disabled for this function (`--no-verify-jwt`), so you only need the custom API key.
 
 ## Request Format
 
@@ -94,11 +96,10 @@ Search behavior is controlled by database settings in `system_settings` table:
 
 1. **Method**: POST
 2. **URL**: `https://cqtxfjcpgaudugkqjpdc.supabase.co/functions/v1/search`
-3. **Authentication**: None (use custom headers)
+3. **Authentication**: None (use custom header)
 4. **Headers**:
    - `Content-Type`: `application/json`
-   - `Authorization`: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxdHhmamNwZ2F1ZHVna3FqcGRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5MDYyMzQsImV4cCI6MjA3NTQ4MjIzNH0.OSqWKKAzUCFo_XKJ_5To_0p0kITjVNJLmhQgvCkmx_U`
-   - `x-api-key`: `671138ec6e414f9065ae9c5171addfcd48c0fc8955a19f70a1c7a3a2214a969f`
+   - `x-api-key`: `test-api-key-12345`
 5. **Body** (JSON):
 ```json
 {

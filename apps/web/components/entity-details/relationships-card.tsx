@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 import { RelationshipSentence } from "./relationship-sentence";
 import { RelationshipEditForm } from "./relationship-edit-form";
 import type { Entity } from "@/app/(app)/graph/actions";
 import { toast } from "sonner";
-import { updateRelationship, deleteRelationship, getEntities } from "@/app/(app)/graph/actions";
+import { updateRelationship, deleteRelationship, getEntities, createRelationship } from "@/app/(app)/graph/actions";
 
 interface Relationship {
   id: string;
@@ -46,6 +48,7 @@ export function RelationshipsCard({
   onRelationshipUpdated,
 }: RelationshipsCardProps) {
   const [editingRelationshipId, setEditingRelationshipId] = useState<string | null>(null);
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [allEntities, setAllEntities] = useState<Entity[]>([]);
 
   // Load all entities for relationship editing
@@ -91,6 +94,26 @@ export function RelationshipsCard({
     }
   };
 
+  const handleCreateNew = async (
+    sourceId: string,
+    targetId: string,
+    type: string
+  ) => {
+    try {
+      await createRelationship({
+        source_entity_id: sourceId,
+        target_entity_id: targetId,
+        relationship_type: type,
+      });
+      toast.success("Relationship created successfully");
+      setIsCreatingNew(false);
+      onRelationshipUpdated();
+    } catch (error) {
+      toast.error("Failed to create relationship");
+      console.error(error);
+    }
+  };
+
   const handleDelete = async (
     relationshipId: string,
     relationshipType: string,
@@ -113,14 +136,44 @@ export function RelationshipsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Relationships</CardTitle>
-        <CardDescription>
-          {allRelationships.length} total
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Relationships</CardTitle>
+            <CardDescription>
+              {allRelationships.length} total
+            </CardDescription>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => setIsCreatingNew(true)}
+            disabled={isCreatingNew}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Relationship
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div>
-          {allRelationships.length === 0 ? (
+          {/* New Relationship Form */}
+          {isCreatingNew && (
+            <div className="mb-4">
+              <RelationshipEditForm
+                sourceEntityId={currentEntityId}
+                targetEntityId=""
+                relationshipType={relationshipTypes[0]}
+                allEntities={allEntities}
+                relationshipTypes={relationshipTypes}
+                onSave={(sourceId, targetId, type) =>
+                  handleCreateNew(sourceId, targetId, type)
+                }
+                onCancel={() => setIsCreatingNew(false)}
+              />
+            </div>
+          )}
+
+          {/* Existing Relationships */}
+          {allRelationships.length === 0 && !isCreatingNew ? (
             <p className="text-sm text-muted-foreground">No relationships found</p>
           ) : (
             allRelationships.map((rel, index) => {

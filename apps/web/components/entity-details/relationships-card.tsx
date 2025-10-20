@@ -117,18 +117,46 @@ export function RelationshipsCard({
           ) : (
             allRelationships.map((rel) => {
               // Determine source and target entities
-              const isOutgoing = rel.source?.id === currentEntityId || !rel.source;
-              const sourceEntity = isOutgoing
-                ? allEntities.find((e) => e.id === currentEntityId)!
-                : rel.source!;
-              const targetEntity = isOutgoing
-                ? rel.target!
-                : allEntities.find((e) => e.id === currentEntityId)!;
+              // For outgoing: source is current entity, target is rel.target
+              // For incoming: source is rel.source, target is current entity
+              const isOutgoing = !rel.source || rel.source.id === currentEntityId;
+              
+              let sourceEntity, targetEntity;
+              
+              if (isOutgoing) {
+                // Outgoing: current entity -> target
+                sourceEntity = allEntities.find((e) => e.id === currentEntityId) || {
+                  id: currentEntityId,
+                  name: "Current Entity",
+                  type: "unknown"
+                };
+                targetEntity = rel.target || {
+                  id: "unknown",
+                  name: "Unknown",
+                  type: "unknown"
+                };
+              } else {
+                // Incoming: source -> current entity
+                sourceEntity = rel.source || {
+                  id: "unknown",
+                  name: "Unknown",
+                  type: "unknown"
+                };
+                targetEntity = allEntities.find((e) => e.id === currentEntityId) || {
+                  id: currentEntityId,
+                  name: "Current Entity",
+                  type: "unknown"
+                };
+              }
 
               // Get the relationship for editing
-              const editRel = allRelationships.find((r) => r.id === rel.id);
-              const editSourceId = editRel?.source?.id || currentEntityId;
-              const editTargetId = editRel?.target?.id || currentEntityId;
+              const editSourceId = rel.source?.id || currentEntityId;
+              const editTargetId = rel.target?.id || currentEntityId;
+
+              // Skip if we don't have valid entities
+              if (!sourceEntity || !targetEntity) {
+                return null;
+              }
 
               return editingRelationshipId === rel.id ? (
                 <RelationshipEditForm

@@ -73,7 +73,11 @@ export function RelationshipsCard({
     type: string
   ) => {
     try {
-      await updateRelationship(relationshipId, sourceId, targetId, type);
+      await updateRelationship(relationshipId, {
+        source_entity_id: sourceId,
+        target_entity_id: targetId,
+        relationship_type: type,
+      });
       toast.success("Relationship updated successfully");
       setEditingRelationshipId(null);
       onRelationshipUpdated();

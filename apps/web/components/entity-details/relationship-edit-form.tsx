@@ -63,7 +63,8 @@ export function RelationshipEditForm({
   const [sourceId, setSourceId] = useState(initialSourceId);
   const [targetId, setTargetId] = useState(initialTargetId);
   const [relType, setRelType] = useState(initialType);
-  const [openCombobox, setOpenCombobox] = useState(false);
+  const [openSourceCombobox, setOpenSourceCombobox] = useState(false);
+  const [openTargetCombobox, setOpenTargetCombobox] = useState(false);
 
   const sourceEntity = allEntities.find((e) => e.id === sourceId);
   const targetEntity = allEntities.find((e) => e.id === targetId);
@@ -81,17 +82,53 @@ export function RelationshipEditForm({
   return (
     <div className="flex flex-col gap-3 p-3 border rounded bg-muted/30">
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Source Entity Chip */}
-        <Badge
-          variant="outline"
-          className="text-sm px-3 py-1"
-          style={{
-            borderColor: sourceEntity ? getColorForType(sourceEntity.type) : undefined,
-            color: sourceEntity ? getColorForType(sourceEntity.type) : undefined,
-          }}
-        >
-          {sourceEntity?.name || "Unknown"}
-        </Badge>
+        {/* Source Entity Combobox */}
+        <Popover open={openSourceCombobox} onOpenChange={setOpenSourceCombobox}>
+          <PopoverTrigger asChild>
+            <Badge
+              variant="outline"
+              className="text-sm px-3 py-1 cursor-pointer hover:bg-muted border-dashed"
+              style={{
+                borderColor: sourceEntity ? getColorForType(sourceEntity.type) : undefined,
+                color: sourceEntity ? getColorForType(sourceEntity.type) : undefined,
+              }}
+            >
+              {sourceEntity?.name || "Select source..."}
+              <ChevronsUpDown className="ml-2 h-3 w-3" />
+            </Badge>
+          </PopoverTrigger>
+          <PopoverContent className="w-[300px] p-0">
+            <Command>
+              <CommandInput placeholder="Search entities..." />
+              <CommandList>
+                <CommandEmpty>No entity found.</CommandEmpty>
+                <CommandGroup>
+                  {allEntities.map((e) => (
+                    <CommandItem
+                      key={e.id}
+                      value={e.name}
+                      onSelect={() => {
+                        setSourceId(e.id);
+                        setOpenSourceCombobox(false);
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          sourceId === e.id ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      <div className="flex flex-col">
+                        <span>{e.name}</span>
+                        <span className="text-xs text-muted-foreground">{e.type}</span>
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
         {/* Relationship Type Dropdown */}
         <Select value={relType} onValueChange={setRelType}>
@@ -108,7 +145,7 @@ export function RelationshipEditForm({
         </Select>
 
         {/* Target Entity Combobox */}
-        <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+        <Popover open={openTargetCombobox} onOpenChange={setOpenTargetCombobox}>
           <PopoverTrigger asChild>
             <Badge
               variant="outline"
@@ -134,7 +171,7 @@ export function RelationshipEditForm({
                       value={e.name}
                       onSelect={() => {
                         setTargetId(e.id);
-                        setOpenCombobox(false);
+                        setOpenTargetCombobox(false);
                       }}
                     >
                       <Check

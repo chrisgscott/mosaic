@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Edit2, Trash2, Save, X, ArrowRight, ArrowLeft } from "lucide-react";
+import { FileText, Edit2, Trash2, Save, X, ArrowRight, ArrowLeft, Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,12 +16,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { 
   deleteEntity, 
   updateEntity, 
   deleteRelationship,
   updateRelationship,
+  getEntities,
   type Entity 
 } from "@/app/(app)/graph/actions";
 
@@ -69,6 +84,23 @@ export function EntityDetailsClient({
   const [editingRelationshipId, setEditingRelationshipId] = useState<string | null>(null);
   const [editRelType, setEditRelType] = useState("");
   const [editRelDesc, setEditRelDesc] = useState("");
+  const [editTargetEntityId, setEditTargetEntityId] = useState("");
+  const [allEntities, setAllEntities] = useState<Entity[]>([]);
+  const [openCombobox, setOpenCombobox] = useState(false);
+
+  // Common relationship types
+  const relationshipTypes = [
+    "uses",
+    "integrates with",
+    "depends on",
+    "implements",
+    "extends",
+    "contains",
+    "part of",
+    "related to",
+    "manages",
+    "owned by",
+  ];
 
   // Edit form state
   const [editName, setEditName] = useState(entity.name);
@@ -157,13 +189,29 @@ export function EntityDetailsClient({
     return "text-red-600";
   };
 
-  const handleEditRelationship = (rel: Relationship) => {
+  // Fetch all entities for the combobox
+  useEffect(() => {
+    const fetchEntities = async () => {
+      const result = await getEntities();
+      if (result.entities) {
+        setAllEntities(result.entities);
+      }
+    };
+    fetchEntities();
+  }, []);
+
+  const handleEditRelationship = (rel: Relationship, isOutgoing: boolean) => {
     setEditingRelationshipId(rel.id);
     setEditRelType(rel.relationship_type);
     setEditRelDesc(rel.description || "");
+    // Set the target entity ID (for outgoing) or source entity ID (for incoming)
+    setEditTargetEntityId(isOutgoing ? rel.target?.id || "" : rel.source?.id || "");
   };
 
-  const handleSaveRelationship = async (relationshipId: string) => {
+  const handleSaveRelationship = async (relationshipId: string, isOutgoing: boolean) => {
+    // For now, we can only update type and description
+    // Changing target/source entity requires deleting and recreating the relationship
+    // TODO: Add this functionality if needed
     const result = await updateRelationship(relationshipId, {
       relationship_type: editRelType,
       description: editRelDesc || null,
@@ -176,6 +224,7 @@ export function EntityDetailsClient({
 
     toast.success("Relationship updated");
     setEditingRelationshipId(null);
+    setEditTargetEntityId("");
     router.refresh();
   };
 
@@ -183,6 +232,8 @@ export function EntityDetailsClient({
     setEditingRelationshipId(null);
     setEditRelType("");
     setEditRelDesc("");
+    setEditTargetEntityId("");
+    setOpenCombobox(false);
   };
 
   const handleDeleteRelationship = async (relationshipId: string, relType: string, targetName: string) => {
@@ -369,23 +420,95 @@ export function EntityDetailsClient({
                     {outgoingRelationships.map((rel) => (
                       <div key={rel.id} className="space-y-2">
                         {editingRelationshipId === rel.id ? (
-                          <div className="flex flex-col gap-2 p-2 border rounded">
-                            <Input
-                              value={editRelType}
-                              onChange={(e) => setEditRelType(e.target.value)}
-                              placeholder="Relationship type"
-                              className="text-sm"
-                            />
-                            <Input
-                              value={editRelDesc}
-                              onChange={(e) => setEditRelDesc(e.target.value)}
-                              placeholder="Description (optional)"
-                              className="text-sm"
-                            />
+                          <div className="flex flex-col gap-3 p-3 border rounded">
+                            <div className="grid grid-cols-2 gap-2">
+                              {/* Relationship Type Select */}
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Type</Label>
+                                <Select value={editRelType} onValueChange={setEditRelType}>
+                                  <SelectTrigger className="text-sm">
+                                    <SelectValue placeholder="Select type" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {relationshipTypes.map((type) => (
+                                      <SelectItem key={type} value={type}>
+                                        {type}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              {/* Target Entity Combobox */}
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Target Entity</Label>
+                                <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      role="combobox"
+                                      aria-expanded={openCombobox}
+                                      className="w-full justify-between text-sm"
+                                    >
+                                      {editTargetEntityId
+                                        ? allEntities.find((e) => e.id === editTargetEntityId)?.name
+                                        : "Select entity..."}
+                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-[300px] p-0">
+                                    <Command>
+                                      <CommandInput placeholder="Search entities..." />
+                                      <CommandList>
+                                        <CommandEmpty>No entity found.</CommandEmpty>
+                                        <CommandGroup>
+                                          {allEntities
+                                            .filter((e) => e.id !== entity.id)
+                                            .map((e) => (
+                                              <CommandItem
+                                                key={e.id}
+                                                value={e.name}
+                                                onSelect={() => {
+                                                  setEditTargetEntityId(e.id);
+                                                  setOpenCombobox(false);
+                                                }}
+                                              >
+                                                <Check
+                                                  className={cn(
+                                                    "mr-2 h-4 w-4",
+                                                    editTargetEntityId === e.id ? "opacity-100" : "opacity-0"
+                                                  )}
+                                                />
+                                                <div className="flex flex-col">
+                                                  <span>{e.name}</span>
+                                                  <span className="text-xs text-muted-foreground">{e.type}</span>
+                                                </div>
+                                              </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                      </CommandList>
+                                    </Command>
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+                            </div>
+
+                            {/* Description */}
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Description (optional)</Label>
+                              <Input
+                                value={editRelDesc}
+                                onChange={(e) => setEditRelDesc(e.target.value)}
+                                placeholder="Add description..."
+                                className="text-sm"
+                              />
+                            </div>
+
+                            {/* Actions */}
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
-                                onClick={() => handleSaveRelationship(rel.id)}
+                                onClick={() => handleSaveRelationship(rel.id, true)}
                               >
                                 <Save className="h-3 w-3 mr-1" />
                                 Save
@@ -416,7 +539,7 @@ export function EntityDetailsClient({
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => handleEditRelationship(rel)}
+                                onClick={() => handleEditRelationship(rel, true)}
                                 className="h-6 w-6 p-0"
                               >
                                 <Edit2 className="h-3 w-3" />
@@ -450,23 +573,95 @@ export function EntityDetailsClient({
                     {incomingRelationships.map((rel) => (
                       <div key={rel.id} className="space-y-2">
                         {editingRelationshipId === rel.id ? (
-                          <div className="flex flex-col gap-2 p-2 border rounded">
-                            <Input
-                              value={editRelType}
-                              onChange={(e) => setEditRelType(e.target.value)}
-                              placeholder="Relationship type"
-                              className="text-sm"
-                            />
-                            <Input
-                              value={editRelDesc}
-                              onChange={(e) => setEditRelDesc(e.target.value)}
-                              placeholder="Description (optional)"
-                              className="text-sm"
-                            />
+                          <div className="flex flex-col gap-3 p-3 border rounded">
+                            <div className="grid grid-cols-2 gap-2">
+                              {/* Source Entity Combobox */}
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Source Entity</Label>
+                                <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      role="combobox"
+                                      aria-expanded={openCombobox}
+                                      className="w-full justify-between text-sm"
+                                    >
+                                      {editTargetEntityId
+                                        ? allEntities.find((e) => e.id === editTargetEntityId)?.name
+                                        : "Select entity..."}
+                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-[300px] p-0">
+                                    <Command>
+                                      <CommandInput placeholder="Search entities..." />
+                                      <CommandList>
+                                        <CommandEmpty>No entity found.</CommandEmpty>
+                                        <CommandGroup>
+                                          {allEntities
+                                            .filter((e) => e.id !== entity.id)
+                                            .map((e) => (
+                                              <CommandItem
+                                                key={e.id}
+                                                value={e.name}
+                                                onSelect={() => {
+                                                  setEditTargetEntityId(e.id);
+                                                  setOpenCombobox(false);
+                                                }}
+                                              >
+                                                <Check
+                                                  className={cn(
+                                                    "mr-2 h-4 w-4",
+                                                    editTargetEntityId === e.id ? "opacity-100" : "opacity-0"
+                                                  )}
+                                                />
+                                                <div className="flex flex-col">
+                                                  <span>{e.name}</span>
+                                                  <span className="text-xs text-muted-foreground">{e.type}</span>
+                                                </div>
+                                              </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                      </CommandList>
+                                    </Command>
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+
+                              {/* Relationship Type Select */}
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Type</Label>
+                                <Select value={editRelType} onValueChange={setEditRelType}>
+                                  <SelectTrigger className="text-sm">
+                                    <SelectValue placeholder="Select type" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {relationshipTypes.map((type) => (
+                                      <SelectItem key={type} value={type}>
+                                        {type}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            {/* Description */}
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Description (optional)</Label>
+                              <Input
+                                value={editRelDesc}
+                                onChange={(e) => setEditRelDesc(e.target.value)}
+                                placeholder="Add description..."
+                                className="text-sm"
+                              />
+                            </div>
+
+                            {/* Actions */}
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
-                                onClick={() => handleSaveRelationship(rel.id)}
+                                onClick={() => handleSaveRelationship(rel.id, false)}
                               >
                                 <Save className="h-3 w-3 mr-1" />
                                 Save
@@ -497,7 +692,7 @@ export function EntityDetailsClient({
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => handleEditRelationship(rel)}
+                                onClick={() => handleEditRelationship(rel, false)}
                                 className="h-6 w-6 p-0"
                               >
                                 <Edit2 className="h-3 w-3" />

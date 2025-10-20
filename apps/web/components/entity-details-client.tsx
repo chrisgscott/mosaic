@@ -39,7 +39,6 @@ import {
   getEntities,
   type Entity 
 } from "@/app/(app)/graph/actions";
-import { EntityGraphView } from "./entity-graph-view";
 
 type Relationship = {
   id: string;
@@ -61,6 +60,21 @@ type Chunk = {
   document_id: string;
   chunk_index: number;
 };
+
+// Helper function to get color for entity type
+function getColorForType(type: string): string {
+  const colors: Record<string, string> = {
+    methodology: "#3b82f6", // blue
+    framework: "#8b5cf6", // purple
+    tool: "#10b981", // green
+    concept: "#f59e0b", // amber
+    organization: "#ef4444", // red
+    person: "#ec4899", // pink
+    program: "#06b6d4", // cyan
+    project: "#84cc16", // lime
+  };
+  return colors[type.toLowerCase()] || "#6b7280"; // gray as default
+}
 
 export function EntityDetailsClient({
   entity: initialEntity,
@@ -412,16 +426,6 @@ export function EntityDetailsClient({
             </CardContent>
           </Card>
 
-          {/* Graph Visualization */}
-          {(outgoingRelationships.length > 0 || incomingRelationships.length > 0) && (
-            <EntityGraphView
-              entity={entity}
-              outgoingRelationships={outgoingRelationships}
-              incomingRelationships={incomingRelationships}
-              allEntities={allEntities}
-            />
-          )}
-
           {/* Relationships */}
           <Card>
             <CardHeader>
@@ -437,8 +441,173 @@ export function EntityDetailsClient({
                     <ArrowRight className="h-4 w-4" />
                     Outgoing ({outgoingRelationships.length})
                   </Label>
-                  <div className="mt-2 space-y-2">
+                  <div className="mt-3 space-y-3">
                     {outgoingRelationships.map((rel) => (
+                      <div key={rel.id} className="space-y-2">
+                        {editingRelationshipId === rel.id ? (
+                          <div className="flex flex-col gap-3 p-3 border rounded bg-muted/30">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* Source Entity Chip */}
+                              <Badge 
+                                variant="outline" 
+                                className="text-sm px-3 py-1 cursor-pointer hover:bg-muted"
+                                style={{ 
+                                  borderColor: getColorForType(entity.type),
+                                  color: getColorForType(entity.type)
+                                }}
+                              >
+                                {entity.name}
+                              </Badge>
+
+                              {/* Relationship Type Chip */}
+                              <Select value={editRelType} onValueChange={setEditRelType}>
+                                <SelectTrigger className="w-auto h-auto px-3 py-1 text-sm border-dashed">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {relationshipTypes.map((type) => (
+                                    <SelectItem key={type} value={type}>
+                                      {type}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+
+                              {/* Target Entity Chip */}
+                              <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                                <PopoverTrigger asChild>
+                                  <Badge 
+                                    variant="outline" 
+                                    className="text-sm px-3 py-1 cursor-pointer hover:bg-muted border-dashed"
+                                    style={{ 
+                                      borderColor: rel.target ? getColorForType(rel.target.type) : undefined,
+                                      color: rel.target ? getColorForType(rel.target.type) : undefined
+                                    }}
+                                  >
+                                    {editTargetEntityId
+                                      ? allEntities.find((e) => e.id === editTargetEntityId)?.name
+                                      : "Select entity..."}
+                                    <ChevronsUpDown className="ml-2 h-3 w-3" />
+                                  </Badge>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[300px] p-0">
+                                  <Command>
+                                    <CommandInput placeholder="Search entities..." />
+                                    <CommandList>
+                                      <CommandEmpty>No entity found.</CommandEmpty>
+                                      <CommandGroup>
+                                        {allEntities.map((e) => (
+                                          <CommandItem
+                                            key={e.id}
+                                            value={e.name}
+                                            onSelect={() => {
+                                              setEditTargetEntityId(e.id);
+                                              setOpenCombobox(false);
+                                            }}
+                                          >
+                                            <Check
+                                              className={cn(
+                                                "mr-2 h-4 w-4",
+                                                editTargetEntityId === e.id ? "opacity-100" : "opacity-0"
+                                              )}
+                                            />
+                                            <div className="flex flex-col">
+                                              <span>{e.name}</span>
+                                              <span className="text-xs text-muted-foreground">{e.type}</span>
+                                            </div>
+                                          </CommandItem>
+                                        ))}
+                                      </CommandGroup>
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleSaveRelationship(rel.id, true)}
+                              >
+                                <Save className="h-3 w-3 mr-1" />
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleCancelEditRelationship}
+                              >
+                                <X className="h-3 w-3 mr-1" />
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 flex-wrap group">
+                            {/* Sentence: [Entity] [relationship] [Entity] */}
+                            <Badge 
+                              variant="outline" 
+                              className="text-sm px-3 py-1"
+                              style={{ 
+                                borderColor: getColorForType(entity.type),
+                                color: getColorForType(entity.type)
+                              }}
+                            >
+                              {entity.name}
+                            </Badge>
+                            <Badge variant="secondary" className="text-sm px-3 py-1">
+                              {rel.relationship_type}
+                            </Badge>
+                            <Badge 
+                              variant="outline" 
+                              className="text-sm px-3 py-1 cursor-pointer hover:underline"
+                              style={{ 
+                                borderColor: rel.target ? getColorForType(rel.target.type) : undefined,
+                                color: rel.target ? getColorForType(rel.target.type) : undefined
+                              }}
+                              onClick={() => rel.target && router.push(`/graph/${rel.target.id}`)}
+                            >
+                              {rel.target?.name}
+                            </Badge>
+
+                            {/* Edit/Delete buttons */}
+                            <div className="ml-auto opacity-0 group-hover:opacity-100 flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleEditRelationship(rel, true)}
+                                className="h-6 w-6 p-0"
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteRelationship(rel.id, rel.relationship_type, rel.target?.name || '')}
+                                className="h-6 w-6 p-0 text-destructive"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                        {rel.description && editingRelationshipId !== rel.id && (
+                          <p className="text-xs text-muted-foreground ml-2">{rel.description}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {incomingRelationships.length > 0 && (
+                <div>
+                  <Label className="text-muted-foreground flex items-center gap-2">
+                    <ArrowLeft className="h-4 w-4" />
+                    Incoming ({incomingRelationships.length})
+                  </Label>
+                  <div className="mt-3 space-y-3">
+                    {incomingRelationships.map((rel) => (
                       <div key={rel.id} className="space-y-2">
                         {editingRelationshipId === rel.id ? (
                           <div className="flex flex-col gap-3 p-3 border rounded bg-muted/30">

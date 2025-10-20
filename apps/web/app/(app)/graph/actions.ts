@@ -20,6 +20,22 @@ export type Entity = {
   relationship_count?: number;
 };
 
+export type Relationship = {
+  id: string;
+  user_id: string;
+  source_entity_id: string;
+  target_entity_id: string;
+  relationship_type: string;
+  description: string | null;
+  document_ids: string[];
+  chunk_ids: string[];
+  extraction_confidence: number | null;
+  created_at: string;
+  updated_at: string;
+  source?: Entity;
+  target?: Entity;
+};
+
 export async function getEntities() {
   const supabase = await createClient();
 
@@ -294,4 +310,231 @@ export async function mergeEntities(
   revalidatePath("/graph");
 
   return { success: true, primaryEntityId };
+}
+
+// ============================================================================
+// Relationship Management Actions
+// ============================================================================
+
+export async function getRelationships(filters?: {
+  entityId?: string;
+  relationshipType?: string;
+  searchQuery?: string;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  let query = supabase
+    .from("relationships")
+    .select(`
+      *,
+      source:entities!relationships_source_entity_id_fkey(id, name, type),
+      target:entities!relationships_target_entity_id_fkey(id, name, type)
+    `)
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  // Filter by entity (either source or target)
+  if (filters?.entityId) {
+    query = query.or(`source_entity_id.eq.${filters.entityId},target_entity_id.eq.${filters.entityId}`);
+  }
+
+  // Filter by relationship type
+  if (filters?.relationshipType) {
+    query = query.eq("relationship_type", filters.relationshipType);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Error fetching relationships:", error);
+    return { error: error.message };
+  }
+
+  // Client-side search filtering if needed
+  let relationships = data as Relationship[];
+  if (filters?.searchQuery) {
+    const search = filters.searchQuery.toLowerCase();
+    relationships = relationships.filter(
+      (rel) =>
+        rel.relationship_type.toLowerCase().includes(search) ||
+        rel.description?.toLowerCase().includes(search) ||
+        rel.source?.name.toLowerCase().includes(search) ||
+        rel.target?.name.toLowerCase().includes(search)
+    );
+  }
+
+  return { relationships };
+}
+
+export async function updateRelationship(
+  relationshipId: string,
+  updates: {
+    relationship_type?: string;
+    description?: string | null;
+  }
+) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  // Get the relationship to verify ownership
+  const { data: relationship, error: fetchError } = await supabase
+    .from("relationships")
+    .select("user_id")
+    .eq("id", relationshipId)
+    .single();
+
+  if (fetchError || !relationship) {
+    return { error: "Relationship not found" };
+  }
+
+  // Verify ownership
+  if (relationship.user_id !== user.id) {
+    return { error: "Unauthorized" };
+  }
+
+  // Update the relationship
+  const updateData: Record<string, unknown> = { ...updates };
+  updateData.updated_at = new Date().toISOString();
+
+  const { error: updateError } = await supabase
+    .from("relationships")
+    .update(updateData)
+    .eq("id", relationshipId);
+
+  if (updateError) {
+    console.error("Update error:", updateError);
+    return { error: `Failed to update relationship: ${updateError.message}` };
+  }
+
+  revalidatePath("/graph");
+
+  return { success: true };
+}
+
+export async function deleteRelationship(relationshipId: string) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  // Get the relationship to verify ownership
+  const { data: relationship, error: fetchError } = await supabase
+    .from("relationships")
+    .select("user_id")
+    .eq("id", relationshipId)
+    .single();
+
+  if (fetchError || !relationship) {
+    return { error: "Relationship not found" };
+  }
+
+  // Verify ownership
+  if (relationship.user_id !== user.id) {
+    return { error: "Unauthorized" };
+  }
+
+  // Delete the relationship
+  const { error: deleteError } = await supabase
+    .from("relationships")
+    .delete()
+    .eq("id", relationshipId);
+
+  if (deleteError) {
+    console.error("Delete error:", deleteError);
+    return { error: `Failed to delete relationship: ${deleteError.message}` };
+  }
+
+  revalidatePath("/graph");
+
+  return { success: true };
+}
+
+export async function createRelationship(data: {
+  source_entity_id: string;
+  target_entity_id: string;
+  relationship_type: string;
+  description?: string | null;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  // Verify both entities exist and belong to user
+  const { data: entities, error: entitiesError } = await supabase
+    .from("entities")
+    .select("id, user_id")
+    .in("id", [data.source_entity_id, data.target_entity_id])
+    .eq("user_id", user.id);
+
+  if (entitiesError || !entities || entities.length !== 2) {
+    return { error: "One or both entities not found" };
+  }
+
+  // Check if relationship already exists
+  const { data: existing } = await supabase
+    .from("relationships")
+    .select("id")
+    .eq("source_entity_id", data.source_entity_id)
+    .eq("target_entity_id", data.target_entity_id)
+    .eq("relationship_type", data.relationship_type)
+    .maybeSingle();
+
+  if (existing) {
+    return { error: "This relationship already exists" };
+  }
+
+  // Create the relationship
+  const { data: newRelationship, error: createError } = await supabase
+    .from("relationships")
+    .insert({
+      user_id: user.id,
+      source_entity_id: data.source_entity_id,
+      target_entity_id: data.target_entity_id,
+      relationship_type: data.relationship_type,
+      description: data.description || null,
+      document_ids: [],
+      chunk_ids: [],
+      extraction_confidence: null, // Manual relationships have no confidence
+    })
+    .select()
+    .single();
+
+  if (createError) {
+    console.error("Create error:", createError);
+    return { error: `Failed to create relationship: ${createError.message}` };
+  }
+
+  revalidatePath("/graph");
+
+  return { success: true, relationship: newRelationship };
 }

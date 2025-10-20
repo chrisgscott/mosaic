@@ -549,12 +549,12 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
   - Filter by confidence → bulk delete low-quality
   - Search pattern → review and clean up
 
-#### Phase 3: Relationship Management (1-2 days)
-- [ ] View all relationships with filtering
-- [ ] Edit relationship types and descriptions
-- [ ] Delete incorrect relationships
-- [ ] Add manual relationships
-- [ ] Relationship quality indicators
+#### Phase 3: Relationship Management ✅ COMPLETE (1-2 days)
+- [x] View all relationships with filtering
+- [x] Edit relationship types and descriptions
+- [x] Delete incorrect relationships
+- [x] Add manual relationships (API ready, UI pending)
+- [x] Relationship quality indicators
 
 #### Type Management
 - [ ] Create type management interface
@@ -565,13 +565,14 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - [ ] Audit trail for type changes
 
 #### API Endpoints
-- [ ] `GET /api/graph/entities` - List entities with filters
-- [ ] `PATCH /api/graph/entities/:id` - Update entity
-- [ ] `DELETE /api/graph/entities/:id` - Delete entity
-- [ ] `POST /api/graph/entities/merge` - Merge entities
-- [ ] `GET /api/graph/relationships` - List relationships
-- [ ] `PATCH /api/graph/relationships/:id` - Update relationship
-- [ ] `DELETE /api/graph/relationships/:id` - Delete relationship
+- [x] `GET /api/graph/entities` - List entities with filters (Server Action)
+- [x] `PATCH /api/graph/entities/:id` - Update entity (Server Action)
+- [x] `DELETE /api/graph/entities/:id` - Delete entity (Server Action)
+- [x] `POST /api/graph/entities/merge` - Merge entities (Server Action)
+- [x] `GET /api/graph/relationships` - List relationships (Server Action)
+- [x] `PATCH /api/graph/relationships/:id` - Update relationship (Server Action)
+- [x] `DELETE /api/graph/relationships/:id` - Delete relationship (Server Action)
+- [x] `POST /api/graph/relationships` - Create relationship (Server Action)
 - [ ] `GET /api/graph/types` - Get available types
 - [ ] `POST /api/graph/types` - Add custom type
 

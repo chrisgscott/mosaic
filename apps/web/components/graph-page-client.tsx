@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { EntityList } from "./entity-list";
 import { Button } from "./ui/button";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Network } from "lucide-react";
 import type { Entity } from "@/app/(app)/graph/actions";
 
 export function GraphPageClient({
@@ -19,8 +19,16 @@ export function GraphPageClient({
 
   return (
     <div className="space-y-4">
-      {/* Clean Up Button */}
-      <div className="flex justify-end">
+      {/* Action Buttons */}
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="outline"
+          onClick={() => router.push("/graph/relationships")}
+          className="gap-2"
+        >
+          <Network className="h-4 w-4" />
+          View Relationships
+        </Button>
         <Button
           variant="outline"
           onClick={() => router.push("/graph/cleanup")}

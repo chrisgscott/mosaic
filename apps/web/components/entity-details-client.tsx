@@ -17,7 +17,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { deleteEntity, updateEntity, type Entity } from "@/app/(app)/graph/actions";
+import { 
+  deleteEntity, 
+  updateEntity, 
+  deleteRelationship,
+  updateRelationship,
+  type Entity 
+} from "@/app/(app)/graph/actions";
 
 type Relationship = {
   id: string;
@@ -60,6 +66,9 @@ export function EntityDetailsClient({
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [editingRelationshipId, setEditingRelationshipId] = useState<string | null>(null);
+  const [editRelType, setEditRelType] = useState("");
+  const [editRelDesc, setEditRelDesc] = useState("");
 
   // Edit form state
   const [editName, setEditName] = useState(entity.name);
@@ -146,6 +155,52 @@ export function EntityDetailsClient({
     if (confidence >= 0.85 && docCount > 1) return "text-green-600";
     if (confidence >= 0.7 || docCount === 1) return "text-yellow-600";
     return "text-red-600";
+  };
+
+  const handleEditRelationship = (rel: Relationship) => {
+    setEditingRelationshipId(rel.id);
+    setEditRelType(rel.relationship_type);
+    setEditRelDesc(rel.description || "");
+  };
+
+  const handleSaveRelationship = async (relationshipId: string) => {
+    const result = await updateRelationship(relationshipId, {
+      relationship_type: editRelType,
+      description: editRelDesc || null,
+    });
+
+    if (result.error) {
+      toast.error("Failed to update relationship");
+      return;
+    }
+
+    toast.success("Relationship updated");
+    setEditingRelationshipId(null);
+    router.refresh();
+  };
+
+  const handleCancelEditRelationship = () => {
+    setEditingRelationshipId(null);
+    setEditRelType("");
+    setEditRelDesc("");
+  };
+
+  const handleDeleteRelationship = async (relationshipId: string, relType: string, targetName: string) => {
+    const confirmed = window.confirm(
+      `Delete relationship "${relType}" to "${targetName}"?`
+    );
+
+    if (!confirmed) return;
+
+    const result = await deleteRelationship(relationshipId);
+
+    if (result.error) {
+      toast.error("Failed to delete relationship");
+      return;
+    }
+
+    toast.success("Relationship deleted");
+    router.refresh();
   };
 
   return (
@@ -312,17 +367,74 @@ export function EntityDetailsClient({
                   </Label>
                   <div className="mt-2 space-y-2">
                     {outgoingRelationships.map((rel) => (
-                      <div key={rel.id} className="flex items-center gap-2 text-sm">
-                        <Badge variant="secondary" className="text-xs">
-                          {rel.relationship_type}
-                        </Badge>
-                        <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                        <button
-                          onClick={() => router.push(`/graph/${rel.target?.id}`)}
-                          className="hover:underline"
-                        >
-                          {rel.target?.name}
-                        </button>
+                      <div key={rel.id} className="space-y-2">
+                        {editingRelationshipId === rel.id ? (
+                          <div className="flex flex-col gap-2 p-2 border rounded">
+                            <Input
+                              value={editRelType}
+                              onChange={(e) => setEditRelType(e.target.value)}
+                              placeholder="Relationship type"
+                              className="text-sm"
+                            />
+                            <Input
+                              value={editRelDesc}
+                              onChange={(e) => setEditRelDesc(e.target.value)}
+                              placeholder="Description (optional)"
+                              className="text-sm"
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleSaveRelationship(rel.id)}
+                              >
+                                <Save className="h-3 w-3 mr-1" />
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleCancelEditRelationship}
+                              >
+                                <X className="h-3 w-3 mr-1" />
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-sm group">
+                            <Badge variant="secondary" className="text-xs">
+                              {rel.relationship_type}
+                            </Badge>
+                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                            <button
+                              onClick={() => router.push(`/graph/${rel.target?.id}`)}
+                              className="hover:underline"
+                            >
+                              {rel.target?.name}
+                            </button>
+                            <div className="ml-auto opacity-0 group-hover:opacity-100 flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleEditRelationship(rel)}
+                                className="h-6 w-6 p-0"
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteRelationship(rel.id, rel.relationship_type, rel.target?.name || '')}
+                                className="h-6 w-6 p-0 text-destructive"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                        {rel.description && editingRelationshipId !== rel.id && (
+                          <p className="text-xs text-muted-foreground ml-6">{rel.description}</p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -336,17 +448,74 @@ export function EntityDetailsClient({
                   </Label>
                   <div className="mt-2 space-y-2">
                     {incomingRelationships.map((rel) => (
-                      <div key={rel.id} className="flex items-center gap-2 text-sm">
-                        <button
-                          onClick={() => router.push(`/graph/${rel.source?.id}`)}
-                          className="hover:underline"
-                        >
-                          {rel.source?.name}
-                        </button>
-                        <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                        <Badge variant="secondary" className="text-xs">
-                          {rel.relationship_type}
-                        </Badge>
+                      <div key={rel.id} className="space-y-2">
+                        {editingRelationshipId === rel.id ? (
+                          <div className="flex flex-col gap-2 p-2 border rounded">
+                            <Input
+                              value={editRelType}
+                              onChange={(e) => setEditRelType(e.target.value)}
+                              placeholder="Relationship type"
+                              className="text-sm"
+                            />
+                            <Input
+                              value={editRelDesc}
+                              onChange={(e) => setEditRelDesc(e.target.value)}
+                              placeholder="Description (optional)"
+                              className="text-sm"
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleSaveRelationship(rel.id)}
+                              >
+                                <Save className="h-3 w-3 mr-1" />
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleCancelEditRelationship}
+                              >
+                                <X className="h-3 w-3 mr-1" />
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-sm group">
+                            <button
+                              onClick={() => router.push(`/graph/${rel.source?.id}`)}
+                              className="hover:underline"
+                            >
+                              {rel.source?.name}
+                            </button>
+                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                            <Badge variant="secondary" className="text-xs">
+                              {rel.relationship_type}
+                            </Badge>
+                            <div className="ml-auto opacity-0 group-hover:opacity-100 flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleEditRelationship(rel)}
+                                className="h-6 w-6 p-0"
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteRelationship(rel.id, rel.relationship_type, rel.source?.name || '')}
+                                className="h-6 w-6 p-0 text-destructive"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                        {rel.description && editingRelationshipId !== rel.id && (
+                          <p className="text-xs text-muted-foreground ml-6">{rel.description}</p>
+                        )}
                       </div>
                     ))}
                   </div>

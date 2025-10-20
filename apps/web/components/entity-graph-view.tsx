@@ -46,7 +46,7 @@ export function EntityGraphView({
       id: entity.id,
       name: entity.name,
       type: entity.type,
-      val: 15, // Larger size for center node
+      val: 20, // Larger size for center node
       color: getColorForType(entity.type),
       isCurrent: true,
     });
@@ -61,7 +61,7 @@ export function EntityGraphView({
           id: rel.target.id,
           name: rel.target.name,
           type: rel.target.type,
-          val: 8,
+          val: 12, // Increased from 8
           color: getColorForType(rel.target.type),
         });
         addedEntityIds.add(rel.target.id);
@@ -84,7 +84,7 @@ export function EntityGraphView({
           id: rel.source.id,
           name: rel.source.name,
           type: rel.source.type,
-          val: 8,
+          val: 12, // Increased from 8
           color: getColorForType(rel.source.type),
         });
         addedEntityIds.add(rel.source.id);
@@ -124,60 +124,72 @@ export function EntityGraphView({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="relative w-full h-[500px] bg-muted/20 rounded-lg overflow-hidden">
+        <div className="relative w-full h-[600px] bg-muted/20 rounded-lg overflow-hidden">
           <ForceGraph2D
             graphData={graphData}
-            nodeLabel="name"
+            nodeLabel={(node: any) => `${node.name} (${node.type})`}
             nodeAutoColorBy="type"
             linkLabel="label"
-            linkDirectionalArrowLength={6}
-            linkDirectionalArrowRelPos={1}
-            linkCurvature={0.2}
-            nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-              const label = node.name;
-              const fontSize = node.isCurrent ? 14 : 12;
-              ctx.font = `${fontSize}px Sans-Serif`;
-              const textWidth = ctx.measureText(label).width;
-              const bckgDimensions = [textWidth + 8, fontSize + 4];
-
+            linkDirectionalArrowLength={8}
+            linkDirectionalArrowRelPos={0.9}
+            linkCurvature={0.25}
+            linkWidth={2}
+            nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D) => {
               // Draw node circle with glow for current entity
               ctx.beginPath();
               ctx.arc(node.x, node.y, node.val, 0, 2 * Math.PI, false);
               ctx.fillStyle = node.color;
               
               if (node.isCurrent) {
-                ctx.shadowBlur = 15;
+                ctx.shadowBlur = 20;
                 ctx.shadowColor = node.color;
               }
               
               ctx.fill();
               ctx.shadowBlur = 0;
 
-              // Draw label background
-              ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
-              ctx.fillRect(
-                node.x - bckgDimensions[0] / 2,
-                node.y - bckgDimensions[1] / 2 + node.val + 5,
-                bckgDimensions[0],
-                bckgDimensions[1]
-              );
+              // Add white border for better visibility
+              ctx.strokeStyle = "#fff";
+              ctx.lineWidth = 2;
+              ctx.stroke();
 
-              // Draw label text
-              ctx.textAlign = "center";
-              ctx.textBaseline = "middle";
-              ctx.fillStyle = "#fff";
-              ctx.fillText(label, node.x, node.y + node.val + 5 + fontSize / 2);
+              // Only draw label for current entity or on hover
+              if (node.isCurrent) {
+                const label = node.name;
+                const fontSize = 14;
+                ctx.font = `bold ${fontSize}px Sans-Serif`;
+                const textWidth = ctx.measureText(label).width;
+                const bckgDimensions = [textWidth + 12, fontSize + 6];
+
+                // Draw label background with better contrast
+                ctx.fillStyle = "rgba(0, 0, 0, 0.9)";
+                ctx.fillRect(
+                  node.x - bckgDimensions[0] / 2,
+                  node.y - node.val - bckgDimensions[1] - 8,
+                  bckgDimensions[0],
+                  bckgDimensions[1]
+                );
+
+                // Draw label text above the node
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillStyle = "#fff";
+                ctx.fillText(label, node.x, node.y - node.val - 8 - fontSize / 2 + 3);
+              }
             }}
-            linkDirectionalParticles={2}
-            linkDirectionalParticleWidth={2}
-            linkDirectionalParticleSpeed={0.005}
+            linkDirectionalParticles={3}
+            linkDirectionalParticleWidth={3}
+            linkDirectionalParticleSpeed={0.006}
             onNodeClick={(node: any) => {
               if (node.id !== entity.id) {
                 router.push(`/graph/${node.id}`);
               }
             }}
-            cooldownTicks={100}
-            d3VelocityDecay={0.3}
+            // Improved physics for better spacing
+            d3AlphaDecay={0.01}
+            d3VelocityDecay={0.15}
+            cooldownTicks={300}
+            warmupTicks={50}
           />
         </div>
         <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">

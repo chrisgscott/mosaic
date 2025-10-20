@@ -550,16 +550,16 @@ export function EntityDetailsClient({
                           </div>
                         ) : (
                           <div className="flex items-center gap-2 text-sm group">
-                            <Badge variant="secondary" className="text-xs">
-                              {rel.relationship_type}
-                            </Badge>
-                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
                             <button
                               onClick={() => router.push(`/graph/${rel.target?.id}`)}
                               className="hover:underline"
                             >
                               {rel.target?.name}
                             </button>
+                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                            <Badge variant="secondary" className="text-xs">
+                              {rel.relationship_type}
+                            </Badge>
                             <div className="ml-auto opacity-0 group-hover:opacity-100 flex gap-1">
                               <Button
                                 size="sm"
@@ -703,16 +703,16 @@ export function EntityDetailsClient({
                           </div>
                         ) : (
                           <div className="flex items-center gap-2 text-sm group">
+                            <Badge variant="secondary" className="text-xs">
+                              {rel.relationship_type}
+                            </Badge>
+                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
                             <button
                               onClick={() => router.push(`/graph/${rel.source?.id}`)}
                               className="hover:underline"
                             >
                               {rel.source?.name}
                             </button>
-                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                            <Badge variant="secondary" className="text-xs">
-                              {rel.relationship_type}
-                            </Badge>
                             <div className="ml-auto opacity-0 group-hover:opacity-100 flex gap-1">
                               <Button
                                 size="sm"

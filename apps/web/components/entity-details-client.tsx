@@ -39,6 +39,7 @@ import {
   getEntities,
   type Entity 
 } from "@/app/(app)/graph/actions";
+import { EntityGraphView } from "./entity-graph-view";
 
 type Relationship = {
   id: string;
@@ -410,6 +411,16 @@ export function EntityDetailsClient({
               </div>
             </CardContent>
           </Card>
+
+          {/* Graph Visualization */}
+          {(outgoingRelationships.length > 0 || incomingRelationships.length > 0) && (
+            <EntityGraphView
+              entity={entity}
+              outgoingRelationships={outgoingRelationships}
+              incomingRelationships={incomingRelationships}
+              allEntities={allEntities}
+            />
+          )}
 
           {/* Relationships */}
           <Card>

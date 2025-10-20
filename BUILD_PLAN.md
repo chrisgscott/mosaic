@@ -1,7 +1,7 @@
 # Mosaic RAG Platform - Build Plan
 
-**Last Updated:** October 16, 2025  
-**Status:** Phase 1-4 Complete + Phase 7.1-7.4 Complete - **Production-ready end-to-end pipeline: Upload → Processing → Embeddings → Search working across all document types (PDF, PPTX, TXT, CSV, MD)**
+**Last Updated:** October 19, 2025  
+**Status:** Phases 1-5 Core Complete + Phase 7.1-7.4 Complete + Phase 8 Complete - **Production-ready end-to-end pipeline: Upload → Processing → Embeddings → Graph RAG → Search working across all document types (PDF, PPTX, TXT, CSV, MD)**
 
 ---
 
@@ -46,85 +46,14 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 ---
 
 ## Phase 1: Core Upload Infrastructure ✅ COMPLETE
-
-### Goals
-- Enable users to upload documents
-- Store files securely in Supabase Storage
-- Track document metadata in database
-- Implement background processing queue
-
-### Completed Tasks
-
-#### ✅ Document Upload System
-- [x] Direct client-side uploads to Supabase Storage (bypasses Next.js)
-- [x] Support for PDF, TXT, MD, DOC, DOCX formats
-- [x] File size validation (50MB limit for free tier)
-- [x] File type validation
-- [x] Progress bar UI with simulated progress
-- [x] Session refresh for long uploads
-- [x] Resumable uploads for files > 6MB
-
-#### ✅ Database Schema
-- [x] `documents` table with RLS policies
-- [x] User-isolated storage (files stored in `user_id/` folders)
-- [x] Status tracking: `uploaded`, `processing`, `ready`, `error`
-- [x] Metadata: file name, size, type, timestamps
-
-#### ✅ Background Processing Queue
-- [x] Enabled `pgmq` extension (Postgres Message Queue)
-- [x] Created `document_processing` queue
-- [x] Automatic job creation after upload
-- [x] Edge Function worker to process jobs
-- [x] Cron job (runs every minute) to trigger worker
-- [x] Status updates: `uploaded` → `processing` → `ready`
-
-### Files Created/Modified
-- `apps/web/app/(app)/documents/page.tsx` - Documents management page
-- `apps/web/app/(app)/documents/actions.ts` - Server actions for CRUD + queue
-- `apps/web/components/document-upload.tsx` - Upload dialog with progress
-- `apps/web/components/document-list.tsx` - Document table with actions
-- `supabase/migrations/20241014_create_documents_table.sql` - DB schema
-- `supabase/functions/process-documents/index.ts` - Background worker
-
-### Technical Decisions
-- **Direct uploads**: Bypasses Next.js server for better performance and no size limits
-- **pgmq over external queue**: Postgres-native, simpler, no extra services
-- **Edge Functions**: Serverless processing, scales automatically
-- **Free tier limits**: 50MB per file, 1GB total storage (upgrade to Pro for 5GB files)
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+Document upload, storage, background processing queue with pgmq
 
 ---
 
 ## Phase 2: Real-Time Status Updates & UX Improvements ✅ COMPLETE
-
-### Goals
-- Users see document status changes without refreshing
-- Live updates as documents move through processing pipeline
-- Better UX with instant feedback
-- Support multiple file uploads
-
-### Completed Tasks
-
-#### ✅ Supabase Realtime Integration
-- [x] Subscribe to `documents` table changes
-- [x] Update UI when status changes (INSERT, UPDATE, DELETE)
-- [x] Show processing progress indicators with animated spinners
-- [x] Handle connection states
-
-#### ✅ UI Enhancements
-- [x] Add status badges with animations (Uploading, Processing, Ready)
-- [x] Show "Processing..." spinner for active documents
-- [x] Toast notifications for status changes (upload start, complete, ready)
-- [x] Optimistic updates for instant feedback
-- [x] Non-blocking upload (modal closes immediately)
-- [x] Multiple file selection and parallel uploads
-- [x] Shared state management via DocumentsPageClient wrapper
-
-### Key Features Implemented
-- **Optimistic UI**: Files appear in table instantly with "Uploading" status
-- **Real-time updates**: Status changes reflected immediately via Supabase Realtime
-- **Multiple uploads**: Select and upload multiple files simultaneously
-- **Toast notifications**: Clear feedback at each stage
-- **Non-blocking**: Users can continue working while uploads happen
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+Supabase Realtime integration, optimistic UI, multiple file uploads
 
 ### Phase 2 Improvements (Future Enhancement)
 
@@ -172,182 +101,17 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 - Database migration for status enum
 - `apps/backend/ingest/main.py` - Update status at each stage
 - Frontend status components
-
-**Priority:** Low - Nice to have but not critical
-
 ---
 
 ## Phase 3: Document Processing Pipeline ✅ COMPLETE
-
-### Goals
-- Extract text from various document formats
-- Implement intelligent chunking strategies
-- Store chunks with metadata for retrieval
-
-### Completed Tasks
-
-#### 📄 Text Extraction
-- [x] Integrate Unstructured.io OSS (legacy)
-- [x] Integrate Docling with VLM support (primary processor)
-- [x] Support PDF text extraction with parallel page processing
-- [x] Support DOCX text extraction
-- [x] Support TXT/MD direct reading
-- [x] Preserve document structure (headers, sections)
-- [x] Extract tables and maintain formatting
-- [x] Handle multi-column layouts
-- [x] Create Python background worker service
-- [x] Deploy to Render.com with Docker
-- [x] Test with real documents (200+ page PDFs)
-- [x] Implement API VLM (GPT-4o-mini) for fast processing
-- [x] Implement local VLM (GraniteDocling) for privacy-first processing
-
-#### ✂️ Text Chunking
-- [x] Implement markdown-based chunking strategy
-- [x] Respect section boundaries (never split titles)
-- [x] Configurable chunk size (1200 char soft max, 2000 char hard max)
-- [x] Configurable overlap (100 characters)
-- [x] Token counting with tiktoken
-- [x] Extract comprehensive metadata:
-  - Page numbers for citations
-  - Element types (Title, NarrativeText, Table, etc.)
-  - Table HTML for structured data
-  - PDF coordinates for deep linking
-  - File metadata (source, last modified)
-  - Links from HTML/web documents
-- [x] Parallel page processing (10 workers default, configurable)
-
-#### 🗄️ Chunks Database
-- [x] Create `chunks` table migration
-  - `id`, `document_id`, `user_id`
-  - `content`, `chunk_index`, `token_count`
-  - `metadata` (JSONB: page, section, etc.)
-  - `created_at`
-- [x] Add RLS policies for user isolation
-- [x] Create indexes for efficient querying
-- [x] Apply migration to Supabase
-- [x] Verify chunks are being stored (tested with 1972+ chunk documents)
-
-### Technical Decisions
-
-#### Text Extraction Strategy: VLM-First Approach
-- **Primary Processor: Docling with VLM**
-  - Why: 20-40x faster than OCR for table-heavy documents (3-7 min vs 2-4 hours for 200 pages)
-  - Features: Vision Language Model, parallel page processing, superior table extraction
-  - Options:
-    - **API VLM (GPT-4o-mini)**: Fastest, ~$0.005/document, recommended for production
-    - **Local VLM (GraniteDocling)**: Privacy-first, free, slower but still faster than OCR
-  - Best for: All document types, especially PDFs with tables, charts, complex layouts
-  
-- **Legacy Processor: Unstructured.io OSS**
-  - Why: Kept as fallback option, traditional OCR approach
-  - Use when: Docling unavailable or specific edge cases
-  - Features: OCR, table extraction, layout detection, spreadsheet handling
-  - Note: Significantly slower, higher temp disk usage
-  
-- **Future Enhancement: Multimodal LLM (GPT-4V/Claude 3 Vision)**
-  - Why: Extract from complex diagrams, images, or layouts that parsers fail on
-  - Use when: Docling fails on specific pages/documents
-  - Note: Most expensive option, use sparingly
-
-#### Service Architecture
-- **Background Worker**: Python service deployed on Render.com (2GB RAM, $25/mo Standard plan)
-  - **Environment**: Docker (for system package support)
-  - **System Dependencies**: Minimal (Docling handles most internally)
-  - **Retry Logic**: Max 3 attempts with exponential backoff
-  - **Error Tracking**: Stores error messages, retry counts, timestamps in database
-  - **Parallel Processing**: 10 concurrent page workers (configurable via DOCLING_MAX_WORKERS)
-- **Queue**: pgmq (Postgres-based message queue)
-- **Processing Flow**:
-  1. Server action adds job to pgmq queue
-  2. Python worker polls queue every 5 seconds
-  3. Downloads file from Supabase Storage
-  4. Splits PDF into individual pages (for parallel processing)
-  5. Processes pages in parallel with Docling VLM (10 workers)
-  6. Combines page results into full markdown
-  7. Chunks markdown with MarkdownChunker
-  8. Extracts comprehensive metadata (pages, coordinates, tables, links)
-  9. Stores chunks in Postgres
-  10. Updates document status
-  11. Real-time UI update via Supabase Realtime
-  12. Orphaned job cleanup (deletes jobs for deleted documents)
-
-#### Other Decisions
-- **Chunking strategy**: Markdown-based with heading preservation (respects section boundaries)
-- **Chunk size**: 1200 char soft max, 2000 char hard max (balance context and precision)
-- **Overlap**: 100 characters between chunks
-- **Deployment**: Render.com Background Worker with 2GB RAM, Docker container
-- **File types**: PDF (primary), DOC, DOCX, TXT, MD, HTML, XML, CSV, XLSX, PPTX
-- **Processor selection**: Environment variable `USE_DOCLING` (default: true)
-- **VLM mode**: Environment variable `USE_API_VLM` (default: true for speed)
-
-### Phase 3 Improvements (Future Enhancements)
-
-#### 🧠 Intelligent Chunking for Better Graph Extraction (High Priority)
-**Goal**: Improve chunking quality to enhance all downstream results (embeddings, search, graph extraction)
-
-**Problem**: Current fixed-size chunking doesn't preserve semantic boundaries or context, limiting graph extraction quality.
-
-**Proposed Solutions:**
-
-1. **Agentic Chunking**
-   - [ ] Use LLM to determine optimal chunk boundaries based on semantic meaning
-   - [ ] Preserve entity boundaries (don't split entities across chunks)
-   - [ ] Maintain relationship context within chunks
-   - [ ] Implement as optional chunking strategy
-
-2. **Chunk Summaries**
-   - [ ] Generate summaries by comparing each chunk to nearest X neighbors
-   - [ ] Provide better context for entity/relationship extraction
-   - [ ] Improve embedding quality
-   - [ ] Help LLM understand chunk's role in larger document
-   - [ ] Store summaries in `chunks.metadata` JSONB field
-
-**Benefits:**
-- Better entity extraction (entities won't be split across chunks)
-- More accurate relationships (context preserved)
-- Improved search results (better embeddings)
-- Addresses root cause of many RAG quality issues
-
-**Implementation Approach:**
-1. Add new chunking strategy option (markdown, agentic, hybrid)
-2. Implement chunk summary generation as post-processing step
-3. Store summaries in existing metadata field
-4. Use summaries for graph extraction instead of raw content
-5. Measure quality improvement vs cost increase
-
-**Priority:** High - Improves entire pipeline quality
-
----
-
-#### 🔧 OpenAI API Timeout Handling
-- [ ] Increase API timeout from 60s to 120s
-- [ ] Implement retry logic for failed pages (3 attempts with exponential backoff)
-- [ ] Track failed pages in document metadata
-- [ ] Display failed pages in frontend document details
-- [ ] Add "Reprocess Failed Pages" action
-
-**Current Issue:** Occasional OpenAI API timeouts cause individual pages to fail during parallel processing. Failed pages are skipped, rest of document continues.
-
-**Recommended Implementation:**
-1. **Phase 1 (Immediate):** Increase timeout to 120s
-2. **Phase 2 (Next sprint):** Add retry logic with exponential backoff
-3. **Phase 3 (Future):** Track and display failed pages to users
-
-**Priority:** Medium-High - Affects document completeness
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+Docling integration with VLM, parallel page processing, support for all major document types
 
 ---
 
 ## Phase 4: Vector Embeddings & Semantic Search ✅ COMPLETE
-
-### Goals
-- ✅ Generate embeddings for all text chunks
-- ✅ Enable semantic search across documents
-- ✅ Implement efficient vector similarity search
-- Optional: LLM-enhanced chunk summaries for better retrieval (future enhancement)
-
-### Completed Tasks
-
-#### 🧮 Embeddings Generation ✅
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+OpenAI embeddings, pgvector storage, semantic search API
 - [x] Setup pgvector extension
 - [x] Create `embeddings` table with vector(1536) column
 - [x] Integrate OpenAI Embeddings API (text-embedding-3-small)
@@ -403,11 +167,8 @@ Mosaic is a comprehensive RAG (Retrieval-Augmented Generation) platform that com
 ---
 
 ## Phase 5: Graph RAG - Knowledge Extraction ✅ CORE COMPLETE
-
-### Goals
-- ✅ Extract entities and relationships from documents
-- ✅ Build knowledge graph for advanced querying
-- ✅ Enable graph-based retrieval
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+Entity/relationship extraction, graph database, semantic entity search, smart cascade delete
 
 ### Phase 5.1: Core Implementation ✅ COMPLETE
 
@@ -952,6 +713,328 @@ Race condition between:
 
 ---
 
+## Phase 6.5: RAG Answer Generation & Chat Interface
+
+### Overview
+Complete the RAG pipeline by connecting retrieved chunks to an LLM for answer generation. This is the critical missing piece that transforms search results into conversational answers.
+
+### Goals
+- Generate natural language answers from retrieved chunks
+- Provide source attribution for transparency
+- Stream responses for better UX
+- Handle context window limits intelligently
+- Support follow-up questions with conversation history
+
+### Tasks
+
+#### 🤖 LLM Integration
+- [ ] Create answer generation service
+- [ ] Integrate OpenAI API (GPT-4o or GPT-4o-mini)
+- [ ] Implement streaming responses
+- [ ] Add error handling and fallbacks
+- [ ] Configure model settings (temperature, max_tokens)
+- [ ] Add cost tracking and monitoring
+
+#### 📝 Prompt Engineering
+- [ ] Design system prompt for RAG context
+- [ ] Create prompt template with retrieved chunks
+- [ ] Add instructions for source citation
+- [ ] Handle cases with no relevant results
+- [ ] Optimize for accuracy vs conciseness
+- [ ] Test with various query types
+
+#### 💬 Chat Interface
+- [ ] Install shadcn.io AI components (derived from Vercel AI Elements)
+  - Documentation: https://www.shadcn.io/ai
+  - Components: `<Message>`, `<Response>`, `<Tool>`, `<Reasoning>`, `<Sources>`, `<Branch>`, `<Conversation>`
+  - Philosophy: Copy-paste components into codebase for full ownership
+- [ ] Implement chat UI using shadcn.io AI components
+  - `<Conversation>` container for chat interface
+  - `<Message>` for user/assistant messages
+  - `<Response>` for streaming text with markdown rendering
+  - `<Sources>` for source chunk attribution
+- [ ] Display streaming responses with typing indicator
+- [ ] Add "Copy" and "Regenerate" buttons
+- [ ] Implement conversation history
+- [ ] Add "Clear conversation" action
+- [ ] Customize components for Mosaic's specific needs
+
+#### 🔗 Source Attribution
+- [ ] Link each answer claim to source chunks
+- [ ] Display chunk metadata (document, page, confidence)
+- [ ] Enable click-through to full document
+- [ ] Highlight relevant text in source chunks
+- [ ] Show multiple sources when available
+- [ ] Add "View all sources" expansion
+
+#### 🧠 Context Management
+- [ ] Implement context window management (8K-128K tokens)
+- [ ] Prioritize most relevant chunks when over limit
+- [ ] Use chunk summaries for context compression
+- [ ] Add "Load more context" option for complex queries
+- [ ] Track token usage per query
+- [ ] Optimize chunk selection strategy
+
+#### 💾 Conversation History
+- [ ] Store conversation threads in database
+- [ ] Associate conversations with users
+- [ ] Enable conversation search and filtering
+- [ ] Add conversation sharing (optional)
+- [ ] Implement conversation export
+- [ ] Add conversation deletion
+
+#### 📊 Analytics & Monitoring
+- [ ] Track answer quality metrics
+- [ ] Monitor LLM costs per query
+- [ ] Log failed generations
+- [ ] Track average response time
+- [ ] Measure user satisfaction (thumbs up/down)
+- [ ] A/B test different prompts
+
+### Implementation Phases
+
+**Phase 6.5.1: Basic Answer Generation (✅ COMPLETED - Oct 19, 2025)**
+- [x] Install and configure shadcn.io AI components
+- [x] LLM integration with OpenAI (via AI Gateway)
+- [x] Simple prompt template
+- [x] Basic chat UI using AI components
+- [x] Source attribution with `<Sources>` component
+- [x] Streaming responses with markdown rendering
+
+**Phase 6.5.2: Enhanced Context Management (2 days)**
+- [ ] Smart context window management
+- [ ] Chunk prioritization
+- [ ] Context compression with summaries
+- [ ] Multi-turn conversation support
+
+**Phase 6.5.3: Conversation Features (2-3 days)**
+- [ ] Conversation history storage
+- [ ] Thread management UI
+- [ ] Conversation search
+- [ ] Export functionality
+
+**Phase 6.5.4: Polish & Optimization (1-2 days)**
+- [ ] Prompt optimization
+- [ ] Cost optimization
+- [ ] Analytics dashboard
+- [ ] User feedback collection
+
+### Technical Decisions
+
+**LLM Selection:**
+- **GPT-4o-mini**: Fast, cost-effective ($0.15/1M input, $0.60/1M output)
+- **GPT-4o**: Higher quality for complex queries ($2.50/1M input, $10/1M output)
+- **Strategy**: Start with GPT-4o-mini, upgrade to GPT-4o for specific use cases
+
+**Context Strategy:**
+- Retrieve top 10-20 chunks (semantic + graph + keyword)
+- Rerank to top 5-10 most relevant
+- Include chunk summaries for context
+- Total context: ~4K-8K tokens (fits in most models)
+
+**Streaming:**
+- Use OpenAI streaming API
+- Update UI incrementally as tokens arrive
+- Show typing indicator during generation
+- Handle connection errors gracefully
+
+**Source Attribution:**
+- Include chunk IDs in prompt
+- Parse LLM response for citations
+- Link citations to source chunks
+- Display sources below answer
+
+### Cost Estimates
+
+**Per Query (GPT-4o-mini):**
+- Input: ~5K tokens (chunks + prompt) = $0.00075
+- Output: ~500 tokens (answer) = $0.0003
+- **Total: ~$0.001 per query**
+
+**At Scale:**
+- 1,000 queries/day = $1/day = $30/month
+- 10,000 queries/day = $10/day = $300/month
+
+**Optimization Strategies:**
+- Cache common queries
+- Use chunk summaries to reduce input tokens
+- Implement query deduplication
+- Set max_tokens limits
+
+### Files to Create/Modify
+
+**Backend:**
+- `apps/web/lib/llm/answer-generator.ts` - Core answer generation
+- `apps/web/app/api/chat/route.ts` - Chat API endpoint
+- `apps/web/app/api/chat/stream/route.ts` - Streaming endpoint
+
+**Frontend:**
+- `apps/web/components/ai/` - shadcn.io AI components (copy-pasted)
+  - `message.tsx` - Message container component
+  - `response.tsx` - Streaming response component
+  - `sources.tsx` - Source attribution component
+  - `conversation.tsx` - Conversation container
+- `apps/web/app/(app)/chat/page.tsx` - Chat page using AI components
+
+**Database:**
+- `supabase/migrations/YYYYMMDD_create_conversations.sql` - Conversation storage
+- `supabase/migrations/YYYYMMDD_create_messages.sql` - Message storage
+
+### Success Criteria
+
+- [ ] Users can ask questions and get accurate answers
+- [ ] Answers include source citations
+- [ ] Response time < 5 seconds for most queries
+- [ ] Cost per query < $0.002
+- [ ] User satisfaction > 80% (thumbs up)
+- [ ] Answers are grounded in retrieved chunks (no hallucination)
+
+### Priority
+**High** - This is the core RAG functionality. Without it, we're just a search engine, not a RAG system.
+
+**Estimated Effort:** 7-10 days total (1.5-2 weeks)
+
+### Phase 6.5 Enhancements
+
+#### 🎚️ Adaptive Response Depth & Retrieval Matching (Medium-High Priority)
+
+**Goal:** Allow users to control response depth and match retrieval strategy to query complexity for better UX and cost optimization.
+
+**Problem:** Currently all queries use the same retrieval and generation approach regardless of whether the user wants a quick answer or comprehensive analysis. This creates unnecessary cost and latency for simple queries while potentially under-serving complex research needs.
+
+**Solution: User-Controlled Response Depth**
+
+**Quick Mode (30 seconds, ~$0.001)**
+- Retrieval: Top 3-5 chunks, basic semantic search only
+- Generation: Short response (100-200 tokens) with GPT-4o-mini
+- Use case: "What is X?", "When did Y happen?"
+
+**Standard Mode (1-2 minutes, ~$0.005)** - Default
+- Retrieval: Top 10-15 chunks, hybrid search + reranking
+- Generation: Medium response (300-500 tokens) with GPT-4o-mini
+- Use case: Most queries
+
+**Detailed Mode (2-5 minutes, ~$0.02)**
+- Retrieval: Top 20-30 chunks, full hybrid + graph traversal
+- Generation: Long response (800-1200 tokens) with GPT-4o
+- Use case: "Explain the relationship between X and Y"
+
+**Implementation Tasks:**
+- [ ] Add response depth selector to chat UI (toggle or dropdown)
+- [ ] Implement retrieval strategy routing based on depth
+- [ ] Configure model selection per depth level
+- [ ] Add cost/time estimates before query execution
+- [ ] Track usage metrics by depth level
+- [ ] Optimize chunk selection for each depth
+
+**Benefits:**
+- Faster responses for simple queries
+- Cost optimization (match retrieval to need)
+- Better UX (users control depth vs speed tradeoff)
+- Clear cost transparency
+
+**Estimated Effort:** 3-5 days
+
+#### 🌐 Vercel AI Gateway Integration (Medium-High Priority)
+
+**Goal:** Implement Vercel AI Gateway for unified model access, automatic failover, and better cost monitoring.
+
+**Problem:** Currently using direct OpenAI API calls. If OpenAI has an outage, the entire system fails. Managing multiple provider API keys and tracking costs across providers is complex.
+
+**Solution: Vercel AI Gateway**
+
+**Key Benefits:**
+- **Unified API**: Access all models (OpenAI, Anthropic, xAI, Groq, DeepSeek) through single endpoint
+- **Automatic Failover**: Falls back to alternative providers during outages
+- **Cost Monitoring**: Unified billing and spend tracking dashboard
+- **Simplified Keys**: One API key instead of managing multiple provider keys
+- **Easy Model Switching**: Change models without code changes
+
+**Implementation Tasks:**
+- [ ] Sign up for Vercel AI Gateway
+- [ ] Update AI SDK configuration to use gateway endpoint
+- [ ] Configure fallback providers (e.g., GPT-4o → Claude Sonnet 4 → Gemini 2.5 Pro)
+- [ ] Set budget limits and alerts
+- [ ] Update environment variables (single AI_GATEWAY_API_KEY)
+- [ ] Test failover behavior
+- [ ] Update cost tracking to use gateway metrics
+- [ ] Document model selection strategy
+
+**Code Changes Required:**
+```typescript
+// Before:
+import { openai } from '@ai-sdk/openai';
+const model = openai('gpt-4o-mini');
+
+// After (minimal change):
+import { createOpenAI } from '@ai-sdk/openai';
+const gateway = createOpenAI({
+  baseURL: 'https://ai-gateway.vercel.sh/v1',
+  apiKey: process.env.AI_GATEWAY_API_KEY,
+});
+const model = gateway('gpt-4o-mini');
+```
+
+**Fallback Configuration:**
+- Primary: GPT-4o-mini (fast, cost-effective)
+- Fallback 1: Claude 3.7 Sonnet (similar quality)
+- Fallback 2: Gemini 2.5 Flash Lite (backup option)
+
+**Benefits:**
+- Higher uptime and reliability (automatic failover)
+- Better cost visibility (unified dashboard)
+- Easier to experiment with different models
+- Simplified configuration management
+- Production-ready resilience
+
+**Estimated Effort:** 1-2 hours
+
+**Priority:** Medium-High (implement before Phase 6.5 goes to production)
+
+#### 🔬 Deep Research Mode (Medium Priority)
+
+**Goal:** Enable multi-page research documents with CrewAI agents and o4-mini-deep-research for complex analysis.
+
+**Features:**
+
+**Pre-Query Clarification:**
+- Ask clarifying questions upfront
+- "What aspects are most important?"
+- "What's your intended use?"
+- "Any specific time period or context?"
+
+**Multi-Agent Research Crew:**
+- **Research Agent**: Gathers all relevant information
+- **Analysis Agent**: Synthesizes findings and patterns
+- **Critique Agent**: Identifies gaps and contradictions
+- **Writing Agent**: Produces structured document
+
+**Deep Reasoning with o4-mini-deep-research:**
+- Cross-document synthesis
+- Contradiction resolution
+- Causal relationship analysis
+- Strategic recommendations
+
+**Output Format:**
+- Executive summary
+- Detailed findings by topic
+- Source citations throughout
+- Methodology notes
+- Confidence levels for claims
+
+**Implementation Tasks:**
+- [ ] Design clarification question flow
+- [ ] Integrate CrewAI framework
+- [ ] Configure o4-mini-deep-research model
+- [ ] Build multi-agent research crew
+- [ ] Create structured output templates
+- [ ] Add progress tracking UI
+- [ ] Implement long-running job queue
+
+**Estimated Effort:** 2-3 weeks
+
+---
+
 ## Phase 7: Document Details & Management
 
 ### Goals
@@ -1106,8 +1189,10 @@ WHERE id = $1;
 ---
 
 ## Phase 7.3: Shared Corpus & Access Control ✅ COMPLETE
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+Public/private documents, RLS policies for shared access
 
-### Goals
+### Goals (Summary)
 - Enable admin users to share documents across organization
 - Implement public/private document controls
 - Support bulk operations for sharing
@@ -1143,8 +1228,10 @@ WHERE id = $1;
 ---
 
 ## Phase 7.4: Error Tracking & Retry Logic ✅ COMPLETE
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+Error tracking, retry logic (max 3 retries), error display in UI
 
-### Goals
+### Goals (Summary)
 - Track processing failures with detailed error messages
 - Implement retry limits to prevent infinite loops
 - Surface error information to users
@@ -1272,7 +1359,7 @@ CREATE TABLE document_processing_log (
 
 ---
 
-## Phase 8: Collaborative Annotations & Comments
+## Phase 11: Collaborative Annotations & Comments
 
 ### Goals
 - Enable inline discussions on document chunks
@@ -1359,14 +1446,14 @@ CREATE TABLE document_collaborators (
 ```
 
 ### Implementation Phases
-1. **Phase 8.1**: Basic annotations (text selection, simple comments)
-2. **Phase 8.2**: Collaboration (@mentions, threading, notifications)
-3. **Phase 8.3**: Advanced features (realtime, rich text, presence)
-4. **Phase 8.4**: Polish (search, export, analytics)
+1. **Phase 11.1**: Basic annotations (text selection, simple comments)
+2. **Phase 11.2**: Collaboration (@mentions, threading, notifications)
+3. **Phase 11.3**: Advanced features (realtime, rich text, presence)
+4. **Phase 11.4**: Polish (search, export, analytics)
 
 ---
 
-## Phase 9: Polish & Production Readiness
+## Phase 12: Polish & Production Readiness
 
 ### Goals
 - Improve user experience
@@ -1409,9 +1496,50 @@ CREATE TABLE document_collaborators (
 - [ ] Add export functionality (PDF, CSV)
 - [ ] Create mobile-responsive views
 
+#### 🎨 Kibo UI Component Library Evaluation (Low-Medium Priority)
+
+**Goal:** Evaluate and potentially migrate to Kibo UI for improved component quality and developer experience.
+
+**Context:** Mosaic currently uses shadcn/ui components. Kibo UI is a curated collection of enhanced shadcn components with better defaults, improved accessibility, and additional features.
+
+**What is Kibo UI:**
+- Built on top of shadcn/ui (same foundation we're using)
+- Enhanced components with better defaults
+- Improved accessibility and keyboard navigation
+- More polished animations and interactions
+- Additional component variants and compositions
+- Documentation: https://www.kibo-ui.com/docs/setup
+
+**Potential Benefits:**
+- Better UX with more polished components out of the box
+- Faster development with pre-built component compositions
+- Enhanced ARIA support and keyboard navigation
+- Better design system cohesion
+- Less custom component code to maintain
+
+**Evaluation Tasks:**
+- [ ] Audit current shadcn components in use
+- [ ] Compare Kibo versions of same components
+- [ ] Build prototype test page with Kibo components
+- [ ] Measure bundle size impact
+- [ ] Test performance (runtime and build time)
+- [ ] Verify customization flexibility
+- [ ] Check for breaking changes with existing components
+
+**Decision Criteria:**
+1. Does it provide meaningful improvements over current shadcn?
+2. Is the bundle size increase acceptable?
+3. Does it maintain or improve accessibility?
+4. Can we easily customize for Mosaic's needs?
+5. Is documentation clear and comprehensive?
+
+**Estimated Effort:**
+- Evaluation: 1-2 days
+- Migration (if approved): 3-5 days
+
 ---
 
-## Phase 10: Platform Migration & Enterprise Scaling
+## Phase 13: Platform Migration & Enterprise Scaling
 
 ### Overview
 Strategic plan for migrating from Render to enterprise-grade infrastructure when scaling demands it. This phase is triggered by growth milestones, not time-based.
@@ -1952,8 +2080,10 @@ mosaic/
 ---
 
 ## Phase 8: Settings Management System ✅ COMPLETE
+**Moved to COMPLETED_ITEMS.md:** October 19, 2025  
+Database-driven configuration, SettingsService with 60s cache, comprehensive test suite
 
-### Goals
+### Goals (Summary)
 - Move configuration from hardcoded ENV vars to database
 - Enable real-time settings changes without deployments
 - Provide admin UI for system configuration
@@ -2022,24 +2152,673 @@ mosaic/
 
 ---
 
+## Phase 9: Living Entities - Continuously Updated Knowledge Pages
+
+### Overview
+
+Transform Mosaic from "smart search" to "living knowledge base" with template-based, AI-maintained entity pages that serve as single source of truth for critical domain entities.
+
+**The Killer Feature:** Living Entities are what make "Mosaic for X" truly powerful for any domain where expert decision-making creates value.
+
+### What Are Living Entities?
+
+**Living Entities** are continuously-updated, structured knowledge pages that evolve automatically as new information is ingested:
+
+- **Template-based**: Each entity type (Material, Mine, Supplier, etc.) follows consistent structure
+- **AI-maintained**: CrewAI agents automatically update entities when new content arrives
+- **Cross-linked**: Bidirectional relationships between related entities
+- **Auditable**: Complete history of all changes with source attribution
+- **Contextual AI**: Each entity has its own AI chat scoped to its knowledge
+
+### Living Entities vs. Graph Entities
+
+**Graph Entities** (Current - Phase 5):
+- Lightweight, extracted automatically during ingestion
+- Simple schema: name, type, description, relationships
+- Purpose: Enable semantic search and relationship discovery
+- Example: "Strategic Planning" entity linking documents
+
+**Living Entities** (Phase 9):
+- Rich, curated pages with domain-specific schemas
+- Complex templates with 10-20+ sections per entity type
+- Purpose: Single source of truth for critical domain entities
+- Example: "Antimony" page with supply chain, pricing, geopolitics, applications, recent developments, etc.
+
+**The Relationship:**
+```
+Graph Entities → Identify what matters (discovery)
+Living Entities → Deep, structured knowledge about what matters (intelligence)
+```
+
+### Goals
+
+- ✅ Create structured, template-based entity pages
+- ✅ Automatic updates via CrewAI agents when new content arrives
+- ✅ Cross-linking between related entities
+- ✅ Contextual AI chat scoped to each entity
+- ✅ Complete audit trail of all changes
+- ✅ Domain-specific templates (Materials, Mines, Suppliers, Agencies, etc.)
+
+### Use Case Example
+
+**User asks:** "I'm about to make a purchasing decision on 40 tons of Antimony, what do I need to know?"
+
+**Platform provides:**
+1. Comprehensive Antimony living entity page with structured sections:
+   - Overview (chemical properties, criticality score)
+   - Supply Chain Analysis (global production, major producers, US import reliance)
+   - Pricing & Market Dynamics (current price, trends, historical data)
+   - Geopolitical Risk Assessment (risk score, export controls, trade restrictions)
+   - Applications & Use Cases (primary applications, industries)
+   - Alternatives & Substitutes (feasibility, performance, cost comparisons)
+   - Recent Developments (timeline of news and updates)
+2. Inline links to related entities (MP Materials, Arizona Mine, DLA, F-35)
+3. Contextual AI chat grounded in entity's knowledge
+4. Always current - updated automatically as new information arrives
+
+### Phase 9.1: Database Schema & Templates (1 week)
+
+**Goal:** Create database tables and template system for living entities
+
+#### Tasks
+
+**Database Schema:**
+- [ ] Create `living_entities` table
+  - Core fields: id, org_id, entity_type, name, slug
+  - JSONB sections field for flexible template-based content
+  - Metadata: last_updated, update_count, source_count, confidence_score
+  - Full-text search vector
+- [ ] Create `living_entity_relationships` table
+  - Bidirectional links between entities
+  - Relationship types: produces, supplies, regulates, competes_with, located_in
+  - Context and strength fields
+  - Source attribution
+- [ ] Create `living_entity_updates` table
+  - Complete audit trail of all changes
+  - Old/new content tracking
+  - Source attribution (document, news, data, manual)
+  - Agent tracking (which CrewAI agent made the change)
+  - Validation status (approved, pending, rejected)
+- [ ] Create `living_entity_graph_links` table
+  - Links between living entities and graph entities
+  - Link strength and type
+- [ ] Add RLS policies for all tables
+- [ ] Create indexes for performance
+
+**Template System:**
+- [ ] Create `EntityTemplate` TypeScript interface
+- [ ] Create `SectionDefinition` interface with JSON Schema validation
+- [ ] Create `TemplateRegistry` class for template management
+- [ ] Define Material entity template (7 sections)
+- [ ] Define Mine entity template (6+ sections)
+- [ ] Define Supplier entity template
+- [ ] Define Agency entity template
+- [ ] Define Technology entity template
+- [ ] Add template validation logic
+
+**Estimated Effort:** 4-5 days
+
+**Files to Create:**
+- `supabase/migrations/2025XX_create_living_entities_tables.sql`
+- `apps/web/lib/templates/entity-template.ts`
+- `apps/web/lib/templates/material-template.ts`
+- `apps/web/lib/templates/mine-template.ts`
+- `apps/web/lib/templates/template-registry.ts`
+
+**Reference:** `docs/living_entities/01_architecture.md`
+
+### Phase 9.2: CrewAI Update Crew (2 weeks)
+
+**Goal:** Build multi-agent system to automatically update living entities
+
+#### The Update Crew (5 Agents)
+
+**Agent 1: Entity Identifier**
+- Identifies which living entities should be updated from new content
+- Tools: search_living_entities, search_graph_entities, semantic_similarity
+- Output: List of entity slugs with confidence scores
+
+**Agent 2: Information Extractor**
+- Extracts structured information that fits entity templates
+- Tools: read_content, get_entity_template, extract_structured_data
+- Output: Section-specific content with confidence scores
+
+**Agent 3: Content Synthesizer**
+- Merges new information with existing entity content
+- Handles deduplication and conflict resolution
+- Tools: read_entity, compare_content, merge_strategies
+- Output: Synthesized content for each section
+
+**Agent 4: Relationship Linker**
+- Creates/updates relationships between entities
+- Tools: find_related_entities, create_relationship, validate_relationship
+- Output: List of relationships to create/update
+
+**Agent 5: Quality Validator**
+- Validates accuracy and quality of updates
+- Tools: fact_check, schema_validate, confidence_score
+- Output: Approval/rejection with quality metrics
+
+#### Tasks
+
+**CrewAI Setup:**
+- [ ] Install CrewAI dependencies (`crewai`, `crewai-tools`)
+- [ ] Create `apps/backend/living_entities/` directory
+- [ ] Set up CrewAI configuration
+
+**Agent Implementation:**
+- [ ] Implement Entity Identifier agent
+- [ ] Implement Information Extractor agent
+- [ ] Implement Content Synthesizer agent
+- [ ] Implement Relationship Linker agent
+- [ ] Implement Quality Validator agent
+
+**Tools Development:**
+- [ ] Create `search_living_entities` tool
+- [ ] Create `search_graph_entities` tool
+- [ ] Create `get_entity_template` tool
+- [ ] Create `extract_structured_data` tool
+- [ ] Create `merge_content` tool
+- [ ] Create `create_relationship` tool
+- [ ] Create `validate_update` tool
+
+**Workflow Integration:**
+- [ ] Create update orchestration workflow
+- [ ] Integrate with document processing pipeline
+- [ ] Add queue for living entity updates
+- [ ] Implement error handling and retry logic
+- [ ] Add logging and metrics
+
+**Testing:**
+- [ ] Test with sample news articles
+- [ ] Test with uploaded documents
+- [ ] Verify entity identification accuracy
+- [ ] Verify extraction quality
+- [ ] Verify synthesis correctness
+- [ ] Test relationship creation
+
+**Estimated Effort:** 8-10 days
+
+**Files to Create:**
+- `apps/backend/living_entities/crew.py`
+- `apps/backend/living_entities/agents/identifier.py`
+- `apps/backend/living_entities/agents/extractor.py`
+- `apps/backend/living_entities/agents/synthesizer.py`
+- `apps/backend/living_entities/agents/linker.py`
+- `apps/backend/living_entities/agents/validator.py`
+- `apps/backend/living_entities/tools/entity_tools.py`
+- `apps/backend/living_entities/tools/extraction_tools.py`
+- `apps/backend/living_entities/workflow.py`
+
+**Reference:** `docs/living_entities/02_crewai_agents.md`, `docs/living_entities/03_update_workflow.md`
+
+### Phase 9.3: UI Components (1-2 weeks)
+
+**Goal:** Build rich, interactive entity pages
+
+#### Tasks
+
+**Entity Page Components:**
+- [ ] Create entity page layout (`/entities/[slug]`)
+- [ ] Create section renderer (handles different section types)
+- [ ] Create MaterialOverview component
+- [ ] Create SupplyChainAnalysis component
+- [ ] Create PricingData component
+- [ ] Create GeopoliticalRisk component
+- [ ] Create Applications component
+- [ ] Create Alternatives component
+- [ ] Create RecentDevelopments timeline component
+- [ ] Create QuickStats dashboard
+- [ ] Create RelatedEntities sidebar
+
+**Entity Management:**
+- [ ] Create entity list page (`/entities`)
+- [ ] Add search and filtering
+- [ ] Add entity type filtering
+- [ ] Create entity creation form
+- [ ] Create entity editing interface
+- [ ] Add manual update capability
+
+**Relationship Visualization:**
+- [ ] Create relationship graph component
+- [ ] Add interactive entity network view
+- [ ] Show relationship strength visually
+- [ ] Enable click-to-navigate between entities
+
+**Audit Trail:**
+- [ ] Create update history component
+- [ ] Show what changed, when, why, by whom
+- [ ] Add diff view for content changes
+- [ ] Link to source documents
+
+**Contextual AI Chat:**
+- [ ] Create entity-scoped chat component
+- [ ] Integrate with existing search/chat
+- [ ] Filter context to entity's knowledge
+- [ ] Show entity context in chat
+
+**Estimated Effort:** 6-8 days
+
+**Files to Create:**
+- `apps/web/app/(app)/entities/page.tsx`
+- `apps/web/app/(app)/entities/[slug]/page.tsx`
+- `apps/web/components/living-entities/entity-page.tsx`
+- `apps/web/components/living-entities/section-renderer.tsx`
+- `apps/web/components/living-entities/material-overview.tsx`
+- `apps/web/components/living-entities/supply-chain-analysis.tsx`
+- `apps/web/components/living-entities/pricing-data.tsx`
+- `apps/web/components/living-entities/geopolitical-risk.tsx`
+- `apps/web/components/living-entities/quick-stats.tsx`
+- `apps/web/components/living-entities/related-entities.tsx`
+- `apps/web/components/living-entities/update-history.tsx`
+- `apps/web/components/living-entities/entity-chat.tsx`
+
+### Phase 9.4: Integration with Ingestion Pipeline (1 week)
+
+**Goal:** Connect living entity updates to document processing
+
+#### Tasks
+
+**Pipeline Integration:**
+- [ ] Add living entity update trigger to document processing
+- [ ] Queue living entity updates after graph extraction
+- [ ] Pass document content and metadata to CrewAI crew
+- [ ] Handle success/failure states
+
+**API Endpoints:**
+- [ ] `GET /api/living-entities` - List entities with filtering
+- [ ] `GET /api/living-entities/[slug]` - Get entity details
+- [ ] `POST /api/living-entities` - Create new entity
+- [ ] `PUT /api/living-entities/[slug]` - Update entity
+- [ ] `DELETE /api/living-entities/[slug]` - Delete entity
+- [ ] `GET /api/living-entities/[slug]/updates` - Get update history
+- [ ] `GET /api/living-entities/[slug]/relationships` - Get relationships
+- [ ] `POST /api/living-entities/[slug]/chat` - Entity-scoped chat
+
+**Background Processing:**
+- [ ] Create living entity update queue
+- [ ] Implement worker to process updates
+- [ ] Add retry logic for failed updates
+- [ ] Add rate limiting for CrewAI calls
+- [ ] Monitor queue depth and processing time
+
+**Testing:**
+- [ ] End-to-end test: Upload document → Entity updated
+- [ ] Test with multiple documents updating same entity
+- [ ] Test relationship creation across entities
+- [ ] Verify audit trail accuracy
+- [ ] Load test with concurrent updates
+
+**Estimated Effort:** 4-5 days
+
+**Files to Create:**
+- `apps/web/app/api/living-entities/route.ts`
+- `apps/web/app/api/living-entities/[slug]/route.ts`
+- `apps/web/app/api/living-entities/[slug]/updates/route.ts`
+- `apps/web/app/api/living-entities/[slug]/relationships/route.ts`
+- `supabase/functions/update-living-entities/index.ts`
+
+**Reference:** `docs/living_entities/03_update_workflow.md`
+
+### Phase 9.5: Domain-Specific Templates (Optional)
+
+**Goal:** Create templates for specific use cases
+
+#### Strategic Materials Platform Templates
+- [ ] Material template (Antimony, Lithium, Rare Earths)
+- [ ] Mine template (mining operations)
+- [ ] Supplier template (companies in supply chain)
+- [ ] Technology template (applications and use cases)
+- [ ] Agency template (government bodies and regulators)
+
+#### Nuclear Cybersecurity Platform Templates
+- [ ] Threat Actor template (APT groups, nation-states)
+- [ ] Vulnerability template (CVEs, zero-days)
+- [ ] Asset template (control systems, facilities)
+- [ ] Incident template (past attacks, security events)
+- [ ] Mitigation template (patches, procedures, controls)
+
+#### Veteran Services Platform Templates
+- [ ] Individual template (veterans with risk profiles, anonymized)
+- [ ] Program template (intervention programs and services)
+- [ ] Facility template (VA centers, community organizations)
+- [ ] Risk Factor template (PTSD, TBI, social isolation)
+- [ ] Protective Factor template (support systems, resources)
+
+**Estimated Effort:** 2-3 days per domain
+
+### Benefits
+
+**For Users:**
+- ✅ Single source of truth for any entity
+- ✅ Always up-to-date without manual curation
+- ✅ Structured, comparable information across entities
+- ✅ Deep exploration via entity links
+- ✅ Grounded AI answers scoped to entity context
+
+**For Platform Builders:**
+- ✅ Scalable - Handles thousands of entities automatically
+- ✅ Extensible - Easy to add new entity types
+- ✅ Maintainable - AI handles updates, not manual curation
+- ✅ Auditable - Complete history of all changes
+- ✅ Flexible - Templates adapt to domain needs
+
+### Technical Decisions
+
+- **Storage:** JSONB for flexible template-based content
+- **Updates:** CrewAI multi-agent system for intelligent processing
+- **Validation:** JSON Schema for section validation
+- **Relationships:** Bidirectional links with strength scores
+- **Audit:** Complete history with source attribution
+- **Search:** Full-text search + semantic search on entity content
+
+### Cost Estimates
+
+**Per Document Processing:**
+- Entity identification: ~$0.02
+- Information extraction: ~$0.05-0.10
+- Content synthesis: ~$0.03-0.05
+- Relationship linking: ~$0.02
+- Quality validation: ~$0.02
+- **Total:** ~$0.14-0.21 per document
+
+**At Scale (1000 documents/month):**
+- ~$140-210/month for living entity updates
+- Scales linearly with document volume
+- Can batch updates to reduce costs
+
+### Success Metrics
+
+- Number of living entities created
+- Update frequency per entity
+- User engagement with entity pages
+- Entity page views vs. search results
+- Relationship accuracy (manual review)
+- Update quality scores (validator agent)
+- Time from content ingestion to entity update
+
+### Documentation
+
+Complete implementation details available in:
+- `docs/living_entities/README.md` - Overview and concept
+- `docs/living_entities/01_architecture.md` - Database schema and templates
+- `docs/living_entities/02_crewai_agents.md` - AI agents that update entities
+- `docs/living_entities/03_update_workflow.md` - End-to-end workflow
+
+---
+
+## Phase 10: Advanced Graph & Document Intelligence
+
+### Overview
+
+Enhance graph quality, document organization, and intelligent automation features to create a production-grade enterprise RAG platform.
+
+### Phase 10.1: Entity Deduplication & Merge Assistant (1-2 weeks)
+
+**Goal:** Clean up duplicate entities and improve graph quality
+
+**Priority:** High
+
+**Estimated Effort:** 7-10 days
+
+**Tasks:**
+- [ ] **Phase 1: Manual Merge Workflow** (2-3 days)
+  - Add "Merge Entities" action to entity list
+  - Create merge dialog with side-by-side comparison
+  - Implement merge operation (union references, update relationships)
+  - Add "Mark as Alias" quick action
+- [ ] **Phase 2: Automated Duplicate Detection** (2-3 days)
+  - Create background job: `detect_duplicate_entities`
+  - Detection algorithm (embedding similarity + Levenshtein + co-occurrence)
+  - Store suggestions in `entity_merge_suggestions` table
+  - Add "Merge Suggestions" tab to graph page
+- [ ] **Phase 3: AI-Assisted Merge Intelligence** (3-4 days)
+  - Use LLM to analyze entity pairs
+  - Generate confidence scores and reasoning
+  - Synthesized descriptions
+  - User review queue with AI explanations
+
+**Reference:** INBOX lines 38-211
+
+### Phase 10.2: Generic Entity Detection & Cleanup (3-4 days)
+
+**Goal:** Remove overly generic entities that provide little semantic value
+
+**Priority:** Medium
+
+**Estimated Effort:** 2-3 days
+
+**Tasks:**
+- [ ] **Phase 1: Detection & Flagging** (1-2 days)
+  - Create `detect_generic_entities` function
+  - Combine frequency, pattern, and context-based detection
+  - Add `is_generic` flag and `generic_score` to entities table
+  - Create "Generic Entities" section in cleanup UI
+- [ ] **Phase 2: Review & Cleanup UI** (1 day)
+  - Add "Generic Entities" tab to cleanup page
+  - Show flagged entities with scores and reasons
+  - Bulk delete workflow
+  - "Keep" option for false positives
+
+**Reference:** INBOX lines 335-432
+
+### Phase 10.3: Document Organization System (1-2 weeks)
+
+**Goal:** Folders, tags, and AI-powered organization
+
+**Priority:** Medium-High
+
+**Estimated Effort:** 7-10 days
+
+**Tasks:**
+- [ ] **Phase 1: Folder/Subfolder Hierarchy** (2-3 days)
+  - Create `document_folders` table
+  - Folder management UI (create, rename, delete, drag-drop)
+  - Nested folder structure with breadcrumb navigation
+  - Search within folders
+- [ ] **Phase 2: Tagging System** (1-2 days)
+  - Create `document_tags` and `document_tag_assignments` tables
+  - Tag management UI with color picker
+  - Tag filtering (AND/OR logic)
+  - Bulk tag assignment
+- [ ] **Phase 3: Combined Folder + Tag Views** (1 day)
+  - Flexible organization (folders AND tags)
+  - Smart collections (Recent, Favorites, Needs Review)
+  - Multiple view options (list, grid, compact)
+- [ ] **Phase 4: AI-Powered Organization Suggestions** (3-4 days)
+  - Automatic folder/tag suggestions for new uploads
+  - Bulk organization assistant
+  - Smart folder creation from document clusters
+  - Learning system (track user patterns)
+
+**Reference:** INBOX lines 607-835
+
+### Phase 10.4: Document-Level Intelligence & Graph Integration (2-3 weeks)
+
+**Goal:** Add intelligence layer to documents with summaries, metadata, and graph integration
+
+**Priority:** High
+
+**Estimated Effort:** 12-15 days
+
+**Tasks:**
+- [ ] **Phase 1: Document Summarization & Metadata** (2-3 days)
+  - Add document-level fields (summary, key_topics, document_type, primary_entities)
+  - Generate document summary during processing
+  - Display in document list and details page
+- [ ] **Phase 2: Auto-Tagging from Content** (1-2 days)
+  - Automatic tag generation from content
+  - Tag suggestion algorithm with confidence scores
+  - Smart tag application (auto-apply high-confidence)
+- [ ] **Phase 3: Documents as Graph Entities** (3-4 days)
+  - Integrate documents into knowledge graph
+  - Document-to-topic relationships
+  - Graph queries for documents
+  - Visual graph integration
+- [ ] **Phase 4: Staleness Detection & Freshness Tracking** (2-3 days)
+  - Temporal metadata (effective_date, expiration_date)
+  - Staleness detection algorithm
+  - Freshness indicators and badges
+  - Staleness dashboard
+- [ ] **Phase 5: Document Clustering & Discovery** (2-3 days)
+  - Document similarity analysis
+  - Document clustering UI
+  - Smart document discovery
+  - Document network analysis
+
+**Reference:** INBOX lines 838-1141
+
+### Phase 10.5: Temporal Data Management & Versioning (1 week)
+
+**Goal:** Handle document versions and temporal relevance
+
+**Priority:** Medium-High
+
+**Estimated Effort:** 5-7 days
+
+**Tasks:**
+- [ ] **Phase 1: Basic Temporal Metadata** (1-2 days)
+  - Add `effective_date`, `expiration_date`, `is_current` to documents
+  - Add temporal filters to search UI
+  - Display document age/freshness in results
+- [ ] **Phase 2: Document Versioning** (2-3 days)
+  - Create `document_versions` table
+  - Add "Upload New Version" workflow
+  - Link documents in version chains
+  - Search defaults to latest versions only
+- [ ] **Phase 3: Temporal Search Weighting** (1-2 days)
+  - Add time-decay function to search scoring
+  - Configurable decay rates per document type
+  - Show temporal relevance indicators
+
+**Reference:** INBOX lines 212-332
+
+### Phase 10.6: Intelligent Source Discovery (1-2 weeks)
+
+**Goal:** NotebookLM-style source discovery with knowledge gap analysis
+
+**Priority:** Medium-High
+
+**Estimated Effort:** 7-10 days
+
+**Tasks:**
+- [ ] **Phase 1: Knowledge Gap Analysis** (3-4 days)
+  - Analyze corpus to identify knowledge gaps
+  - Create "Knowledge Gaps" dashboard
+  - Gap detection algorithm
+- [ ] **Phase 2: Web Source Discovery** (2-3 days)
+  - Add "Discover Sources" button
+  - Implement web search integration (Tavily API)
+  - Source evaluation criteria
+  - Show source candidates with relevance scores
+- [ ] **Phase 3: Automated Source Ingestion** (2-3 days)
+  - Web scraping/extraction for recommended sources
+  - Support for web pages, PDFs, academic papers
+  - Automatic metadata extraction
+  - Add to processing queue with source tracking
+
+**Reference:** INBOX lines 435-605
+
+### Phase 10.7: Adaptive Chunk Quality Enhancement (1-2 weeks)
+
+**Goal:** Detect and fix poor chunking quality
+
+**Priority:** Medium-High
+
+**Estimated Effort:** 6-9 days
+
+**Tasks:**
+- [ ] **Phase 1: Automatic Quality Detection** (2-3 days)
+  - Implement chunk quality scoring (0-1 scale)
+  - Add quality metadata to documents
+  - Run quality assessment after chunking
+  - Flag documents below quality threshold
+- [ ] **Phase 2: Selective LLM Post-Processing** (2-3 days)
+  - Implement boundary fixing for low-quality chunks
+  - Batch processing for efficiency
+  - Automatic application for docs with quality <0.7
+  - Cost optimization (only fix problem chunks)
+- [ ] **Phase 3: On-Demand Re-Chunking UI** (2-3 days)
+  - Add quality indicators to document list
+  - Document details page enhancements
+  - Re-chunking strategies (standard, enhanced, agentic)
+  - Cost estimation and confirmation
+  - Preserve original chunks for rollback
+
+**Cost:** ~$0.01 per document average, $15-30/month at 1000 docs/month
+
+**Reference:** INBOX lines 1144-1377
+
+### Phase 10.8: OCR Cleanup Pre-Processing (1 week)
+
+**Goal:** Fix OCR errors in scanned documents before chunking
+
+**Priority:** Medium
+
+**Estimated Effort:** 5-7 days
+
+**Tasks:**
+- [ ] **Phase 1: Scanned Document Detection** (1 day)
+  - Detect OCR artifacts
+  - Add metadata flags (is_scanned, ocr_error_score)
+  - Flag documents during initial processing
+- [ ] **Phase 2: Conservative OCR Cleanup** (2-3 days)
+  - Implement LLM-based OCR error correction (Gemini 2.0 Flash)
+  - Strict rules to prevent hallucination
+  - Process only flagged documents
+- [ ] **Phase 3: Verification & Rollback** (1-2 days)
+  - Implement hallucination detection
+  - Preserve original document
+  - Automatic rollback on verification failure
+- [ ] **Phase 4: UI & User Control** (1-2 days)
+  - Document details page indicators
+  - Settings page controls
+  - Manual trigger with preview
+
+**Cost:** ~$0.02 per scanned document, $2/month at 100 scanned docs/month
+
+**Reference:** INBOX lines 1379-1687
+
+### Phase 10.9: Prompt Management System (1 week)
+
+**Goal:** Move prompts from code to database for easier iteration
+
+**Priority:** Medium
+
+**Estimated Effort:** 5-7 days
+
+**Tasks:**
+- [ ] **Phase 1: Prompt Settings Page** (3-4 days)
+  - Create dedicated settings page for system prompts
+  - Store prompts in `system_settings` table
+  - Categories: chunk summary, graph extraction, HyDE, multi-query
+  - Allow real-time editing without code changes
+  - Version tracking for prompt changes
+- [ ] **Phase 2: Automated Prompt Optimization** (Future)
+  - A/B testing framework for prompts
+  - Track metrics: quality, latency, token usage
+  - Statistical significance testing
+  - Automated rollback if performance degrades
+
+**Reference:** INBOX lines 5-36
+
+---
+
 ## Future Enhancements
 
 ### Short Term (1-3 months)
 - Multi-language support
 - Advanced filtering and sorting
-- Document collections/folders
 - Collaborative features
 
 ### Medium Term (3-6 months)
 - Custom embedding models
 - Fine-tuned entity extraction
-- Advanced graph analytics
 - API for external integrations
 
 ### Long Term (6-12 months)
 - Multi-modal support (images, audio)
 - Real-time collaboration
-- Advanced AI agents
 - Enterprise features (SSO, audit logs)
 
 ---
@@ -2097,6 +2876,22 @@ mosaic/
   - ~$0.23 per 200-page document, ~$0.0001 per search
 - 🎯 **System Status: Production-ready with Graph RAG for real-world use**
 
+### 2025-10-19
+- ✅ **BUILD_PLAN Reorganization**
+- ✅ Fixed duplicate phase numbers (old Phases 8-10 renumbered to 11-13)
+- ✅ Added Phase 9: Living Entities (CrewAI-powered knowledge pages)
+- ✅ Added Phase 10: Advanced Graph & Document Intelligence (9 sub-phases)
+- ✅ Cleaned up INBOX.md (all items migrated to BUILD_PLAN or TO_PROCESS)
+- ✅ Cleaned up TO_PROCESS.md (moved bugs to BUGS.md, removed completed items)
+- 📋 **Current Structure:**
+  - Phases 1-5: Core RAG pipeline ✅ COMPLETE
+  - Phase 6: Hybrid Search & Query Interface (in progress)
+  - Phase 7: Document Details & Management (mostly complete)
+  - Phase 8: Settings Management System ✅ COMPLETE
+  - Phase 9: Living Entities (future)
+  - Phase 10: Advanced Graph & Document Intelligence (future)
+  - Phases 11-13: Collaborative features, polish, enterprise scaling (future)
+
 ### 2025-10-17
 - ✅ **Phase 8 Complete: Settings Management System**
 - ✅ Created SettingsService with 60s TTL cache and type-safe getters
@@ -2118,4 +2913,4 @@ mosaic/
 
 ---
 
-**Next Phase**: Phase 5.4 - Graph Management UI or Phase 6 - Hybrid Search Enhancements
+**Next Phase**: Phase 6 - Hybrid Search Enhancements or Phase 9 - Living Entities

@@ -59,6 +59,10 @@ const data = {
           url: "/graph",
         },
         {
+          title: "Visualize",
+          url: "/graph/visualize",
+        },
+        {
           title: "Clean Up Duplicates",
           url: "/graph/cleanup",
         },
@@ -95,9 +99,9 @@ const data = {
       icon: "Search",
     },
     {
-      title: "AI Assistant",
-      url: "#",
-      icon: "Sparkles",
+      title: "Chat",
+      url: "/chat",
+      icon: "MessageSquare",
     },
   ],
   projects: [

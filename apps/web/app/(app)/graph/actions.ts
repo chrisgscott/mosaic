@@ -43,7 +43,20 @@ export async function getEntities() {
     return { error: error.message };
   }
 
-  return { entities: data as Entity[] };
+  // Also fetch relationships
+  const { data: relationships, error: relError } = await supabase
+    .from("relationships")
+    .select("*")
+    .eq("user_id", user.id);
+
+  if (relError) {
+    console.error("Error fetching relationships:", relError);
+  }
+
+  return { 
+    entities: data as Entity[],
+    relationships: relationships || []
+  };
 }
 
 export async function deleteEntity(entityId: string) {

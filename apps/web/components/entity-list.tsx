@@ -38,11 +38,11 @@ const getQualityIndicator = (entity: Entity) => {
   const docCount = entity.document_ids?.length || 0;
 
   if (confidence >= 0.85 && docCount > 1) {
-    return { emoji: "🟢", label: "High", color: "text-green-600" };
+    return { label: "High", color: "bg-green-500" };
   } else if (confidence >= 0.7 || docCount === 1) {
-    return { emoji: "🟡", label: "Medium", color: "text-yellow-600" };
+    return { label: "Medium", color: "bg-yellow-500" };
   } else {
-    return { emoji: "🔴", label: "Low", color: "text-red-600" };
+    return { label: "Low", color: "bg-red-500" };
   }
 };
 
@@ -451,9 +451,10 @@ export function EntityList({
                     />
                   </TableCell>
                   <TableCell>
-                    <span title={`${quality.label} quality`} className={quality.color}>
-                      {quality.emoji}
-                    </span>
+                    <div 
+                      title={`${quality.label} quality`} 
+                      className={`w-3 h-3 rounded-full ${quality.color}`}
+                    />
                   </TableCell>
                   <TableCell>
                     <button

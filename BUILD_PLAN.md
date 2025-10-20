@@ -744,13 +744,20 @@ Complete the RAG pipeline by connecting retrieved chunks to an LLM for answer ge
 - [ ] Test with various query types
 
 #### 💬 Chat Interface
-- [ ] Create chat UI component
+- [ ] Install shadcn.io AI components (derived from Vercel AI Elements)
+  - Documentation: https://www.shadcn.io/ai
+  - Components: `<Message>`, `<Response>`, `<Tool>`, `<Reasoning>`, `<Sources>`, `<Branch>`, `<Conversation>`
+  - Philosophy: Copy-paste components into codebase for full ownership
+- [ ] Implement chat UI using shadcn.io AI components
+  - `<Conversation>` container for chat interface
+  - `<Message>` for user/assistant messages
+  - `<Response>` for streaming text with markdown rendering
+  - `<Sources>` for source chunk attribution
 - [ ] Display streaming responses with typing indicator
-- [ ] Show source chunks inline or as expandable cards
 - [ ] Add "Copy" and "Regenerate" buttons
 - [ ] Implement conversation history
 - [ ] Add "Clear conversation" action
-- [ ] Support markdown formatting in responses
+- [ ] Customize components for Mosaic's specific needs
 
 #### 🔗 Source Attribution
 - [ ] Link each answer claim to source chunks
@@ -786,12 +793,13 @@ Complete the RAG pipeline by connecting retrieved chunks to an LLM for answer ge
 
 ### Implementation Phases
 
-**Phase 6.5.1: Basic Answer Generation (2-3 days)**
-- [ ] LLM integration with OpenAI
-- [ ] Simple prompt template
-- [ ] Basic chat UI
-- [ ] Source attribution
-- [ ] Streaming responses
+**Phase 6.5.1: Basic Answer Generation (✅ COMPLETED - Oct 19, 2025)**
+- [x] Install and configure shadcn.io AI components
+- [x] LLM integration with OpenAI (via AI Gateway)
+- [x] Simple prompt template
+- [x] Basic chat UI using AI components
+- [x] Source attribution with `<Sources>` component
+- [x] Streaming responses with markdown rendering
 
 **Phase 6.5.2: Enhanced Context Management (2 days)**
 - [ ] Smart context window management
@@ -861,10 +869,12 @@ Complete the RAG pipeline by connecting retrieved chunks to an LLM for answer ge
 - `apps/web/app/api/chat/stream/route.ts` - Streaming endpoint
 
 **Frontend:**
-- `apps/web/components/chat-interface.tsx` - Main chat UI
-- `apps/web/components/chat-message.tsx` - Message component
-- `apps/web/components/source-attribution.tsx` - Source display
-- `apps/web/app/(app)/chat/page.tsx` - Chat page
+- `apps/web/components/ai/` - shadcn.io AI components (copy-pasted)
+  - `message.tsx` - Message container component
+  - `response.tsx` - Streaming response component
+  - `sources.tsx` - Source attribution component
+  - `conversation.tsx` - Conversation container
+- `apps/web/app/(app)/chat/page.tsx` - Chat page using AI components
 
 **Database:**
 - `supabase/migrations/YYYYMMDD_create_conversations.sql` - Conversation storage
@@ -883,6 +893,145 @@ Complete the RAG pipeline by connecting retrieved chunks to an LLM for answer ge
 **High** - This is the core RAG functionality. Without it, we're just a search engine, not a RAG system.
 
 **Estimated Effort:** 7-10 days total (1.5-2 weeks)
+
+### Phase 6.5 Enhancements
+
+#### 🎚️ Adaptive Response Depth & Retrieval Matching (Medium-High Priority)
+
+**Goal:** Allow users to control response depth and match retrieval strategy to query complexity for better UX and cost optimization.
+
+**Problem:** Currently all queries use the same retrieval and generation approach regardless of whether the user wants a quick answer or comprehensive analysis. This creates unnecessary cost and latency for simple queries while potentially under-serving complex research needs.
+
+**Solution: User-Controlled Response Depth**
+
+**Quick Mode (30 seconds, ~$0.001)**
+- Retrieval: Top 3-5 chunks, basic semantic search only
+- Generation: Short response (100-200 tokens) with GPT-4o-mini
+- Use case: "What is X?", "When did Y happen?"
+
+**Standard Mode (1-2 minutes, ~$0.005)** - Default
+- Retrieval: Top 10-15 chunks, hybrid search + reranking
+- Generation: Medium response (300-500 tokens) with GPT-4o-mini
+- Use case: Most queries
+
+**Detailed Mode (2-5 minutes, ~$0.02)**
+- Retrieval: Top 20-30 chunks, full hybrid + graph traversal
+- Generation: Long response (800-1200 tokens) with GPT-4o
+- Use case: "Explain the relationship between X and Y"
+
+**Implementation Tasks:**
+- [ ] Add response depth selector to chat UI (toggle or dropdown)
+- [ ] Implement retrieval strategy routing based on depth
+- [ ] Configure model selection per depth level
+- [ ] Add cost/time estimates before query execution
+- [ ] Track usage metrics by depth level
+- [ ] Optimize chunk selection for each depth
+
+**Benefits:**
+- Faster responses for simple queries
+- Cost optimization (match retrieval to need)
+- Better UX (users control depth vs speed tradeoff)
+- Clear cost transparency
+
+**Estimated Effort:** 3-5 days
+
+#### 🌐 Vercel AI Gateway Integration (Medium-High Priority)
+
+**Goal:** Implement Vercel AI Gateway for unified model access, automatic failover, and better cost monitoring.
+
+**Problem:** Currently using direct OpenAI API calls. If OpenAI has an outage, the entire system fails. Managing multiple provider API keys and tracking costs across providers is complex.
+
+**Solution: Vercel AI Gateway**
+
+**Key Benefits:**
+- **Unified API**: Access all models (OpenAI, Anthropic, xAI, Groq, DeepSeek) through single endpoint
+- **Automatic Failover**: Falls back to alternative providers during outages
+- **Cost Monitoring**: Unified billing and spend tracking dashboard
+- **Simplified Keys**: One API key instead of managing multiple provider keys
+- **Easy Model Switching**: Change models without code changes
+
+**Implementation Tasks:**
+- [ ] Sign up for Vercel AI Gateway
+- [ ] Update AI SDK configuration to use gateway endpoint
+- [ ] Configure fallback providers (e.g., GPT-4o → Claude Sonnet 4 → Gemini 2.5 Pro)
+- [ ] Set budget limits and alerts
+- [ ] Update environment variables (single AI_GATEWAY_API_KEY)
+- [ ] Test failover behavior
+- [ ] Update cost tracking to use gateway metrics
+- [ ] Document model selection strategy
+
+**Code Changes Required:**
+```typescript
+// Before:
+import { openai } from '@ai-sdk/openai';
+const model = openai('gpt-4o-mini');
+
+// After (minimal change):
+import { createOpenAI } from '@ai-sdk/openai';
+const gateway = createOpenAI({
+  baseURL: 'https://ai-gateway.vercel.sh/v1',
+  apiKey: process.env.AI_GATEWAY_API_KEY,
+});
+const model = gateway('gpt-4o-mini');
+```
+
+**Fallback Configuration:**
+- Primary: GPT-4o-mini (fast, cost-effective)
+- Fallback 1: Claude 3.7 Sonnet (similar quality)
+- Fallback 2: Gemini 2.5 Flash Lite (backup option)
+
+**Benefits:**
+- Higher uptime and reliability (automatic failover)
+- Better cost visibility (unified dashboard)
+- Easier to experiment with different models
+- Simplified configuration management
+- Production-ready resilience
+
+**Estimated Effort:** 1-2 hours
+
+**Priority:** Medium-High (implement before Phase 6.5 goes to production)
+
+#### 🔬 Deep Research Mode (Medium Priority)
+
+**Goal:** Enable multi-page research documents with CrewAI agents and o4-mini-deep-research for complex analysis.
+
+**Features:**
+
+**Pre-Query Clarification:**
+- Ask clarifying questions upfront
+- "What aspects are most important?"
+- "What's your intended use?"
+- "Any specific time period or context?"
+
+**Multi-Agent Research Crew:**
+- **Research Agent**: Gathers all relevant information
+- **Analysis Agent**: Synthesizes findings and patterns
+- **Critique Agent**: Identifies gaps and contradictions
+- **Writing Agent**: Produces structured document
+
+**Deep Reasoning with o4-mini-deep-research:**
+- Cross-document synthesis
+- Contradiction resolution
+- Causal relationship analysis
+- Strategic recommendations
+
+**Output Format:**
+- Executive summary
+- Detailed findings by topic
+- Source citations throughout
+- Methodology notes
+- Confidence levels for claims
+
+**Implementation Tasks:**
+- [ ] Design clarification question flow
+- [ ] Integrate CrewAI framework
+- [ ] Configure o4-mini-deep-research model
+- [ ] Build multi-agent research crew
+- [ ] Create structured output templates
+- [ ] Add progress tracking UI
+- [ ] Implement long-running job queue
+
+**Estimated Effort:** 2-3 weeks
 
 ---
 
@@ -1346,6 +1495,47 @@ CREATE TABLE document_collaborators (
 - [ ] Implement document versioning
 - [ ] Add export functionality (PDF, CSV)
 - [ ] Create mobile-responsive views
+
+#### 🎨 Kibo UI Component Library Evaluation (Low-Medium Priority)
+
+**Goal:** Evaluate and potentially migrate to Kibo UI for improved component quality and developer experience.
+
+**Context:** Mosaic currently uses shadcn/ui components. Kibo UI is a curated collection of enhanced shadcn components with better defaults, improved accessibility, and additional features.
+
+**What is Kibo UI:**
+- Built on top of shadcn/ui (same foundation we're using)
+- Enhanced components with better defaults
+- Improved accessibility and keyboard navigation
+- More polished animations and interactions
+- Additional component variants and compositions
+- Documentation: https://www.kibo-ui.com/docs/setup
+
+**Potential Benefits:**
+- Better UX with more polished components out of the box
+- Faster development with pre-built component compositions
+- Enhanced ARIA support and keyboard navigation
+- Better design system cohesion
+- Less custom component code to maintain
+
+**Evaluation Tasks:**
+- [ ] Audit current shadcn components in use
+- [ ] Compare Kibo versions of same components
+- [ ] Build prototype test page with Kibo components
+- [ ] Measure bundle size impact
+- [ ] Test performance (runtime and build time)
+- [ ] Verify customization flexibility
+- [ ] Check for breaking changes with existing components
+
+**Decision Criteria:**
+1. Does it provide meaningful improvements over current shadcn?
+2. Is the bundle size increase acceptable?
+3. Does it maintain or improve accessibility?
+4. Can we easily customize for Mosaic's needs?
+5. Is documentation clear and comprehensive?
+
+**Estimated Effort:**
+- Evaluation: 1-2 days
+- Migration (if approved): 3-5 days
 
 ---
 

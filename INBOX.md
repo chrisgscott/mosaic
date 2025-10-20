@@ -2,129 +2,65 @@
 
 ## 💡 Enhancements & Ideas
 
-### Adaptive Response Depth & Retrieval Matching
+### Chat Session Persistence & History
+**Priority:** High  
+**Effort:** 3-5 days  
+**Phase:** 6.5.3 - Conversation Features
 
-**Context:** Currently, all queries use the same retrieval and generation approach regardless of whether the user wants a quick answer or a comprehensive analysis. This creates unnecessary cost and latency for simple queries while potentially under-serving complex research needs.
+**Current State:**
+- Chat conversations exist only in browser memory
+- Refreshing the page clears all conversation history
+- No way to revisit or continue previous conversations
+- Users lose context when navigating away
 
-**Proposal:**
+**Required Implementation:**
+1. **Database Schema:**
+   - `chat_sessions` table: session metadata (title, created_at, updated_at, user_id)
+   - `chat_messages` table: individual messages (session_id, role, content, sources, timestamp)
+   - Auto-generate session titles from first message or conversation summary
 
-**1. User-Controlled Response Depth**
-Allow users to select response depth before or during their query:
+2. **Session Management:**
+   - Create new session on first message
+   - Save each message (user + assistant) to database
+   - Load session history when revisiting
+   - List all user's sessions with preview/search
+   - Delete/archive old sessions
 
-- **Quick (30 seconds, ~$0.001)**: Brief, direct answer
-  - Retrieval: Top 3-5 chunks, basic semantic search only
-  - Generation: Short response (100-200 tokens)
-  - Use case: "What is X?", "When did Y happen?"
+3. **UI Components:**
+   - Session sidebar/dropdown to switch between conversations
+   - "New Chat" button to start fresh session
+   - Session list with timestamps and previews
+   - Search across all sessions
+   - Export conversation functionality
 
-- **Standard (1-2 minutes, ~$0.005)**: Balanced answer with context
-  - Retrieval: Top 10-15 chunks, hybrid search + reranking
-  - Generation: Medium response (300-500 tokens)
-  - Use case: Most queries, default setting
+4. **Conversation Continuity:**
+   - Load full conversation history when opening session
+   - Apply 10-turn limit only to what's sent to LLM (not what's displayed)
+   - Show full conversation in UI, but send limited context to API
+   - Preserve source citations and metadata
 
-- **Detailed (2-5 minutes, ~$0.02)**: Comprehensive analysis
-  - Retrieval: Top 20-30 chunks, full hybrid + graph traversal
-  - Generation: Long response (800-1200 tokens)
-  - Use case: "Explain the relationship between X and Y", "Summarize all information about Z"
-
-**2. Deep Research Mode (CrewAI + o4-mini-deep-research)**
-Separate mode for multi-page research documents with interactive clarification:
-
-- **Pre-Query Clarification**: Ask user clarifying questions upfront
-  - "What aspects of X are most important?"
-  - "What's your intended use for this research?"
-  - "Any specific time period or context?"
-
-- **Multi-Agent Research Crew**:
-  - **Research Agent**: Gathers all relevant information across documents
-  - **Analysis Agent**: Synthesizes findings and identifies patterns
-  - **Critique Agent**: Identifies gaps and contradictions
-  - **Writing Agent**: Produces structured, multi-page document
-
-- **Deep Reasoning with o4-mini-deep-research**: Use o4-mini-deep-research for complex reasoning tasks
-  - Cross-document synthesis
-  - Contradiction resolution
-  - Causal relationship analysis
-  - Strategic recommendations
-
-- **Output Format**: Multi-page markdown document with:
-  - Executive summary
-  - Detailed findings by topic
-  - Source citations throughout
-  - Methodology notes
-  - Confidence levels for claims
-
-**Implementation Considerations:**
-
-- **UI Design**: Toggle or dropdown for response depth on search/chat interface
-- **Cost Transparency**: Show estimated cost/time before query execution
-- **Progressive Enhancement**: Start with Quick/Standard/Detailed, add Deep Research later
-- **Model Selection**: 
-  - Quick/Standard: GPT-4o-mini
-  - Detailed: GPT-4o
-  - Deep Research: o1-mini for reasoning + GPT-4o for writing
-- **Retrieval Optimization**: Match retrieval strategy to response depth to avoid over-fetching
+5. **Performance Considerations:**
+   - Paginate long conversations
+   - Lazy load old messages
+   - Index sessions by user_id and timestamp
+   - Consider conversation summarization for very long threads
 
 **Benefits:**
-- Faster responses for simple queries
-- Cost optimization (don't use expensive retrieval for quick answers)
-- Better UX (users control depth vs speed tradeoff)
-- Enables true research workflows with Deep Research mode
+- Users can return to conversations anytime
+- Build knowledge over multiple sessions
+- Reference previous answers
+- Share conversation links (optional)
+- Track conversation quality over time
 
-**Priority:** Medium-High (Standard depth levels), Medium (Deep Research mode)
+**Related:**
+- Phase 6.5.2: Context window management (conversation summarization)
+- Phase 6.5.4: Analytics (track conversation metrics)
 
-**Estimated Effort:**
-- Response depth levels: 3-5 days
-- Deep Research mode: 2-3 weeks
-
----
-
-### Kibo UI Component Library Integration
-
-**Context:** Mosaic currently uses shadcn/ui components directly. Kibo UI is a curated collection of enhanced shadcn components with additional features, better defaults, and improved accessibility.
-
-**Proposal:** Evaluate and potentially migrate to Kibo UI for improved component quality and developer experience.
-
-**What is Kibo UI?**
-- Built on top of shadcn/ui (same foundation we're already using)
-- Enhanced components with better defaults and additional features
-- Improved accessibility and keyboard navigation
-- More polished animations and interactions
-- Additional component variants and compositions
-- Documentation: https://www.kibo-ui.com/docs/setup
-
-**Potential Benefits:**
-- **Better UX**: More polished components out of the box
-- **Faster Development**: Pre-built component compositions reduce custom work
-- **Accessibility**: Enhanced ARIA support and keyboard navigation
-- **Consistency**: Better design system cohesion across components
-- **Maintenance**: Less custom component code to maintain
-
-**Migration Considerations:**
-- **Compatibility**: Kibo UI is built on shadcn, so migration should be straightforward
-- **Bundle Size**: Evaluate if additional features increase bundle size significantly
-- **Customization**: Ensure we can still customize components as needed
-- **Breaking Changes**: Test existing components to ensure no regressions
-- **Learning Curve**: Team needs to familiarize with Kibo-specific patterns
-
-**Evaluation Criteria:**
-1. Does it provide meaningful improvements over current shadcn components?
-2. Is the bundle size increase acceptable?
-3. Does it maintain or improve accessibility?
-4. Can we easily customize components for Mosaic's needs?
-5. Is the documentation clear and comprehensive?
-
-**Recommended Approach:**
-1. **Audit Current Components**: List all shadcn components currently in use
-2. **Kibo Comparison**: Compare Kibo versions of same components
-3. **Prototype**: Build a test page with Kibo components
-4. **Performance Test**: Measure bundle size and runtime performance
-5. **Decision**: Migrate if benefits outweigh costs, otherwise stay with shadcn
-
-**Priority:** Low-Medium (Nice to have, not critical)
-
-**Estimated Effort:**
-- Evaluation: 1-2 days
-- Migration (if approved): 3-5 days depending on component count
+**Notes:**
+- This is a critical feature for production use
+- Without persistence, chat is just a demo
+- Consider privacy/data retention policies
+- May want conversation sharing/collaboration features later
 
 ---
 
@@ -136,7 +72,13 @@ Separate mode for multi-page research documents with interactive clarification:
 
 ## ✅ Recently Completed
 
-### Moved to BUILD_PLAN.md (October 19, 2025)
+### Moved to BUILD_PLAN.md (October 19, 2025 - Evening)
+- **Adaptive Response Depth & Retrieval Matching** → Phase 6.5 Enhancements
+  - Quick/Standard/Detailed response modes
+  - Deep Research Mode with CrewAI + o4-mini-deep-research
+- **Kibo UI Component Library Evaluation** → Phase 12: Polish & Production Readiness
+
+### Moved to BUILD_PLAN.md (October 19, 2025 - Morning)
 All major enhancement proposals migrated to **Phase 10: Advanced Graph & Document Intelligence**:
 
 1. **Entity Deduplication & Merge Assistant** → Phase 10.1 (High Priority, 1-2 weeks)
@@ -228,5 +170,4 @@ When new ideas or enhancements come up:
 
 ---
 
-*Last cleaned: October 19, 2025*
-*Last updated: October 19, 2025 - Added Adaptive Response Depth, Deep Research Mode, and Kibo UI evaluation*
+*Last cleaned: October 19, 2025 (Evening)*

@@ -5,6 +5,11 @@ import { Separator } from "@/components/ui/separator";
 import { Edit2, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+// Convert snake_case to plain language
+function formatRelationshipType(type: string): string {
+  return type.replace(/_/g, " ");
+}
+
 interface RelationshipSentenceProps {
   relationshipId: string;
   sourceEntity: { id: string; name: string; type: string };
@@ -40,7 +45,7 @@ export function RelationshipSentence({
           </span>
 
           {/* Relationship Type */}
-          <span className="text-muted-foreground">{relationshipType}</span>
+          <span className="text-muted-foreground">{formatRelationshipType(relationshipType)}</span>
 
           {/* Target Entity */}
           <span

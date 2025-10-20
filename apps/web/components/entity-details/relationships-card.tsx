@@ -24,15 +24,19 @@ interface RelationshipsCardProps {
 }
 
 const relationshipTypes = [
-  "is part of",
+  "part_of",
   "uses",
   "implements",
   "extends",
-  "depends on",
-  "related to",
-  "created by",
+  "depends_on",
+  "relates_to",
+  "requires",
   "manages",
-  "contributes to",
+  "creates",
+  "collaborates_with",
+  "analyzes",
+  "evaluates",
+  "other",
 ];
 
 export function RelationshipsCard({

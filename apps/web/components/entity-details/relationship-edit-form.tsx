@@ -21,6 +21,11 @@ import { Check, ChevronsUpDown, Save, X, ArrowLeftRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Entity } from "@/app/(app)/graph/actions";
 
+// Convert snake_case to plain language
+function formatRelationshipType(type: string): string {
+  return type.replace(/_/g, " ");
+}
+
 interface RelationshipEditFormProps {
   sourceEntityId: string;
   targetEntityId: string;
@@ -96,7 +101,7 @@ export function RelationshipEditForm({
           <SelectContent>
             {relationshipTypes.map((type) => (
               <SelectItem key={type} value={type}>
-                {type}
+                {formatRelationshipType(type)}
               </SelectItem>
             ))}
           </SelectContent>

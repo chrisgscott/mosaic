@@ -450,13 +450,13 @@ export function EntityDetailsClient({
                               {/* Source Entity Chip */}
                               <Badge 
                                 variant="outline" 
-                                className="text-sm px-3 py-1 cursor-pointer hover:bg-muted"
+                                className="text-sm px-3 py-1"
                                 style={{ 
                                   borderColor: getColorForType(entity.type),
                                   color: getColorForType(entity.type)
                                 }}
                               >
-                                {entity.name}
+                                {allEntities.find((e) => e.id === editSourceEntityId)?.name || entity.name}
                               </Badge>
 
                               {/* Relationship Type Chip */}
@@ -522,6 +522,17 @@ export function EntityDetailsClient({
                                   </Command>
                                 </PopoverContent>
                               </Popover>
+
+                              {/* Reverse Direction Button */}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={handleReverseDirection}
+                                className="h-auto px-2 py-1"
+                                title="Reverse direction"
+                              >
+                                <ArrowLeftRight className="h-4 w-4" />
+                              </Button>
                             </div>
 
                             {/* Actions */}

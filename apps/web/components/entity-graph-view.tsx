@@ -1,13 +1,25 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
+import ReactFlow, {
+  Node,
+  Edge,
+  Controls,
+  Background,
+  useNodesState,
+  useEdgesState,
+  MarkerType,
+} from "reactflow";
+import "reactflow/dist/style.css";
+import dagre from "dagre";
 import { Entity } from "@/app/(app)/graph/actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
-import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Maximize2 } from "lucide-react";
+import { Maximize2, Network, GitBranch } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Label } from "./ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 // Dynamically import ForceGraph2D to avoid SSR issues
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
@@ -27,6 +39,136 @@ interface EntityGraphViewProps {
   allEntities: Entity[];
 }
 
+// Helper function for hierarchical layout using dagre
+function getHierarchicalLayout(
+  entity: Entity,
+  outgoingRelationships: Relationship[],
+  incomingRelationships: Relationship[]
+): { nodes: Node[]; edges: Edge[] } {
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+  dagreGraph.setGraph({ rankdir: "TB", ranksep: 80, nodesep: 60 });
+
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
+  const addedEntityIds = new Set<string>();
+
+  // Add current entity as center node
+  const currentNode: Node = {
+    id: entity.id,
+    type: "default",
+    position: { x: 0, y: 0 },
+    data: { label: entity.name },
+    style: {
+      background: getColorForType(entity.type),
+      color: "#fff",
+      border: "3px solid #fff",
+      borderRadius: "8px",
+      padding: "12px 16px",
+      fontSize: "14px",
+      fontWeight: "600",
+      boxShadow: `0 0 20px ${getColorForType(entity.type)}`,
+    },
+  };
+  nodes.push(currentNode);
+  dagreGraph.setNode(entity.id, { width: 180, height: 60 });
+  addedEntityIds.add(entity.id);
+
+  // Add outgoing relationships
+  outgoingRelationships.forEach((rel) => {
+    if (rel.target && !addedEntityIds.has(rel.target.id)) {
+      const node: Node = {
+        id: rel.target.id,
+        type: "default",
+        position: { x: 0, y: 0 },
+        data: { label: rel.target.name },
+        style: {
+          background: getColorForType(rel.target.type),
+          color: "#fff",
+          border: "2px solid #fff",
+          borderRadius: "8px",
+          padding: "10px 14px",
+          fontSize: "12px",
+          fontWeight: "500",
+        },
+      };
+      nodes.push(node);
+      dagreGraph.setNode(rel.target.id, { width: 160, height: 50 });
+      addedEntityIds.add(rel.target.id);
+    }
+
+    if (rel.target) {
+      edges.push({
+        id: `${entity.id}-${rel.target.id}`,
+        source: entity.id,
+        target: rel.target.id,
+        label: rel.relationship_type,
+        type: "smoothstep",
+        animated: true,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: "#64748b", strokeWidth: 2 },
+        labelStyle: { fill: "#fff", fontSize: 11, fontWeight: 500 },
+        labelBgStyle: { fill: "rgba(0, 0, 0, 0.8)" },
+      });
+      dagreGraph.setEdge(entity.id, rel.target.id);
+    }
+  });
+
+  // Add incoming relationships
+  incomingRelationships.forEach((rel) => {
+    if (rel.source && !addedEntityIds.has(rel.source.id)) {
+      const node: Node = {
+        id: rel.source.id,
+        type: "default",
+        position: { x: 0, y: 0 },
+        data: { label: rel.source.name },
+        style: {
+          background: getColorForType(rel.source.type),
+          color: "#fff",
+          border: "2px solid #fff",
+          borderRadius: "8px",
+          padding: "10px 14px",
+          fontSize: "12px",
+          fontWeight: "500",
+        },
+      };
+      nodes.push(node);
+      dagreGraph.setNode(rel.source.id, { width: 160, height: 50 });
+      addedEntityIds.add(rel.source.id);
+    }
+
+    if (rel.source) {
+      edges.push({
+        id: `${rel.source.id}-${entity.id}`,
+        source: rel.source.id,
+        target: entity.id,
+        label: rel.relationship_type,
+        type: "smoothstep",
+        animated: true,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: "#64748b", strokeWidth: 2 },
+        labelStyle: { fill: "#fff", fontSize: 11, fontWeight: 500 },
+        labelBgStyle: { fill: "rgba(0, 0, 0, 0.8)" },
+      });
+      dagreGraph.setEdge(rel.source.id, entity.id);
+    }
+  });
+
+  // Apply dagre layout
+  dagre.layout(dagreGraph);
+
+  // Update node positions
+  nodes.forEach((node) => {
+    const nodeWithPosition = dagreGraph.node(node.id);
+    node.position = {
+      x: nodeWithPosition.x - (nodeWithPosition.width || 0) / 2,
+      y: nodeWithPosition.y - (nodeWithPosition.height || 0) / 2,
+    };
+  });
+
+  return { nodes, edges };
+}
+
 export function EntityGraphView({
   entity,
   outgoingRelationships,
@@ -34,7 +176,25 @@ export function EntityGraphView({
   allEntities,
 }: EntityGraphViewProps) {
   const router = useRouter();
-  const [selectedNode, setSelectedNode] = useState<any>(null);
+  const [layout, setLayout] = useState<"force" | "hierarchical">("hierarchical");
+
+  // Prepare hierarchical layout data
+  const hierarchicalData = useMemo(
+    () => getHierarchicalLayout(entity, outgoingRelationships, incomingRelationships),
+    [entity, outgoingRelationships, incomingRelationships]
+  );
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(hierarchicalData.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(hierarchicalData.edges);
+
+  const onNodeClick = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      if (node.id !== entity.id) {
+        router.push(`/graph/${node.id}`);
+      }
+    },
+    [entity.id, router]
+  );
 
   // Prepare graph data for force-graph
   const graphData = useMemo(() => {
@@ -110,22 +270,59 @@ export function EntityGraphView({
           <div>
             <CardTitle>Relationship Graph</CardTitle>
             <CardDescription>
-              {graphData.nodes.length - 1} connected entities
+              {hierarchicalData.nodes.length - 1} connected entities
             </CardDescription>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push("/graph/visualize")}
-          >
-            <Maximize2 className="h-4 w-4 mr-2" />
-            Full Graph
-          </Button>
+          <div className="flex gap-2">
+            <Select value={layout} onValueChange={(value: any) => setLayout(value)}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="hierarchical">
+                  <div className="flex items-center gap-2">
+                    <GitBranch className="h-4 w-4" />
+                    Hierarchical
+                  </div>
+                </SelectItem>
+                <SelectItem value="force">
+                  <div className="flex items-center gap-2">
+                    <Network className="h-4 w-4" />
+                    Force-Directed
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push("/graph/visualize")}
+            >
+              <Maximize2 className="h-4 w-4 mr-2" />
+              Full Graph
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="relative w-full h-[600px] bg-muted/20 rounded-lg overflow-hidden">
-          <ForceGraph2D
+        {layout === "hierarchical" ? (
+          <div className="w-full h-[600px] bg-muted/20 rounded-lg overflow-hidden">
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onNodeClick={onNodeClick}
+              fitView
+              attributionPosition="bottom-left"
+            >
+              <Background />
+              <Controls />
+            </ReactFlow>
+          </div>
+        ) : (
+          <div className="relative w-full h-[600px] bg-muted/20 rounded-lg overflow-hidden">
+            <ForceGraph2D
             graphData={graphData}
             nodeLabel={(node: any) => `${node.name} (${node.type})`}
             nodeAutoColorBy="type"
@@ -191,7 +388,8 @@ export function EntityGraphView({
             cooldownTicks={300}
             warmupTicks={50}
           />
-        </div>
+          </div>
+        )}
         <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: getColorForType(entity.type) }} />

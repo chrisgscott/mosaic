@@ -144,24 +144,28 @@ export function EntityDetailsClient({
           onAliasesChange={setEditAliases}
         />
       ) : (
-        <div className="space-y-6">
-          {/* Entity Information */}
-          <EntityInfoCard
-            description={entity.description}
-            extractionConfidence={entity.extraction_confidence || 0}
-            documentCount={entity.document_ids?.length || 0}
-            chunkCount={entity.chunk_ids?.length || 0}
-            createdAt={entity.created_at}
-          />
+        <div className="grid gap-6 md:grid-cols-4">
+          {/* Entity Information - 25% */}
+          <div className="md:col-span-1">
+            <EntityInfoCard
+              description={entity.description}
+              extractionConfidence={entity.extraction_confidence || 0}
+              documentCount={entity.document_ids?.length || 0}
+              chunkCount={entity.chunk_ids?.length || 0}
+              createdAt={entity.created_at}
+            />
+          </div>
 
-          {/* Relationships */}
-          <RelationshipsCard
-            key={refreshKey}
-            currentEntityId={entity.id}
-            outgoingRelationships={outgoingRelationships}
-            incomingRelationships={incomingRelationships}
-            onRelationshipUpdated={handleRelationshipUpdated}
-          />
+          {/* Relationships - 75% */}
+          <div className="md:col-span-3">
+            <RelationshipsCard
+              key={refreshKey}
+              currentEntityId={entity.id}
+              outgoingRelationships={outgoingRelationships}
+              incomingRelationships={incomingRelationships}
+              onRelationshipUpdated={handleRelationshipUpdated}
+            />
+          </div>
         </div>
       )}
     </div>

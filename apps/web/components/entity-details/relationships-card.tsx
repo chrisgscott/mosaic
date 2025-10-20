@@ -88,13 +88,15 @@ export function RelationshipsCard({
     relationshipId: string,
     sourceId: string,
     targetId: string,
-    type: string
+    type: string,
+    description?: string
   ) => {
     try {
       await updateRelationship(relationshipId, {
         source_entity_id: sourceId,
         target_entity_id: targetId,
         relationship_type: type,
+        description: description || null,
       });
       toast.success("Relationship updated successfully");
       setEditingRelationshipId(null);
@@ -108,13 +110,15 @@ export function RelationshipsCard({
   const handleCreateNew = async (
     sourceId: string,
     targetId: string,
-    type: string
+    type: string,
+    description?: string
   ) => {
     try {
       await createRelationship({
         source_entity_id: sourceId,
         target_entity_id: targetId,
         relationship_type: type,
+        description: description || null,
       });
       toast.success("Relationship created successfully");
       setIsCreatingNew(false);
@@ -173,10 +177,11 @@ export function RelationshipsCard({
                 sourceEntityId={currentEntityId}
                 targetEntityId=""
                 relationshipType={relationshipTypes[0]}
+                description=""
                 allEntities={allEntities}
                 relationshipTypes={relationshipTypes}
-                onSave={(sourceId, targetId, type) =>
-                  handleCreateNew(sourceId, targetId, type)
+                onSave={(sourceId, targetId, type, description) =>
+                  handleCreateNew(sourceId, targetId, type, description)
                 }
                 onCancel={() => setIsCreatingNew(false)}
               />
@@ -236,10 +241,11 @@ export function RelationshipsCard({
                   sourceEntityId={editSourceId}
                   targetEntityId={editTargetId}
                   relationshipType={rel.relationship_type}
+                  description={rel.description || ""}
                   allEntities={allEntities}
                   relationshipTypes={relationshipTypes}
-                  onSave={(sourceId, targetId, type) =>
-                    handleSave(rel.id, sourceId, targetId, type)
+                  onSave={(sourceId, targetId, type, description) =>
+                    handleSave(rel.id, sourceId, targetId, type, description)
                   }
                   onCancel={handleCancelEdit}
                 />

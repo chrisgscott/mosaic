@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Popover,
@@ -30,9 +31,10 @@ interface RelationshipEditFormProps {
   sourceEntityId: string;
   targetEntityId: string;
   relationshipType: string;
+  description?: string;
   allEntities: Entity[];
   relationshipTypes: string[];
-  onSave: (sourceId: string, targetId: string, type: string) => void;
+  onSave: (sourceId: string, targetId: string, type: string, description?: string) => void;
   onCancel: () => void;
 }
 
@@ -55,6 +57,7 @@ export function RelationshipEditForm({
   sourceEntityId: initialSourceId,
   targetEntityId: initialTargetId,
   relationshipType: initialType,
+  description: initialDescription,
   allEntities,
   relationshipTypes,
   onSave,
@@ -63,6 +66,7 @@ export function RelationshipEditForm({
   const [sourceId, setSourceId] = useState(initialSourceId);
   const [targetId, setTargetId] = useState(initialTargetId);
   const [relType, setRelType] = useState(initialType);
+  const [description, setDescription] = useState(initialDescription || "");
   const [openSourceCombobox, setOpenSourceCombobox] = useState(false);
   const [openTargetCombobox, setOpenTargetCombobox] = useState(false);
 
@@ -76,7 +80,7 @@ export function RelationshipEditForm({
   };
 
   const handleSave = () => {
-    onSave(sourceId, targetId, relType);
+    onSave(sourceId, targetId, relType, description || undefined);
   };
 
   return (
@@ -202,6 +206,23 @@ export function RelationshipEditForm({
         >
           <ArrowLeftRight className="h-4 w-4" />
         </Button>
+      </div>
+
+      {/* Description Field */}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="description" className="text-sm font-medium text-muted-foreground">
+          Description (optional)
+        </label>
+        <Textarea
+          id="description"
+          placeholder="Describe this relationship... (used by AI for graph search)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className="min-h-[60px] text-sm"
+        />
+        <p className="text-xs text-muted-foreground">
+          This description helps the AI understand the context and nuances of this relationship when searching the knowledge graph.
+        </p>
       </div>
 
       {/* Actions */}

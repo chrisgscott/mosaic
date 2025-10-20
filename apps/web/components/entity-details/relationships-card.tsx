@@ -115,11 +115,11 @@ export function RelationshipsCard({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
+        <div>
           {allRelationships.length === 0 ? (
             <p className="text-sm text-muted-foreground">No relationships found</p>
           ) : (
-            allRelationships.map((rel) => {
+            allRelationships.map((rel, index) => {
               // Determine source and target entities
               // For outgoing: source is current entity, target is rel.target
               // For incoming: source is rel.source, target is current entity
@@ -183,6 +183,7 @@ export function RelationshipsCard({
                   relationshipType={rel.relationship_type}
                   targetEntity={targetEntity}
                   description={rel.description}
+                  isLast={index === allRelationships.length - 1}
                   onEdit={() => handleEdit(rel.id)}
                   onDelete={() =>
                     handleDelete(rel.id, rel.relationship_type, targetEntity.name)

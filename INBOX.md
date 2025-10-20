@@ -2,6 +2,120 @@
 
 ## 💡 Enhancements & Ideas
 
+### Entity Source Document & Chunk References
+**Context:** Entity pages currently show basic metadata (confidence, document count, chunk count) but don't provide direct access to the source material where entities were mentioned. Users cannot easily verify entity information or explore the original context.
+
+**Problem:**
+- Entity pages show document/chunk counts but no links to actual documents
+- No way to see which specific documents mention an entity
+- Cannot navigate from entity to the chunks where it was extracted
+- Difficult to verify or validate entity information
+- Missing connection between graph entities and source material
+
+**Proposed Solution:**
+
+**Part 1: Document List on Entity Page (1-2 days)**
+- [ ] Add "Source Documents" section to entity details page
+- [ ] Display list of documents where entity is mentioned:
+  - Document title (clickable link)
+  - Document type/category
+  - Number of mentions in that document
+  - Extraction confidence for that document
+  - Date added
+- [ ] Sort by: relevance, date, mention count
+- [ ] Filter by document type
+- [ ] Show preview snippet of entity mention on hover
+
+**Part 2: Chunk-Level References with Docling Integration (2-3 days)**
+- [ ] Add "Mentions" or "Context" section showing specific chunks
+- [ ] For each chunk reference:
+  - Link to the specific chunk in Docling document viewer
+  - Show chunk content with entity highlighted
+  - Display surrounding context (previous/next chunks)
+  - Show page number and location in original document
+  - Include extraction confidence for that mention
+- [ ] Deep linking: `/documents/:docId/chunks/:chunkId`
+- [ ] Highlight entity mentions within chunk text
+- [ ] Navigate between mentions (previous/next)
+
+**Part 3: Docling Document Viewer Integration (2-3 days)**
+- [ ] Create document viewer using Docling's rendering capabilities
+- [ ] Display original document structure (headings, tables, images)
+- [ ] Highlight entity mentions throughout document
+- [ ] Jump to specific chunk/page from entity page
+- [ ] Show all entities extracted from current view
+- [ ] Side panel with entity graph for current document
+
+**UI Design:**
+```
+┌─────────────────────────────────────────────┐
+│ Entity: Strategic Design Approaches         │
+│ [Edit] [Delete]                             │
+├─────────────────────────────────────────────┤
+│ Information (33%)  │  Relationships (66%)   │
+├────────────────────┴────────────────────────┤
+│ Source Documents (4)                        │
+│ ┌─────────────────────────────────────────┐ │
+│ │ 📄 SDA Methodologies Guide              │ │
+│ │    12 mentions • High confidence        │ │
+│ │    Added Oct 17, 2025                   │ │
+│ └─────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────┐ │
+│ │ 📄 Strategic Planning Overview          │ │
+│ │    8 mentions • Medium confidence       │ │
+│ │    Added Oct 15, 2025                   │ │
+│ └─────────────────────────────────────────┘ │
+├─────────────────────────────────────────────┤
+│ Context & Mentions (20)                     │
+│ ┌─────────────────────────────────────────┐ │
+│ │ "...Strategic Design Approaches is a    │ │
+│ │  comprehensive framework..."            │ │
+│ │  📄 SDA Guide • Page 3 • Chunk 12       │ │
+│ │  [View in Document →]                   │ │
+│ └─────────────────────────────────────────┘ │
+└─────────────────────────────────────────────┘
+```
+
+**Benefits:**
+- ✅ Easy verification of entity information
+- ✅ Direct access to source material
+- ✅ Better understanding of entity context
+- ✅ Improved trust in extracted data
+- ✅ Seamless navigation: entity → document → chunk
+- ✅ Enhanced document exploration
+- ✅ Visual document rendering with Docling
+
+**Technical Considerations:**
+- Need to query documents table with entity.document_ids
+- Chunk references already stored in entity.chunk_ids
+- Docling document viewer may need separate component
+- Consider pagination for entities with many mentions
+- Deep linking requires document/chunk routing
+- May need to cache Docling rendered documents
+- Highlight logic needs to handle entity name variations
+
+**Database Queries:**
+```typescript
+// Get documents for entity
+const { data: documents } = await supabase
+  .from('documents')
+  .select('*')
+  .in('id', entity.document_ids);
+
+// Get chunks for entity with document info
+const { data: chunks } = await supabase
+  .from('chunks')
+  .select('*, document:documents(*)')
+  .in('id', entity.chunk_ids)
+  .order('document_id', 'chunk_index');
+```
+
+**Priority:** High (Core feature for entity validation and exploration)
+
+**Estimated Effort:** 5-8 days total (all three parts)
+
+---
+
 ### Prompt Management System
 **Context:** Currently, prompts are hardcoded throughout the platform (chunk summarization, graph extraction, HyDE generation, multi-query, etc.). Changes require code deployments.
 

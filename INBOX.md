@@ -2,6 +2,136 @@
 
 ## 💡 Enhancements & Ideas
 
+### Custom Relationship Types Management
+**Context:** Relationship types are currently hardcoded in both the Python extractor and the UI. Users cannot add custom relationship types specific to their domain without code changes.
+
+**Current State:**
+- 13 predefined types: `part_of`, `uses`, `requires`, `relates_to`, `implements`, `extends`, `depends_on`, `collaborates_with`, `manages`, `creates`, `analyzes`, `evaluates`, `other`
+- Defined in Python enum (`graph_extractor.py`)
+- Duplicated in UI dropdown (`relationships-card.tsx`)
+- "other" type exists but is unused (0 instances in database)
+
+**Problem:**
+- Cannot add domain-specific relationship types (e.g., "funds", "reports_to", "supersedes")
+- No way to remove unused types
+- Changes require code deployment
+- Python extractor and UI can get out of sync
+
+**Proposed Solution: Settings Page for Relationship Types**
+
+**Phase 1: Basic Management UI (1-2 days)**
+- [ ] Create "Relationship Types" section in Settings page
+- [ ] Display current types in a table:
+  - Type name (snake_case)
+  - Display name (plain language)
+  - Usage count (# of relationships)
+  - Created date
+  - Actions (Edit, Delete)
+- [ ] Add new type form:
+  - Name input (auto-converts to snake_case)
+  - Display name (optional, defaults to formatted name)
+  - Validation (unique, no spaces, lowercase)
+- [ ] Edit existing types (rename, change display name)
+- [ ] Delete unused types (only if count = 0)
+- [ ] Store in `relationship_types` table
+
+**Phase 2: Database Schema (1 day)**
+```sql
+CREATE TABLE relationship_types (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT UNIQUE NOT NULL,           -- snake_case: "reports_to"
+  display_name TEXT,                    -- plain language: "reports to"
+  description TEXT,                     -- optional explanation
+  is_system BOOLEAN DEFAULT false,      -- prevent deletion of core types
+  usage_count INTEGER DEFAULT 0,        -- cached count
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Seed with existing types
+INSERT INTO relationship_types (name, is_system) VALUES
+  ('part_of', true),
+  ('uses', true),
+  ('requires', true),
+  ('relates_to', true),
+  ('implements', true),
+  ('extends', true),
+  ('depends_on', true),
+  ('collaborates_with', true),
+  ('manages', true),
+  ('creates', true),
+  ('analyzes', true),
+  ('evaluates', true);
+
+-- Remove "other" - it's unused and not useful
+```
+
+**Phase 3: Dynamic Loading in UI (1 day)**
+- [ ] Load relationship types from database instead of hardcoded array
+- [ ] Cache in React state/context
+- [ ] Refresh when types are updated
+- [ ] Show formatted display names in dropdowns
+- [ ] Sort by usage count (most used first)
+
+**Phase 4: Python Extractor Integration (Optional, 2-3 days)**
+- [ ] Load relationship types from database in Python
+- [ ] Use dynamic types in LLM prompt
+- [ ] Fall back to core types if database unavailable
+- [ ] Sync mechanism to keep Python and DB in sync
+
+**UI Design - Settings Page:**
+```
+┌─────────────────────────────────────────────┐
+│ Settings > Relationship Types               │
+├─────────────────────────────────────────────┤
+│ [+ Add New Type]                            │
+├─────────────────────────────────────────────┤
+│ Type Name       Display      Used   Actions │
+├─────────────────────────────────────────────┤
+│ relates_to      relates to   33    [Edit]   │
+│ part_of         part of      20    [Edit]   │
+│ uses            uses         15    [Edit]   │
+│ requires        requires     15    [Edit]   │
+│ creates         creates      12    [Edit]   │
+│ manages         manages      9     [Edit]   │
+│ analyzes        analyzes     8     [Edit]   │
+│ ...                                          │
+│ custom_type     custom type  0     [Delete] │
+└─────────────────────────────────────────────┘
+```
+
+**Benefits:**
+- ✅ Domain-specific relationship types
+- ✅ No code changes needed
+- ✅ Centralized management
+- ✅ Consistent across UI and extraction
+- ✅ Can remove unused types
+- ✅ Usage statistics visible
+- ✅ Protected system types
+
+**Technical Considerations:**
+- Need migration to create table and seed data
+- UI dropdown needs to fetch types dynamically
+- Cache types to avoid repeated queries
+- Validate type names (snake_case, unique)
+- Prevent deletion of types in use
+- Consider type versioning/history
+- May need RLS policies for multi-tenant
+
+**API Endpoints:**
+```typescript
+GET /api/settings/relationship-types
+POST /api/settings/relationship-types
+PATCH /api/settings/relationship-types/:id
+DELETE /api/settings/relationship-types/:id
+```
+
+**Priority:** Medium (Nice-to-have, not blocking)
+
+**Estimated Effort:** 3-4 days (Phases 1-3)
+
+---
+
 ### Entity Source Document & Chunk References
 **Context:** Entity pages currently show basic metadata (confidence, document count, chunk count) but don't provide direct access to the source material where entities were mentioned. Users cannot easily verify entity information or explore the original context.
 

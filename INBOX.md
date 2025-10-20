@@ -2,6 +2,91 @@
 
 ## 💡 Enhancements & Ideas
 
+### MCP Server for External Tool Integration
+**Context:** External automation tools (n8n, Make, Zapier) and AI assistants (Claude Desktop, Cline, etc.) need programmatic access to Mosaic's search, graph, and document capabilities.
+
+**Current State:**
+- ✅ Edge Function deployed: `search` endpoint with API key auth
+- Provides hybrid search with HyDE, Multi-Query, Reranking
+- Requires `user_id` parameter (must know user ID in advance)
+- Single-purpose endpoint (search only)
+
+**Problem:**
+- No standard protocol for tool discovery
+- Each integration requires custom HTTP client code
+- Cannot expose multiple capabilities (search, ingest, graph queries, entity management) under one interface
+- No type-safe schema for external tools
+- Manual API documentation maintenance
+
+**Proposed Solution: Model Context Protocol (MCP) Server**
+
+**Why MCP:**
+- Standard protocol for AI/automation tool integration
+- Automatic schema discovery and validation
+- Single server exposes multiple tools and resources
+- Native support in Claude Desktop, Cline, and emerging AI platforms
+- Type-safe tool definitions with automatic documentation
+
+**Architecture:**
+- **Location:** `apps/backend/mcp-server/` (Node.js/TypeScript)
+- **Transport:** HTTP (for n8n, web clients) + stdio (for local AI tools)
+- **Auth:** API key validation (same pattern as Edge Function)
+
+**Phase 1: Core MCP Server (2-3 days)**
+- [ ] Set up MCP SDK (`@modelcontextprotocol/sdk`)
+- [ ] Implement HTTP transport with API key auth
+- [ ] Create stdio transport for local tools
+- [ ] Connect to Supabase (service role or user-scoped)
+
+**Phase 2: Search Tools (1 day)**
+- [ ] `search_documents` tool:
+  - Parameters: `query`, `user_id`, `match_threshold`, `match_count`
+  - Returns: search results with scores, metadata
+  - Wraps existing hybrid search logic
+- [ ] `search_entities` tool:
+  - Parameters: `query`, `user_id`, `entity_type`
+  - Returns: matching entities with relationships
+
+**Phase 3: Graph Tools (1-2 days)**
+- [ ] `get_entity` tool: Fetch entity by ID with relationships
+- [ ] `get_entity_neighbors` tool: Traverse graph from entity
+- [ ] `find_path` tool: Find relationship path between two entities
+
+**Phase 4: Document Tools (1 day)**
+- [ ] `list_documents` resource: Browse available documents
+- [ ] `get_document` resource: Fetch full document content
+- [ ] `ingest_document` tool: Trigger document processing (future)
+
+**Phase 5: Resources (1 day)**
+- [ ] `mosaic://graphs` - List available graphs
+- [ ] `mosaic://graph/{id}` - Graph metadata
+- [ ] `mosaic://document/{id}` - Document content
+- [ ] `mosaic://entity/{id}` - Entity details
+
+**Benefits:**
+- **For n8n:** Single HTTP endpoint, auto-discovered tools
+- **For Claude Desktop:** Native MCP integration, no custom code
+- **For developers:** Type-safe API, automatic docs
+- **For Mosaic:** Centralized external access point, easier to maintain
+
+**Implementation Notes:**
+- Reuse Edge Function search logic (import as module)
+- Service role key for admin operations, user-scoped for queries
+- Rate limiting per API key (optional, Phase 6)
+- Logging and audit trail for all tool calls
+
+**Estimated Effort:** 1-2 weeks total
+**Priority:** Medium-High (enables ecosystem integrations)
+
+**Next Steps:**
+1. Validate n8n MCP support (or HTTP adapter availability)
+2. Scaffold MCP server with search tool
+3. Test with Claude Desktop
+4. Expand to graph and document tools
+5. Document for external developers
+
+---
+
 ### Custom Relationship Types Management
 **Context:** Relationship types are currently hardcoded in both the Python extractor and the UI. Users cannot add custom relationship types specific to their domain without code changes.
 

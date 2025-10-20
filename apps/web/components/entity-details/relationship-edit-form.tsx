@@ -21,6 +21,7 @@ import {
 import { Check, ChevronsUpDown, Save, X, ArrowLeftRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Entity } from "@/app/(app)/graph/actions";
+import { AIDescriptionButton } from "@/components/ui/ai-description-button";
 
 // Convert snake_case to plain language
 function formatRelationshipType(type: string): string {
@@ -210,9 +211,21 @@ export function RelationshipEditForm({
 
       {/* Description Field */}
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="description" className="text-sm font-medium text-muted-foreground">
-          Description (optional)
-        </label>
+        <div className="flex items-center justify-between">
+          <label htmlFor="description" className="text-sm font-medium text-muted-foreground">
+            Description (optional)
+          </label>
+          <AIDescriptionButton
+            type="relationship"
+            name={`${sourceEntity?.name || ""} ${relType} ${targetEntity?.name || ""}`}
+            sourceEntityName={sourceEntity?.name || ""}
+            targetEntityName={targetEntity?.name || ""}
+            relationshipType={relType}
+            onDescriptionGenerated={setDescription}
+            size="sm"
+            variant="ghost"
+          />
+        </div>
         <Textarea
           id="description"
           placeholder="Describe this relationship... (used by AI for graph search)"

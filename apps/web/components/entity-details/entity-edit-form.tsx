@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AIDescriptionButton } from "@/components/ui/ai-description-button";
 
 interface EntityEditFormProps {
   name: string;
@@ -66,7 +67,15 @@ export function EntityEditForm({
           </Select>
         </div>
         <div>
-          <Label htmlFor="description">Description</Label>
+          <div className="flex items-center justify-between mb-2">
+            <Label htmlFor="description">Description</Label>
+            <AIDescriptionButton
+              type="entity"
+              name={name}
+              entityType={type}
+              onDescriptionGenerated={onDescriptionChange}
+            />
+          </div>
           <Textarea
             id="description"
             value={description}

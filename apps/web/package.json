@@ -38,19 +38,13 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
-<<<<<<< HEAD
     "@types/d3-force": "^3.0.10",
-=======
     "@types/dagre": "^0.7.53",
->>>>>>> feature/graph-management-ui
     "ai": "^5.0.72",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-<<<<<<< HEAD
     "d3-force": "^3.0.0",
-=======
->>>>>>> feature/graph-management-ui
     "dagre": "^0.8.5",
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",

@@ -14,11 +14,11 @@ Include the custom API key in the `x-api-key` header:
 
 **Headers:**
 ```
-x-api-key: test-api-key-12345
+x-api-key: <YOUR_API_KEY>
 Content-Type: application/json
 ```
 
-**Note:** JWT verification is disabled for this function (`--no-verify-jwt`), so you only need the custom API key.
+**Note:** JWT verification is disabled for this function (`--no-verify-jwt`), so you only need the custom API key. Contact the administrator for the API key.
 
 ## Request Format
 
@@ -99,7 +99,7 @@ Search behavior is controlled by database settings in `system_settings` table:
 3. **Authentication**: None (use custom header)
 4. **Headers**:
    - `Content-Type`: `application/json`
-   - `x-api-key`: `test-api-key-12345`
+   - `x-api-key`: `<YOUR_API_KEY>`
 5. **Body** (JSON):
 ```json
 {

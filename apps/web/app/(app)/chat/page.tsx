@@ -1,11 +1,11 @@
 'use client';
 
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Message } from '@/components/ai/message';
-import { Sources } from '@/components/ai/sources';
 import { MarkdownResponse } from '@/components/ai/markdown-response';
 import { Send, Loader2, Bot } from 'lucide-react';
 import {
@@ -17,27 +17,29 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  sources?: Array<{
-    chunkId: string;
-    documentId: string;
-    documentName: string;
-    chunkIndex: number;
-    relevanceScore: number;
-  }>;
-}
-
+/**
+ * Chat Page - Vercel AI SDK Implementation
+ * 
+ * Uses useChat hook for automatic:
+ * - Message state management
+ * - Streaming responses
+ * - Error handling
+ * - Loading states
+ * - Optimistic updates
+ * 
+ * Documentation: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot
+ */
 export default function ChatPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [streamingContent, setStreamingContent] = useState('');
-  const [loadingStatus, setLoadingStatus] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // useChat hook handles all chat state and streaming automatically
+  const { messages, sendMessage, status, error } = useChat({
+    transport: new DefaultChatTransport({
+      api: '/api/chat',
+    }),
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -45,103 +47,17 @@ export default function ChatPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingContent]);
+  }, [messages]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || status !== 'ready') return;
 
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: input.trim(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
+    // sendMessage automatically handles everything
+    sendMessage({ text: input.trim() });
     setInput('');
-    setIsLoading(true);
-    setStreamingContent('');
-    setLoadingStatus('Searching through your documents...');
-
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: userMessage.content,
-          depth: 'standard',
-          conversationHistory: messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to get response');
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-
-      if (!reader) {
-        throw new Error('No response stream');
-      }
-
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: '',
-      };
-
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              if (data.type === 'sources') {
-                assistantMessage.sources = data.sources;
-                setLoadingStatus('Generating answer...');
-              } else if (data.type === 'text') {
-                assistantMessage.content += data.content;
-                setStreamingContent(assistantMessage.content);
-              } else if (data.type === 'done') {
-                setMessages((prev) => [...prev, assistantMessage]);
-                setStreamingContent('');
-              }
-            } catch (error) {
-              console.error('Error parsing SSE data:', error);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Chat error:', error);
-      const errorMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-      setStreamingContent('');
-      setLoadingStatus('');
-      inputRef.current?.focus();
-    }
+    inputRef.current?.focus();
   };
 
   return (
@@ -188,46 +104,41 @@ export default function ChatPage() {
             </Card>
           )}
 
-          {messages.map((message) => (
-            <div key={message.id} className="space-y-4">
-              {message.role === 'user' ? (
-                <Message role="user" content={message.content} />
-              ) : (
-                <>
-                  <div className="flex gap-3 p-4 rounded-lg bg-background">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
-                      <Bot className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 space-y-2 overflow-hidden">
-                      <div className="text-sm font-medium">Assistant</div>
-                      <MarkdownResponse content={message.content} />
-                    </div>
-                  </div>
-                  {message.sources && message.sources.length > 0 && (
-                    <Sources sources={message.sources} />
-                  )}
-                </>
-              )}
-            </div>
-          ))}
+          {messages.map((message) => {
+            // Extract text from message parts
+            const textContent = message.parts
+              .filter(part => part.type === 'text')
+              .map(part => part.text)
+              .join('');
 
-          {/* Streaming message */}
-          {isLoading && streamingContent && (
-            <div className="space-y-4">
-              <div className="flex gap-3 p-4 rounded-lg bg-background">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
-                  <Bot className="h-4 w-4" />
-                </div>
-                <div className="flex-1 space-y-2 overflow-hidden">
-                  <div className="text-sm font-medium">Assistant</div>
-                  <MarkdownResponse content={streamingContent} isStreaming />
+            return (
+              <div key={message.id} className="space-y-4">
+                <div className="flex gap-3 p-4 rounded-lg bg-background">
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                    message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                  }`}>
+                    {message.role === 'user' ? (
+                      <Bot className="h-4 w-4" />
+                    ) : (
+                      <Bot className="h-4 w-4" />
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-2 overflow-hidden">
+                    <div className="text-sm font-medium">
+                      {message.role === 'user' ? 'You' : 'Assistant'}
+                    </div>
+                    <MarkdownResponse 
+                      content={textContent} 
+                      isStreaming={status === 'streaming' && message.id === messages[messages.length - 1]?.id}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })}
 
           {/* Loading indicator */}
-          {isLoading && !streamingContent && (
+          {status === 'submitted' && (
             <div className="flex gap-3 p-4 rounded-lg bg-background">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
                 <Bot className="h-4 w-4" />
@@ -236,8 +147,38 @@ export default function ChatPage() {
                 <div className="text-sm font-medium">Assistant</div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {loadingStatus || 'Processing...'}
+                  Searching through your documents...
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Error state */}
+          {error && (
+            <div className="flex gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+              <div className="flex-1 space-y-2">
+                <div className="text-sm font-medium text-destructive">Error</div>
+                <div className="text-sm text-muted-foreground">
+                  Something went wrong. Please try again.
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (messages.length > 0) {
+                      const lastUserMessage = messages.filter(m => m.role === 'user').pop();
+                      if (lastUserMessage) {
+                        const text = lastUserMessage.parts
+                          .filter(p => p.type === 'text')
+                          .map(p => p.text)
+                          .join('');
+                        sendMessage({ text });
+                      }
+                    }
+                  }}
+                >
+                  Retry
+                </Button>
               </div>
             </div>
           )}
@@ -255,12 +196,12 @@ export default function ChatPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask a question about your documents..."
-                disabled={isLoading}
+                disabled={status !== 'ready'}
                 className="flex-1"
                 autoFocus
               />
-              <Button type="submit" disabled={isLoading || !input.trim()}>
-                {isLoading ? (
+              <Button type="submit" disabled={status !== 'ready' || !input.trim()}>
+                {status === 'submitted' || status === 'streaming' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Send className="h-4 w-4" />

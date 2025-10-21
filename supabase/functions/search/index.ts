@@ -65,7 +65,7 @@ async function generateMultiQuery(query: string): Promise<string[]> {
     const startTime = Date.now();
     
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4.1-nano",
       messages: [{
         role: "user",
         content: `Generate 3 different variations of this search query to improve search coverage. Each variation should:
@@ -100,7 +100,7 @@ async function generateHyDE(query: string): Promise<string> {
     const startTime = Date.now();
     
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4.1-nano",
       messages: [{
         role: "user",
         content: `You are an expert assistant. Given a user's question, write a detailed, comprehensive answer that would perfectly answer their question. This hypothetical answer will be used to find similar documents.

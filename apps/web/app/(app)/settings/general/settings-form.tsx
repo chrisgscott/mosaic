@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { ModelSelect } from "@/components/settings/model-select";
+import type { ModelCategory } from "@/lib/ai/available-models";
 
 type Setting = {
   id: string;
@@ -145,6 +147,16 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
     return category.charAt(0).toUpperCase() + category.slice(1);
   };
 
+  const getCategoryDescription = (category: string) => {
+    const descriptions: { [key: string]: string } = {
+      'llm': 'Configure AI models for different quality/speed tradeoffs. All models use AI Gateway for unified access and cost tracking.',
+      'search': 'Configure RAG search pipeline features',
+      'processing': 'Configure document processing options',
+    };
+    
+    return descriptions[category.toLowerCase()] || `Configure ${category.toLowerCase()} behavior for the entire system`;
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -153,7 +165,7 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
           <CardHeader>
             <CardTitle>{getCategoryTitle(category)} Settings</CardTitle>
             <CardDescription>
-              Configure {getCategoryTitle(category).toLowerCase()} behavior for the entire system
+              {getCategoryDescription(category)}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -171,6 +183,29 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
                   return acronyms.includes(upperWord) ? upperWord : word.charAt(0).toUpperCase() + word.slice(1);
                 })
                 .join(' ');
+
+              // Check if this is an LLM model setting (exclude embeddingModel and temperature)
+              const modelKeys = ['quickModel', 'summaryModel', 'standardModel', 'detailedModel', 'deepResearchModel', 'vlmModel'];
+              const settingName = setting.key.split('.')[1];
+              const isModelSetting = setting.category === 'llm' && modelKeys.includes(settingName);
+              const modelCategory = isModelSetting ? settingName.replace('Model', '') as ModelCategory : null;
+              
+              // Simple description for model settings (dropdown shows all the details)
+              const getDescription = () => {
+                if (isModelSetting) {
+                  // Just show what this model is used for
+                  const usageMap: { [key: string]: string } = {
+                    'llm.quickModel': 'Used for: HyDE generation, multi-query expansion',
+                    'llm.summaryModel': 'Used for: Chunk summaries, document summarization',
+                    'llm.standardModel': 'Used for: Chat, entity extraction, graph search',
+                    'llm.detailedModel': 'Used for: Complex analysis, detailed responses',
+                    'llm.deepResearchModel': 'Used for: Multi-step reasoning, deep research',
+                    'llm.vlmModel': 'Used for: Image analysis, OCR, visual understanding',
+                  };
+                  return usageMap[setting.key];
+                }
+                return setting.description;
+              };
 
               return (
                 <div key={setting.key} className="space-y-2">
@@ -191,6 +226,17 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
                           }
                         />
                       </>
+                    ) : isModelSetting && modelCategory ? (
+                      <div className="flex-1 space-y-2">
+                        <Label htmlFor={setting.key} className="text-base font-medium">
+                          {displayName}
+                        </Label>
+                        <ModelSelect
+                          category={modelCategory}
+                          value={values[setting.key]?.toString() || ''}
+                          onValueChange={(value) => handleInputChange(setting.key, value, 'string')}
+                        />
+                      </div>
                     ) : (
                       <div className="flex-1 space-y-2">
                         <Label htmlFor={setting.key} className="text-base font-medium">
@@ -206,10 +252,10 @@ export function SettingsForm({ settings }: { settings: Setting[] }) {
                       </div>
                     )}
                   </div>
-                  {setting.description && (
-                    <p className="text-sm text-muted-foreground">
-                      {setting.description}
-                    </p>
+                  {(setting.description || isModelSetting) && (
+                    <div className="text-sm text-muted-foreground">
+                      {getDescription()}
+                    </div>
                   )}
                 </div>
               );

@@ -31,23 +31,14 @@ const data = {
       icon: "FileText",
     },
     {
-      title: "Knowledge Base",
-      url: "#",
-      icon: "Database",
-      items: [
-        {
-          title: "Search",
-          url: "#",
-        },
-        {
-          title: "Collections",
-          url: "#",
-        },
-        {
-          title: "Analytics",
-          url: "#",
-        },
-      ],
+      title: "Search",
+      url: "/search",
+      icon: "Search",
+    },
+    {
+      title: "Chat",
+      url: "/chat",
+      icon: "MessageSquare",
     },
     {
       title: "Knowledge Graph",
@@ -72,38 +63,9 @@ const data = {
       title: "Settings",
       url: "/settings/general",
       icon: "Settings2",
-      items: [
-        {
-          title: "General",
-          url: "/settings/general",
-        },
-        {
-          title: "Embeddings",
-          url: "#",
-        },
-        {
-          title: "Chunking",
-          url: "#",
-        },
-        {
-          title: "API Keys",
-          url: "#",
-        },
-      ],
     },
   ],
-  navSecondary: [
-    {
-      title: "Search",
-      url: "#",
-      icon: "Search",
-    },
-    {
-      title: "Chat",
-      url: "/chat",
-      icon: "MessageSquare",
-    },
-  ],
+  navSecondary: [],
   projects: [
     {
       name: "Quick Upload",

@@ -6,7 +6,7 @@
  */
 
 import { generateObject } from 'ai';
-import { openai } from '@ai-sdk/openai';
+import { models } from '@/lib/ai/gateway';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 
@@ -78,12 +78,11 @@ export async function extractEntitiesAndRelationships(
     temperature?: number;
   }
 ): Promise<ExtractionResult> {
-  const model = options?.model || 'gpt-4o-mini';
   const temperature = options?.temperature || 0.3;
 
   try {
     const result = await generateObject({
-      model: openai(model),
+      model: models.standard,
       temperature,
       schema: ExtractionResultSchema,
       prompt: `You are an expert at extracting entities and relationships from text for knowledge graph construction.

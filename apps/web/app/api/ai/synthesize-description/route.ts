@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { models } from "@/lib/ai/gateway";
+import { generateText } from "ai";
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,8 +31,8 @@ Create a single, comprehensive description that:
 
 Return ONLY the synthesized description, nothing else.`;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const result = await generateText({
+      model: models.standard,
       messages: [
         {
           role: "system",
@@ -48,10 +45,9 @@ Return ONLY the synthesized description, nothing else.`;
         },
       ],
       temperature: 0.3,
-      max_tokens: 200,
     });
 
-    const description = completion.choices[0]?.message?.content?.trim();
+    const description = result.text.trim();
 
     if (!description) {
       return NextResponse.json(

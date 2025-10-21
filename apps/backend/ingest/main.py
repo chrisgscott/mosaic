@@ -56,9 +56,9 @@ ENABLE_GRAPH_EXTRACTION = settings_service.get_bool('search.useGraphSearch', Tru
 CHUNK_SUMMARY_NEIGHBORS = settings_service.get_int('processing.summaryNeighbors', 2, 'CHUNK_SUMMARY_NEIGHBORS')
 
 # Get model settings for logging
-VLM_MODEL = settings_service.get_string('processing.vlmModel', 'gpt-4o-mini')
-SUMMARY_MODEL = settings_service.get_string('processing.summaryModel', 'gpt-4o-mini')
-GRAPH_MODEL = settings_service.get_string('processing.graphModel', 'gpt-4o-mini')
+VLM_MODEL = settings_service.get_string('llm.vlmModel', 'gpt-4o')
+SUMMARY_MODEL = settings_service.get_string('llm.summaryModel', 'gpt-4o-mini')
+GRAPH_MODEL = settings_service.get_string('llm.standardModel', 'gpt-4o-mini')
 EMBEDDING_MODEL = settings_service.get_string('llm.embeddingModel', 'text-embedding-3-small')
 TEMPERATURE = settings_service.get_float('llm.temperature', 0.7)
 

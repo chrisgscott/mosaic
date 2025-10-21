@@ -111,10 +111,10 @@ class GraphExtractor:
         Returns:
             ExtractionResult with entities and relationships
         """
-        # Get graph model from settings (default to gpt-4o-mini)
+        # Get graph model from settings (default to gpt-4o-mini for entity extraction)
         graph_model = "gpt-4o-mini"
         if self.settings_service:
-            graph_model = self.settings_service.get_string('processing.graphModel', 'gpt-4o-mini')
+            graph_model = self.settings_service.get_string('llm.standardModel', 'gpt-4o-mini')
         
         for attempt in range(max_retries):
             try:

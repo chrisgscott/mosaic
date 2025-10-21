@@ -1,45 +1,52 @@
-import { createOpenAI } from '@ai-sdk/openai';
-import { anthropic } from '@ai-sdk/anthropic';
+import { createGateway } from '@ai-sdk/gateway';
 
 /**
- * AI Gateway Configuration
+ * Vercel AI Gateway Configuration
  * 
- * Provides unified access to multiple LLM providers with automatic failover.
- * Uses Vercel AI Gateway for centralized billing and monitoring.
+ * Official Vercel AI Gateway provides:
+ * - Unified API across 20+ providers (OpenAI, Anthropic, Google, xAI, etc.)
+ * - Automatic failover and retry logic
+ * - Centralized usage tracking and cost monitoring
+ * - Provider-level routing and load balancing
+ * - OIDC authentication for Vercel deployments
  * 
- * Fallback Chain:
- * 1. GPT-4o-mini (primary, fast & cheap)
- * 2. Claude 3.7 Sonnet (fallback, high quality)
- * 3. Gemini 2.5 Flash Lite (backup, very fast)
+ * Documentation: https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway
+ * Dashboard: https://vercel.com/ai-gateway
  */
 
-// Configure OpenAI provider through AI Gateway
-export const gateway = createOpenAI({
-  baseURL: process.env.AI_GATEWAY_API_KEY 
-    ? 'https://gateway.ai.cloudflare.com/v1/mosaic/openai'
-    : undefined,
-  apiKey: process.env.OPENAI_API_KEY,
+// Initialize Vercel AI Gateway
+// Uses AI_GATEWAY_API_KEY from environment or OIDC for Vercel deployments
+export const gateway = createGateway({
+  apiKey: process.env.AI_GATEWAY_API_KEY,
 });
 
-// Primary model for RAG answer generation
-export const primaryModel = gateway('gpt-4o-mini');
-
-// Fallback model (Claude 3.7 Sonnet)
-export const fallbackModel = anthropic('claude-3-5-sonnet-20241022');
-
-// Model configurations for different use cases
+/**
+ * Model configurations for different use cases
+ * 
+ * Format: 'provider/model-name'
+ * Available providers: openai, anthropic, google, xai, groq, deepseek, etc.
+ * 
+ * Philosophy:
+ * - quick: Fast, cheap operations (HyDE, multi-query, simple tasks)
+ * - standard: Default chat responses, entity extraction
+ * - detailed: High-quality analysis, complex reasoning
+ * - deepResearch: Advanced reasoning with o1/o4 models
+ * - vlm: Vision tasks requiring multimodal models
+ */
+/**
+ * Default models (used as fallback if settings unavailable)
+ * These match the database defaults and use provider/model format
+ */
 export const models = {
-  // Quick answers (1-2 paragraphs)
-  quick: gateway('gpt-4o-mini'),
+  // Core models for different quality/speed tradeoffs
+  quick: gateway('openai/gpt-4.1-nano'),              // Ultra-fast: HyDE, multi-query
+  standard: gateway('openai/gpt-4o-mini'),            // Default: chat, entities, graph
+  detailed: gateway('openai/gpt-4o'),                 // High quality: complex analysis
+  deepResearch: gateway('openai/o4-mini-deep-research'), // Advanced reasoning
   
-  // Standard answers (3-5 paragraphs with citations)
-  standard: gateway('gpt-4o-mini'),
-  
-  // Detailed answers (comprehensive analysis)
-  detailed: gateway('gpt-4o'),
-  
-  // Deep research (multi-step reasoning)
-  deepResearch: gateway('o4-mini-deep-research'),
+  // Specialized models
+  summary: gateway('openai/gpt-4o-mini'),             // Chunk summaries
+  vlm: gateway('openai/gpt-4o'),                      // Vision/multimodal
 } as const;
 
 export type ResponseDepth = keyof typeof models;
@@ -60,3 +67,25 @@ export function estimateCost(inputTokens: number, outputTokens: number): number 
   const outputCost = (outputTokens / 1_000_000) * 0.60;
   return inputCost + outputCost;
 }
+
+/**
+ * Provider routing options for advanced use cases
+ * 
+ * Example usage:
+ * ```ts
+ * import type { GatewayProviderOptions } from '@ai-sdk/gateway';
+ * 
+ * const result = await generateText({
+ *   model: gateway('anthropic/claude-sonnet-4'),
+ *   prompt: 'Hello',
+ *   providerOptions: {
+ *     gateway: {
+ *       order: ['vertex', 'anthropic'], // Try Vertex AI first
+ *       only: ['vertex', 'anthropic'],  // Only use these providers
+ *       user: 'user-123',                // Track usage per user
+ *       tags: ['chat', 'v2'],            // Tag for analytics
+ *     }
+ *   }
+ * });
+ * ```
+ */

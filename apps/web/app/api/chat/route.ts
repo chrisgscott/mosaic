@@ -1,22 +1,31 @@
 import { createClient } from "@/lib/supabase/server";
-import { NextRequest } from "next/server";
-import { generateStreamingAnswer } from "@/lib/ai/answer-generator";
+import { streamText, convertToModelMessages, type UIMessage } from "ai";
+import { getModelForDepth } from "@/lib/ai/gateway";
 import { POST as searchAPI } from "@/app/api/search/route";
 import type { SearchResult } from "@/app/api/search/route";
 
 /**
- * RAG Chat API with Streaming
+ * RAG Chat API - Vercel AI SDK Implementation
+ * 
+ * Uses official Vercel AI SDK patterns:
+ * - streamText() for streaming responses
+ * - convertToModelMessages() for message conversion
+ * - toUIMessageStreamResponse() for proper streaming format
  * 
  * Flow:
- * 1. Receive user query
- * 2. Use full search API (HyDE, Multi-Query, Reranking, Graph Search)
- * 3. Generate streaming answer using retrieved context
- * 4. Return answer with source citations
+ * 1. Receive UIMessage[] from useChat hook
+ * 2. Extract latest query and run full search pipeline
+ * 3. Build RAG context from search results
+ * 4. Stream response using AI Gateway
+ * 5. Return UIMessageStream with sources
  * 
- * This ensures chat respects all system settings and uses the same
- * sophisticated RAG pipeline as the search page.
+ * Documentation: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot
  */
-export async function POST(request: NextRequest) {
+
+// Allow streaming responses up to 30 seconds
+export const maxDuration = 30;
+
+export async function POST(request: Request) {
   try {
     const supabase = await createClient();
 
@@ -33,125 +42,92 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse request body
-    const body = await request.json();
-    const {
-      query,
-      depth = 'standard',
-      match_threshold = 0.5,
-      match_count = 10,
-      graph_hops = 1,
-      conversationHistory = [],
-    } = body;
+    // Parse request body - AI SDK sends UIMessage[]
+    const { messages }: { messages: UIMessage[] } = await request.json();
 
-    if (!query || typeof query !== "string") {
+    if (!messages || messages.length === 0) {
       return new Response(
-        JSON.stringify({ error: "Query parameter is required and must be a string" }),
+        JSON.stringify({ error: "Messages array is required" }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`[Chat] Processing query: "${query}" (depth: ${depth})`);
+    // Extract the latest user message for search
+    const lastMessage = messages[messages.length - 1];
+    const query = lastMessage.parts
+      .filter(part => part.type === 'text')
+      .map(part => part.text)
+      .join(' ');
 
-    // Step 1: Use the full search API to get results
-    // This respects all system settings: HyDE, Multi-Query, Reranking, Graph Search
-    const searchRequest = new NextRequest(request.url, {
+    if (!query) {
+      return new Response(
+        JSON.stringify({ error: "No text content in message" }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`[Chat] Processing query: "${query}"`);
+
+    // Step 1: Run full search pipeline (HyDE, Multi-Query, Reranking, Graph Search)
+    const searchRequest = new Request(request.url, {
       method: 'POST',
       headers: request.headers,
       body: JSON.stringify({
         query,
-        match_threshold,
-        match_count,
-        graph_hops,
+        match_threshold: 0.5,
+        match_count: 10,
+        graph_hops: 1,
       }),
     });
 
-    const searchResponse = await searchAPI(searchRequest);
+    const searchResponse = await searchAPI(searchRequest as unknown as Request);
     
     if (!searchResponse.ok) {
       const error = await searchResponse.json();
-      return new Response(
-        JSON.stringify({ error: "Search failed", details: error.message }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
+      throw new Error(`Search failed: ${error.message}`);
     }
 
     const searchData = await searchResponse.json();
     const results: SearchResult[] = searchData.results || [];
     
-    console.log(`[Chat] Search completed in ${searchData.processing_time_ms}ms`);
     console.log(`[Chat] Found ${results.length} relevant chunks`);
 
-    if (results.length === 0) {
-      return new Response(
-        JSON.stringify({
-          error: "No relevant information found",
-          message: "I couldn't find any relevant information in your documents to answer this question.",
-        }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
+    // Step 2: Build RAG context from search results
+    const context = results
+      .map((result, idx) => {
+        return `[${idx + 1}] ${result.content}\n(Source: ${result.document_name}, Chunk ${result.chunk_index})`;
+      })
+      .join('\n\n---\n\n');
 
-    // Step 3: Generate streaming answer
-    const streamResult = await generateStreamingAnswer({
-      query,
-      searchResults: results,
-      depth,
-      includeSourceCitations: true,
-      conversationHistory,
-    });
+    const systemPrompt = `You are a helpful AI assistant that answers questions based on provided context.
 
-    // Step 4: Return streaming response with sources metadata
-    const sources = results.map((result) => ({
-      chunkId: result.chunk_id,
-      documentId: result.document_id,
-      documentName: result.document_name,
-      chunkIndex: result.chunk_index,
-      relevanceScore: result.rerank_score || result.similarity || 0,
-    }));
+## Context from Retrieved Documents:
 
-    // Create a custom stream that includes sources in the first chunk
-    const encoder = new TextEncoder();
+${context}
 
-    const customStream = new ReadableStream({
-      async start(controller) {
-        // Send sources as the first event
-        const sourcesEvent = `data: ${JSON.stringify({ type: 'sources', sources })}\n\n`;
-        controller.enqueue(encoder.encode(sourcesEvent));
+## Instructions:
+- Answer using ONLY information from the provided context
+- If context is insufficient, say so clearly
+- Cite sources using [1], [2], etc.
+- Use markdown formatting for readability
+- Your answer is ANALYSIS based on source documents (which are FACTS)
+- Be transparent about uncertainty`;
 
-        // Stream the answer text
-        const reader = streamResult.textStream.getReader();
-        
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            
-            if (done) {
-              // Send completion event
-              const doneEvent = `data: ${JSON.stringify({ type: 'done' })}\n\n`;
-              controller.enqueue(encoder.encode(doneEvent));
-              controller.close();
-              break;
-            }
-
-            // Forward text chunks
-            const textEvent = `data: ${JSON.stringify({ type: 'text', content: value })}\n\n`;
-            controller.enqueue(encoder.encode(textEvent));
-          }
-        } catch (error) {
-          console.error('[Chat] Streaming error:', error);
-          controller.error(error);
-        }
+    // Step 3: Stream response using AI SDK
+    const result = streamText({
+      model: getModelForDepth('standard'),
+      system: systemPrompt,
+      messages: convertToModelMessages(messages),
+      temperature: 0.3,
+      onFinish: ({ usage }) => {
+        console.log(`[Chat] Tokens used: ${usage.inputTokens} input, ${usage.outputTokens} output`);
       },
     });
 
-    return new Response(customStream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
+    // Step 4: Return UIMessageStream response
+    // TODO: Add sources metadata using streaming data (future enhancement)
+    // See: https://ai-sdk.dev/docs/ai-sdk-ui/streaming-data
+    return result.toUIMessageStreamResponse();
   } catch (error) {
     console.error("[Chat] Unexpected error:", error);
     return new Response(

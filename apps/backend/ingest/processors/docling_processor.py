@@ -58,10 +58,10 @@ class DoclingProcessor:
                 if not api_key:
                     raise ValueError("OPENAI_API_KEY environment variable required for API VLM")
                 
-                # Get VLM model from settings (default to gpt-4o-mini)
-                vlm_model = "gpt-4o-mini"
+                # Get VLM model from settings (default to gpt-4o)
+                vlm_model = "gpt-4o"
                 if self.settings_service:
-                    vlm_model = self.settings_service.get_string('processing.vlmModel', 'gpt-4o-mini')
+                    vlm_model = self.settings_service.get_string('llm.vlmModel', 'gpt-4o')
                 
                 vlm_options = ApiVlmOptions(
                     url="https://api.openai.com/v1/chat/completions",
@@ -219,10 +219,16 @@ class DoclingProcessor:
                 )
                 
                 api_key = os.getenv('OPENAI_API_KEY')
+                
+                # Get VLM model from settings
+                vlm_model = "gpt-4o"
+                if self.settings_service:
+                    vlm_model = self.settings_service.get_string('llm.vlmModel', 'gpt-4o')
+                
                 vlm_options = ApiVlmOptions(
                     url="https://api.openai.com/v1/chat/completions",
                     params=dict(
-                        model="gpt-4o-mini",
+                        model=vlm_model,
                         max_tokens=4096,
                     ),
                     headers={"Authorization": f"Bearer {api_key}"},
@@ -288,10 +294,16 @@ class DoclingProcessor:
                 )
                 
                 api_key = os.getenv('OPENAI_API_KEY')
+                
+                # Get VLM model from settings
+                vlm_model = "gpt-4o"
+                if self.settings_service:
+                    vlm_model = self.settings_service.get_string('llm.vlmModel', 'gpt-4o')
+                
                 vlm_options = ApiVlmOptions(
                     url="https://api.openai.com/v1/chat/completions",
                     params=dict(
-                        model="gpt-4o-mini",
+                        model=vlm_model,
                         max_tokens=4096,
                     ),
                     headers={"Authorization": f"Bearer {api_key}"},

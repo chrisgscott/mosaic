@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { generateText } from "ai";
-import { openai as openaiProvider } from "@ai-sdk/openai";
+import { models } from "@/lib/ai/gateway";
 import { createProgressEvent, type ProgressCallback } from "@/lib/search-progress";
 import { graphEnhancedSearch, isRelationshipQuery } from "@/lib/graph/graph-search";
 
@@ -70,7 +70,7 @@ async function generateMultiQuery(query: string): Promise<string[]> {
     const startTime = Date.now();
     
     const { text } = await generateText({
-      model: openaiProvider("gpt-4.1-nano"),
+      model: models.quick,
       prompt: `Generate 3 different variations of this search query to improve search coverage. Each variation should:
 - Rephrase the question differently
 - Use different terminology or synonyms
@@ -102,7 +102,7 @@ async function generateHyDE(query: string): Promise<string> {
     const startTime = Date.now();
     
     const { text } = await generateText({
-      model: openaiProvider("gpt-4.1-nano"),
+      model: models.quick,
       prompt: `You are an expert assistant. Given a user's question, write a detailed, comprehensive answer that would perfectly answer their question. This hypothetical answer will be used to find similar documents.
 
 Question: ${query}

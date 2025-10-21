@@ -211,7 +211,7 @@ export async function generateAnswer(
         input: result.usage?.promptTokens || 0,
         output: result.usage?.completionTokens || 0,
       },
-      model: 'gpt-4o-mini',
+      model: 'standard', // Using AI Gateway standard model
     };
   } catch (error) {
     console.error('[Answer Generation] Error:', error);

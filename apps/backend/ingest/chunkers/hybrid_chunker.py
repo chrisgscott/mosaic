@@ -130,7 +130,7 @@ class HybridChunker:
             # Get summary model from settings (default to gpt-4o-mini)
             summary_model = "gpt-4o-mini"
             if self.settings_service:
-                summary_model = self.settings_service.get_string('processing.summaryModel', 'gpt-4o-mini')
+                summary_model = self.settings_service.get_string('llm.summaryModel', 'gpt-4o-mini')
             
             # Generate summary
             response = self.openai_client.chat.completions.create(

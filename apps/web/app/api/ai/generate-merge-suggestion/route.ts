@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import OpenAI from "openai";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { models } from "@/lib/ai/gateway";
+import { generateObject } from "ai";
+import { z } from "zod";
 
 export async function POST(request: NextRequest) {
   try {
@@ -152,13 +150,20 @@ Provide your suggestions in JSON format:
   "suggestedDescription": "synthesized description optimized for knowledge graph retrieval (2-3 sentences). Be specific and concrete, using terminology from source material. Mention related entities by name. Avoid generic buzzwords."
 }`;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const MergeSuggestionSchema = z.object({
+      suggestedName: z.string(),
+      suggestedType: z.string(),
+      suggestedDescription: z.string(),
+    });
+
+    const result = await generateObject({
+      model: models.standard,
+      schema: MergeSuggestionSchema,
       messages: [
         {
           role: "system",
           content:
-            "You are a knowledge graph expert who helps merge duplicate entities. CRITICAL: Use ONLY information from the [Chunk N] sections provided. DO NOT invent, expand, or guess what abbreviations mean. If an abbreviation's full form is not in the chunks, leave it as an abbreviation. Write specific, concrete descriptions using only terminology that appears in the source chunks. If chunks lack information, write shorter descriptions. Return only valid JSON.",
+            "You are a knowledge graph expert who helps merge duplicate entities. CRITICAL: Use ONLY information from the [Chunk N] sections provided. DO NOT invent, expand, or guess what abbreviations mean. If an abbreviation's full form is not in the chunks, leave it as an abbreviation. Write specific, concrete descriptions using only terminology that appears in the source chunks. If chunks lack information, write shorter descriptions.",
         },
         {
           role: "user",
@@ -166,16 +171,12 @@ Provide your suggestions in JSON format:
         },
       ],
       temperature: 0.1,
-      max_tokens: 400,
-      response_format: { type: "json_object" },
     });
 
-    const result = JSON.parse(completion.choices[0]?.message?.content || "{}");
-
     return NextResponse.json({
-      suggestedName: result.suggestedName || entities[0].name,
-      suggestedType: result.suggestedType || entities[0].type,
-      suggestedDescription: result.suggestedDescription || entities[0].description || "",
+      suggestedName: result.object.suggestedName || entities[0].name,
+      suggestedType: result.object.suggestedType || entities[0].type,
+      suggestedDescription: result.object.suggestedDescription || entities[0].description || "",
     });
   } catch (error) {
     console.error("Generate merge suggestion error:", error);

@@ -8,6 +8,7 @@
 import { generateObject } from 'ai';
 import { models } from '@/lib/ai/gateway';
 import { z } from 'zod';
+import { getPrompt } from '@/lib/ai/prompts';
 import { createClient } from '@/lib/supabase/server';
 
 // ============================================================================
@@ -81,26 +82,14 @@ export async function extractEntitiesAndRelationships(
   const temperature = options?.temperature || 0.3;
 
   try {
+    // Get entity extraction prompt from settings
+    const prompt = await getPrompt('entityExtraction', { text });
+    
     const result = await generateObject({
       model: models.standard,
       temperature,
       schema: ExtractionResultSchema,
-      prompt: `You are an expert at extracting entities and relationships from text for knowledge graph construction.
-
-Analyze the following text and extract:
-1. **Entities**: Important concepts, people, organizations, methodologies, frameworks, tools, etc.
-2. **Relationships**: How these entities relate to each other
-
-Guidelines:
-- Be precise and specific with entity names
-- Include acronyms as aliases (e.g., "SDA" as alias for "Strategic Design Approaches")
-- Only extract relationships that are explicitly stated or strongly implied
-- Use descriptive relationship types that capture the nature of the connection
-- Focus on meaningful entities (not common words or generic concepts)
-- Descriptions should be concise but informative
-
-Text to analyze:
-${text}`,
+      prompt,
     });
 
     return result.object;

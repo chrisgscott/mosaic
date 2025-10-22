@@ -61,8 +61,18 @@ const data = {
     },
     {
       title: "Settings",
-      url: "/settings/general",
+      url: "#",
       icon: "Settings2",
+      items: [
+        {
+          title: "General",
+          url: "/settings/general",
+        },
+        {
+          title: "Prompts",
+          url: "/settings/prompts",
+        },
+      ],
     },
   ],
   navSecondary: [],

@@ -28,9 +28,14 @@ export async function PATCH(request: Request) {
   try {
     const { settings } = await request.json();
 
+    // Handle both array format [{key, value}] and object format {key: value}
+    const settingsArray = Array.isArray(settings) 
+      ? settings 
+      : Object.entries(settings).map(([key, value]) => ({ key, value }));
+
     // Update each setting
-    for (const [key, value] of Object.entries(settings)) {
-      await supabase
+    for (const { key, value } of settingsArray) {
+      const { error } = await supabase
         .from("system_settings")
         .update({
           value: value,
@@ -38,6 +43,11 @@ export async function PATCH(request: Request) {
           updated_at: new Date().toISOString(),
         })
         .eq("key", key);
+
+      if (error) {
+        console.error(`Error updating setting ${key}:`, error);
+        throw error;
+      }
     }
 
     return NextResponse.json({ success: true });

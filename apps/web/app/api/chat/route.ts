@@ -1,6 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
-import { streamText, convertToModelMessages, type UIMessage } from "ai";
-import { getModelForDepth } from "@/lib/ai/gateway";
+import { NextRequest } from 'next/server';
+import { streamText, convertToModelMessages } from 'ai';
+import { createClient } from '@/lib/supabase/server';
+import { getModelForDepth } from '@/lib/ai/gateway';
+import { getPrompt } from '@/lib/ai/prompts';
 import { POST as searchAPI } from "@/app/api/search/route";
 import type { SearchResult } from "@/app/api/search/route";
 
@@ -99,19 +101,8 @@ export async function POST(request: Request) {
       })
       .join('\n\n---\n\n');
 
-    const systemPrompt = `You are a helpful AI assistant that answers questions based on provided context.
-
-## Context from Retrieved Documents:
-
-${context}
-
-## Instructions:
-- Answer using ONLY information from the provided context
-- If context is insufficient, say so clearly
-- Cite sources using [1], [2], etc.
-- Use markdown formatting for readability
-- Your answer is ANALYSIS based on source documents (which are FACTS)
-- Be transparent about uncertainty`;
+    // Get chat prompt from settings with context substitution
+    const systemPrompt = await getPrompt('chat', { context });
 
     // Step 3: Stream response using AI SDK
     const result = streamText({

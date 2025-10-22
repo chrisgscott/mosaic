@@ -1,8 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
-import { generateText } from "ai";
-import { models } from "@/lib/ai/gateway";
+import { generateText } from 'ai';
+import { models } from '@/lib/ai/gateway';
+import { getPrompt } from '@/lib/ai/prompts';
 import { createProgressEvent, type ProgressCallback } from "@/lib/search-progress";
 import { graphEnhancedSearch, isRelationshipQuery } from "@/lib/graph/graph-search";
 
@@ -69,16 +70,12 @@ async function generateMultiQuery(query: string): Promise<string[]> {
   try {
     const startTime = Date.now();
     
+    // Get multi-query prompt from settings
+    const prompt = await getPrompt('multiQuery', { query });
+    
     const { text } = await generateText({
       model: models.quick,
-      prompt: `Generate 3 different variations of this search query to improve search coverage. Each variation should:
-- Rephrase the question differently
-- Use different terminology or synonyms
-- Approach the topic from a different angle
-
-Original query: "${query}"
-
-Return ONLY the 3 variations, one per line, without numbering or explanation.`,
+      prompt,
       temperature: 0.8,
     });
 
@@ -101,13 +98,12 @@ async function generateHyDE(query: string): Promise<string> {
   try {
     const startTime = Date.now();
     
+    // Get HyDE prompt from settings
+    const prompt = await getPrompt('hyde', { query });
+    
     const { text } = await generateText({
       model: models.quick,
-      prompt: `You are an expert assistant. Given a user's question, write a detailed, comprehensive answer that would perfectly answer their question. This hypothetical answer will be used to find similar documents.
-
-Question: ${query}
-
-Write a detailed answer (2-3 paragraphs) that would perfectly answer this question. Use specific terminology and concepts that would appear in relevant documents.`,
+      prompt,
       temperature: 0.7,
     });
 

@@ -6,9 +6,13 @@ import {
   ChevronsUpDown,
   LogOut,
   Settings,
+  Moon,
+  Sun,
+  Laptop,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import { useTheme } from "next-themes"
 
 import {
   Avatar,
@@ -42,11 +46,30 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar()
   const router = useRouter()
+  const { theme, setTheme } = useTheme()
 
   const handleLogout = async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push("/auth/login")
+  }
+
+  const getThemeIcon = () => {
+    if (theme === "light") return <Sun className="h-4 w-4" />
+    if (theme === "dark") return <Moon className="h-4 w-4" />
+    return <Laptop className="h-4 w-4" />
+  }
+
+  const getThemeLabel = () => {
+    if (theme === "light") return "Light Mode"
+    if (theme === "dark") return "Dark Mode"
+    return "System Theme"
+  }
+
+  const cycleTheme = () => {
+    if (theme === "light") setTheme("dark")
+    else if (theme === "dark") setTheme("system")
+    else setTheme("light")
   }
 
   // Get initials for avatar fallback
@@ -110,6 +133,11 @@ export function NavUser({
                 Notifications
               </DropdownMenuItem>
             </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={cycleTheme}>
+              {getThemeIcon()}
+              {getThemeLabel()}
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
               <LogOut />

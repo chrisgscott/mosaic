@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import { generateText } from 'ai';
 import { models } from '@/lib/ai/gateway';
@@ -12,7 +13,7 @@ const openai = new OpenAI({
 });
 
 // Fetch system settings from database
-async function getSystemSettings(supabase: any): Promise<Record<string, boolean>> {
+async function getSystemSettings(supabase: SupabaseClient): Promise<Record<string, boolean>> {
   try {
     const { data: settings, error } = await supabase
       .from("system_settings")
@@ -31,7 +32,7 @@ async function getSystemSettings(supabase: any): Promise<Record<string, boolean>
 
     // Convert to key-value object with boolean values
     const settingsObj: Record<string, boolean> = {};
-    settings.forEach((setting: any) => {
+    settings.forEach((setting: { key: string; value: boolean | string }) => {
       // Handle both boolean and string "true"/"false" values
       settingsObj[setting.key] = setting.value === true || setting.value === "true";
     });
@@ -389,19 +390,29 @@ export async function POST(request: NextRequest) {
             
             if (!graphError && graphChunks) {
               // Add graph chunks to results with a graph_source flag
-              const graphSearchResults = graphChunks.map((chunk: any) => ({
-                chunk_id: chunk.id,
-                content: chunk.content,
-                chunk_index: chunk.chunk_index,
-                token_count: chunk.token_count,
-                metadata: chunk.metadata,
-                document_id: chunk.document.id,
-                document_name: chunk.document.file_name,
-                document_file_type: chunk.document.file_type,
-                similarity: 0.9, // High score for graph-discovered chunks
-                rrf_score: 0.02, // Moderate RRF score
-                graph_source: true, // Flag to indicate this came from graph
-              }));
+              const graphSearchResults = graphChunks.map((chunk: {
+                id: string;
+                content: string;
+                chunk_index: number;
+                token_count: number;
+                metadata: Record<string, unknown>;
+                document: { id: string; file_name: string; file_type: string }[];
+              }) => {
+                const doc = Array.isArray(chunk.document) ? chunk.document[0] : chunk.document;
+                return {
+                  chunk_id: chunk.id,
+                  content: chunk.content,
+                  chunk_index: chunk.chunk_index,
+                  token_count: chunk.token_count,
+                  metadata: chunk.metadata,
+                  document_id: doc.id,
+                  document_name: doc.file_name,
+                  document_file_type: doc.file_type,
+                  similarity: 0.9,
+                  rrf_score: 0.02,
+                  graph_source: true,
+                };
+              });
               
               // Merge with vector search results, deduplicate
               const mergedResults = [...finalResults, ...graphSearchResults];

@@ -1,7 +1,7 @@
 # Mosaic RAG Platform - Build Plan
 
-**Last Updated:** October 19, 2025  
-**Status:** Phases 1-5 Core Complete + Phase 7.1-7.4 Complete + Phase 8 Complete - **Production-ready end-to-end pipeline: Upload → Processing → Embeddings → Graph RAG → Search working across all document types (PDF, PPTX, TXT, CSV, MD)**
+**Last Updated:** October 22, 2025  
+**Status:** Phases 1-5 Core Complete + Phase 7.1-7.4 Complete + Phase 8 Complete + Model & Prompt Management Complete - **Production-ready end-to-end pipeline: Upload → Processing → Embeddings → Graph RAG → Search working across all document types (PDF, PPTX, TXT, CSV, MD). Centralized model and prompt management with UI.**
 
 ---
 
@@ -2083,6 +2083,18 @@ mosaic/
 ## Phase 8: Settings Management System ✅ COMPLETE
 **Moved to COMPLETED_ITEMS.md:** October 19, 2025  
 Database-driven configuration, SettingsService with 60s cache, comprehensive test suite
+
+---
+
+## Phase 8.5: Model Management System ✅ COMPLETE
+**Moved to COMPLETED_ITEMS.md:** October 21, 2025  
+Rich dropdown UI for model selection with 18 models from 3 providers, cost/speed indicators
+
+---
+
+## Phase 8.6: Prompt Management System ✅ COMPLETE
+**Moved to COMPLETED_ITEMS.md:** October 21, 2025  
+Centralized prompt management with database storage, visual editor, 8 customizable prompts
 
 ### Goals (Summary)
 - Move configuration from hardcoded ENV vars to database

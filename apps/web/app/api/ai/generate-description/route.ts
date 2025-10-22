@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { models } from "@/lib/ai/gateway";
 import { generateText } from "ai";
 import { createClient } from "@/lib/supabase/server";
+import { getPrompt } from "@/lib/ai/prompts";
 import OpenAI from "openai";
 
 const openai = new OpenAI({
@@ -33,11 +34,9 @@ export async function POST(request: NextRequest) {
     }
 
     let prompt: string;
-    let systemPrompt: string;
 
     if (type === "entity") {
       // Generate entity description using RAG
-      systemPrompt = `You are a knowledge graph expert who writes clear, concise entity descriptions based on available context from documents.`;
 
       // Search for relevant context about this entity
       const searchQuery = `${name} ${entityType || ""}`;
@@ -70,6 +69,7 @@ export async function POST(request: NextRequest) {
         ?.map((r: { content: string }, i: number) => `[${i + 1}] ${r.content}`)
         .join("\n\n") || "No relevant context found.";
 
+      // Build prompt with entity details and context
       prompt = `Generate a clear, concise description for this knowledge graph entity:
 
 Entity Name: ${name}
@@ -89,7 +89,6 @@ Requirements:
 Return ONLY the description, nothing else.`;
     } else if (type === "relationship") {
       // Generate relationship description
-      systemPrompt = `You are a knowledge graph expert who writes clear, concise relationship descriptions that explain how two entities are connected.`;
 
       // Search for context about both entities and their relationship
       const searchQuery = `${sourceEntityName} ${relationshipType} ${targetEntityName}`;
@@ -121,6 +120,7 @@ Return ONLY the description, nothing else.`;
         ?.map((r: { content: string }, i: number) => `[${i + 1}] ${r.content}`)
         .join("\n\n") || "No relevant context found.";
 
+      // Build prompt with relationship details and context
       prompt = `Generate a clear, concise description for this knowledge graph relationship:
 
 Source Entity: ${sourceEntityName}
@@ -145,6 +145,11 @@ Return ONLY the description, nothing else.`;
         { status: 400 }
       );
     }
+
+    // Get appropriate system prompt from settings
+    const systemPrompt = await getPrompt(
+      type === "entity" ? "entityDescription" : "relationshipDescription"
+    );
 
     const result = await generateText({
       model: models.standard,

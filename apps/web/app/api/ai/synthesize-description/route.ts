@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { models } from "@/lib/ai/gateway";
 import { generateText } from "ai";
+import { getPrompt } from "@/lib/ai/prompts";
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,13 +32,15 @@ Create a single, comprehensive description that:
 
 Return ONLY the synthesized description, nothing else.`;
 
+    // Get entity synthesis prompt from settings
+    const systemPrompt = await getPrompt("entitySynthesis");
+
     const result = await generateText({
       model: models.standard,
       messages: [
         {
           role: "system",
-          content:
-            "You are a knowledge graph expert who synthesizes entity descriptions. You combine multiple descriptions into a single, accurate, concise description.",
+          content: systemPrompt,
         },
         {
           role: "user",

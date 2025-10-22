@@ -2,7 +2,7 @@
 
 This document contains the full details of completed phases from BUILD_PLAN.md. These are preserved for reference and historical context.
 
-**Last Updated:** October 19, 2025
+**Last Updated:** October 22, 2025
 
 ---
 
@@ -349,3 +349,141 @@ This document contains the full details of completed phases from BUILD_PLAN.md. 
 - ✅ Type-safe configuration
 - ✅ Comprehensive test coverage
 - ✅ Graceful fallbacks
+
+---
+
+## Phase 8.5: Model Management System ✅ COMPLETE
+
+**Completed:** October 21, 2025  
+Rich dropdown UI for model selection with provider/model format, cost and speed indicators
+
+### Goals
+- Replace text input with curated model dropdowns
+- Support multiple AI providers (OpenAI, Anthropic, Google)
+- Show cost, speed, and use case information in UI
+- Use `provider/model` format for maximum flexibility
+
+### Completed Tasks
+
+#### 📋 Model Registry
+- [x] Create `available-models.ts` with 18 models
+  - OpenAI: GPT-5 Nano to GPT-5 Pro ($0.02 - $6.08/100pg)
+  - Anthropic: Claude Haiku 4.5, Claude Sonnet ($0.25 - $0.77/100pg)
+  - Google: Gemini 2.5 Flash, Gemini 2.5 Pro ($0.13 - $0.51/100pg)
+- [x] Model metadata: cost, speed (⚡ to ⚡⚡⚡), provider, best use cases
+- [x] Organize by category: quick, summary, standard, detailed, deepResearch, vlm
+
+#### 🎨 Rich Dropdown Component
+- [x] Create `ModelSelect` component showing cost, speed, and use cases
+- [x] Display "Best for" descriptions for each model
+- [x] Professional UI using shadcn/ui Select components
+- [x] Fully accessible and keyboard navigable
+
+#### 💾 Database Migration
+- [x] Update all model values to `provider/model` format
+  - `"gpt-4.1-nano"` → `"openai/gpt-4.1-nano"`
+  - `"gpt-4o-mini"` → `"openai/gpt-4o-mini"`
+  - etc.
+- [x] Update descriptions to clarify format
+
+#### 🔧 Code Simplification
+- [x] Remove `openai/` prefix logic from `lib/ai/settings.ts`
+- [x] Update `lib/ai/gateway.ts` defaults to use `provider/model` format
+- [x] Settings form auto-detects model settings and renders dropdowns
+- [x] Clean up helper text (dropdown shows all details)
+
+### Benefits
+- ✅ User-friendly dropdowns (can't enter invalid models)
+- ✅ Mix providers freely (OpenAI, Anthropic, Google)
+- ✅ Easy to add new models
+- ✅ All model info visible at selection time
+- ✅ Type-safe with TypeScript
+
+### Files Created
+- `lib/ai/available-models.ts` - Model registry
+- `components/settings/model-select.tsx` - Dropdown component
+- `MODEL_DROPDOWN_IMPLEMENTATION.md` - Documentation
+
+### Files Modified
+- `lib/ai/settings.ts` - Simplified (removed prefix logic)
+- `lib/ai/gateway.ts` - Updated defaults
+- `app/(app)/settings/general/settings-form.tsx` - Uses ModelSelect
+- Database - Migration to `provider/model` format
+
+---
+
+## Phase 8.6: Prompt Management System ✅ COMPLETE
+
+**Completed:** October 21, 2025  
+Centralized prompt management with database storage and visual editor
+
+### Goals
+- Store all AI prompts in database for easy customization
+- Provide visual editor for prompt engineering
+- Support placeholder substitution ({context}, {text}, {query})
+- Enable A/B testing without code changes
+
+### Completed Tasks
+
+#### 💾 Database Schema
+- [x] Add 8 prompts to `system_settings` table with category `'prompts'`
+- [x] Store as JSONB with descriptions
+- [x] Migration: `20251021_add_prompt_settings.sql`
+
+#### 📚 Prompt Library
+- [x] Create `lib/ai/prompts.ts` utility
+  - `getPrompt(key, variables)` - Get prompt with placeholder substitution
+  - `getAllPrompts()` - Get all prompts for settings page
+  - Default prompts as fallback if database unavailable
+  - Metadata for each prompt (title, description, placeholders, usage)
+
+#### 🎨 Settings Page
+- [x] Create `/settings/prompts` page with visual editor
+- [x] Large textarea for comfortable editing
+- [x] Show metadata (description, placeholders, usage)
+- [x] Save changes button
+- [x] Reset to defaults button
+- [x] Info tooltips for each prompt
+
+#### 🔗 Integration (7/7 routes complete)
+- [x] Update chat route to use `getPrompt('chat', { context })`
+- [x] Update entity extraction to use `getPrompt('entityExtraction', { text })`
+- [x] Update HyDE to use `getPrompt('hyde', { query })`
+- [x] Update multi-query to use `getPrompt('multiQuery', { query })`
+- [x] Update entity/relationship descriptions to use `getPrompt('entityDescription')` and `getPrompt('relationshipDescription')`
+- [x] Update entity merge to use `getPrompt('entityMerge')`
+- [x] Update entity synthesis to use `getPrompt('entitySynthesis')`
+- [x] Add Prompts to Settings sidebar navigation
+
+### 8 Prompts Available
+1. **chat** - Q&A responses with RAG context
+2. **entityExtraction** - Extract entities from text
+3. **entityDescription** - Generate entity descriptions
+4. **relationshipDescription** - Describe entity relationships
+5. **entityMerge** - Merge duplicate entities
+6. **entitySynthesis** - Combine descriptions
+7. **hyde** - Hypothetical document generation
+8. **multiQuery** - Query variation generation
+
+### Benefits
+- ✅ Customize AI behavior without code changes
+- ✅ A/B test prompts easily
+- ✅ Centralized prompt management
+- ✅ Type-safe with TypeScript
+- ✅ Instant updates (no deployment needed)
+- ✅ Graceful fallback to defaults
+
+### Files Created
+- `supabase/migrations/20251021_add_prompt_settings.sql`
+- `lib/ai/prompts.ts` (utility functions)
+- `app/(app)/settings/prompts/page.tsx` (UI)
+- `app/(app)/settings/prompts/prompts-form.tsx` (form component)
+- `app/api/settings/reset-prompts/route.ts` (reset endpoint)
+- `PROMPT_MANAGEMENT_SYSTEM.md` (documentation)
+
+### Files Modified
+- `components/app-sidebar.tsx` - Added Prompts to Settings menu
+- `app/api/chat/route.ts` - Uses `getPrompt()`
+- `lib/graph/entity-extraction.ts` - Uses `getPrompt()`
+- `app/api/search/route.ts` - Uses `getPrompt()` for HyDE and multi-query
+- `app/api/settings/route.ts` - Handles array format from prompts form

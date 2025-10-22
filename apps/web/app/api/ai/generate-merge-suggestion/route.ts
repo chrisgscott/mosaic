@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { models } from "@/lib/ai/gateway";
 import { generateObject } from "ai";
 import { z } from "zod";
+import { getPrompt } from "@/lib/ai/prompts";
 
 export async function POST(request: NextRequest) {
   try {
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
 
       if (searchResponse.ok) {
         const searchData = await searchResponse.json();
-        sharedChunks = searchData.results?.slice(0, 10).map((r: any) => 
+        sharedChunks = searchData.results?.slice(0, 10).map((r: { content: string }) => 
           r.content.substring(0, 300)
         ) || [];
       }
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
           .select("content")
           .in("id", allChunkIds);
         
-        sharedChunks = chunks?.map((c: any) => c.content.substring(0, 300)) || [];
+        sharedChunks = chunks?.map((c: { content: string }) => c.content.substring(0, 300)) || [];
       }
     }
 
@@ -156,14 +157,16 @@ Provide your suggestions in JSON format:
       suggestedDescription: z.string(),
     });
 
+    // Get entity merge prompt from settings
+    const systemPrompt = await getPrompt("entityMerge");
+
     const result = await generateObject({
       model: models.standard,
       schema: MergeSuggestionSchema,
       messages: [
         {
           role: "system",
-          content:
-            "You are a knowledge graph expert who helps merge duplicate entities. CRITICAL: Use ONLY information from the [Chunk N] sections provided. DO NOT invent, expand, or guess what abbreviations mean. If an abbreviation's full form is not in the chunks, leave it as an abbreviation. Write specific, concrete descriptions using only terminology that appears in the source chunks. If chunks lack information, write shorter descriptions.",
+          content: systemPrompt,
         },
         {
           role: "user",

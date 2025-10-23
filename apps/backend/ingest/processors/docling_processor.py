@@ -58,10 +58,10 @@ class DoclingProcessor:
                 if not api_key:
                     raise ValueError("OPENAI_API_KEY environment variable required for API VLM")
                 
-                # Get VLM model from settings (default to gpt-4o-mini)
-                vlm_model = "gpt-4o-mini"
-                if self.settings_service:
-                    vlm_model = self.settings_service.get_string('processing.vlmModel', 'gpt-4o-mini')
+                # HARDCODED FOR TESTING: Use gpt-4o instead of gpt-4o-mini
+                # gpt-4o-mini was only extracting copyright notices, not actual content
+                vlm_model = "gpt-4o"
+                logger.warning("⚠️  HARDCODED VLM MODEL: Using gpt-4o for testing (ignoring settings)")
                 
                 vlm_options = ApiVlmOptions(
                     url="https://api.openai.com/v1/chat/completions",
@@ -70,7 +70,7 @@ class DoclingProcessor:
                         max_tokens=4096,
                     ),
                     headers={"Authorization": f"Bearer {api_key}"},
-                    prompt="Convert this document page to markdown, preserving all tables, lists, and structure. Be precise and complete.",
+                    prompt="Extract ALL text content from this document page and convert to markdown. Include ALL paragraphs, headings, lists, tables, and any other text. Do not skip any content. Be thorough and complete - extract everything you see.",
                     timeout=120,  # Increased from default 60s to reduce timeout failures
                     temperature=0.1,
                     response_format=ResponseFormat.MARKDOWN,
@@ -192,19 +192,28 @@ class DoclingProcessor:
         if hasattr(base_doc, 'tables'):
             logger.info(f"Total: {len(base_doc.tables)} tables")
         
+        logger.warning("⚠️  WARNING: Merged documents have broken export_to_markdown() - chunking will lose content!")
+        logger.warning("⚠️  Consider chunking pages individually instead of merging first")
+        
         return base_doc
     
-    def _process_single_page_document(self, page_path: str, page_num: int):
+    def _process_single_page_document(self, page_path: str, page_num: int, retry_attempt: int = 0):
         """
-        Process a single PDF page and return DoclingDocument object.
+        Process a single PDF page and return DoclingDocument object with retry logic.
         
         Args:
             page_path: Path to the single-page PDF
             page_num: Page number (1-indexed) for logging
+            retry_attempt: Current retry attempt (0 = first try)
             
         Returns:
             Tuple of (page_num, DoclingDocument or None)
         """
+        import time
+        
+        max_retries = 3
+        base_delay = 2  # seconds
+        
         try:
             # Each thread gets its own converter instance (thread-safe)
             from docling.document_converter import DocumentConverter, PdfFormatOption
@@ -252,16 +261,40 @@ class DoclingProcessor:
                 }
             )
             
-            logger.debug(f"Processing page {page_num}...")
+            logger.debug(f"Processing page {page_num}..." + (f" (retry {retry_attempt})" if retry_attempt > 0 else ""))
             result = converter.convert(source=page_path)
             doc = result.document
             
-            logger.info(f"✓ Completed page {page_num} ({len(doc.texts)} text elements)")
+            logger.info(f"✓ Completed page {page_num} ({len(doc.texts)} text elements)" + (f" after {retry_attempt} retries" if retry_attempt > 0 else ""))
             return (page_num, doc)
             
         except Exception as e:
-            logger.error(f"✗ Error processing page {page_num}: {e}")
-            return (page_num, None)
+            error_msg = str(e)
+            error_type = type(e).__name__
+            
+            # Check if error is retryable (transient network/server issues)
+            is_retryable = (
+                "500" in error_msg or 
+                "Internal Server Error" in error_msg or 
+                "timeout" in error_msg.lower() or
+                "RemoteDisconnected" in error_msg or
+                "Connection" in error_msg or
+                "ConnectionError" in error_type or
+                "ProtocolError" in error_type
+            )
+            
+            logger.error(f"Page {page_num} exception: {error_type}: {error_msg[:200]}")
+            logger.error(f"Is retryable: {is_retryable}, Retry attempt: {retry_attempt}/{max_retries}")
+            
+            if is_retryable and retry_attempt < max_retries:
+                # Exponential backoff: 2s, 4s, 8s
+                delay = base_delay * (2 ** retry_attempt)
+                logger.warning(f"⚠ Page {page_num} failed (attempt {retry_attempt + 1}/{max_retries + 1}): {error_msg[:100]}. Retrying in {delay}s...")
+                time.sleep(delay)
+                return self._process_single_page_document(page_path, page_num, retry_attempt + 1)
+            else:
+                logger.error(f"✗ Page {page_num} failed after {retry_attempt + 1} attempts: {error_type}: {error_msg[:200]}")
+                return (page_num, None)
     
     def _process_single_page(self, page_path: str, page_num: int) -> tuple[int, Optional[str]]:
         """
@@ -385,28 +418,66 @@ class DoclingProcessor:
                 page_documents = []
                 completed = 0
                 
+                failed_pages = []
+                
                 with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                     # Submit all page processing tasks
+                    logger.info(f"Submitting {total_pages} page processing tasks to executor...")
                     future_to_page = {
-                        executor.submit(self._process_single_page_document, page_path, page_num): page_num
+                        executor.submit(self._process_single_page_document, page_path, page_num): (page_num, page_path)
                         for page_num, page_path in enumerate(page_paths, start=1)
                     }
+                    logger.info(f"All {len(future_to_page)} tasks submitted. Waiting for completion...")
                     
-                    # Collect results as they complete
-                    for future in as_completed(future_to_page):
-                        page_num, doc = future.result()
-                        if doc:
-                            page_documents.append((page_num, doc))
-                        completed += 1
-                        
-                        if completed % 10 == 0 or completed == total_pages:
-                            logger.info(f"Progress: {completed}/{total_pages} pages processed")
+                    try:
+                        # Collect results as they complete (with overall timeout)
+                        for future in as_completed(future_to_page, timeout=600):  # 10 minute overall timeout
+                            page_num, page_path = future_to_page[future]
+                            try:
+                                result = future.result(timeout=180)  # 3 minute timeout per page
+                                page_num_result, doc = result
+                                if doc:
+                                    page_documents.append((page_num_result, doc))
+                                    logger.debug(f"Page {page_num_result} added to results")
+                                else:
+                                    failed_pages.append(page_num_result)
+                                    logger.warning(f"Page {page_num_result} returned None")
+                            except TimeoutError:
+                                logger.error(f"✗ Page {page_num} timed out after 180 seconds")
+                                failed_pages.append(page_num)
+                            except Exception as e:
+                                logger.error(f"✗ Page {page_num} raised exception: {e}", exc_info=True)
+                                failed_pages.append(page_num)
+                            
+                            completed += 1
+                            
+                            if completed % 10 == 0 or completed == total_pages:
+                                logger.info(f"Progress: {completed}/{total_pages} pages processed (success: {len(page_documents)}, failed: {len(failed_pages)})")
+                    
+                    except TimeoutError:
+                        logger.error(f"✗ Overall processing timed out after 600 seconds. Processed {completed}/{total_pages} pages")
+                        # Mark remaining pages as failed
+                        for future, (page_num, _) in future_to_page.items():
+                            if not future.done():
+                                failed_pages.append(page_num)
+                                future.cancel()
                 
-                # Merge all page documents into one
-                logger.info("Merging page documents...")
-                document = self._merge_documents(page_documents)
+                # Report results
+                if failed_pages:
+                    logger.warning(f"⚠ {len(failed_pages)} pages failed after retries: {failed_pages}")
+                    logger.info(f"Successfully processed {len(page_documents)}/{total_pages} pages")
+                else:
+                    logger.info(f"✓ All {total_pages} pages processed successfully")
                 
-                return document
+                # CRITICAL: Do NOT merge documents - return page list instead
+                # Merging breaks export_to_markdown() and causes massive content loss
+                # The chunker will handle pages individually
+                logger.info("Returning page documents for individual chunking...")
+                logger.info(f"Total pages to chunk: {len(page_documents)}")
+                
+                # Return a special marker object that indicates we have page documents
+                # This will be handled by the chunker
+                return {"type": "page_documents", "pages": page_documents}
             else:
                 # Sequential processing for non-PDFs or single-worker mode
                 logger.info("Processing document sequentially...")

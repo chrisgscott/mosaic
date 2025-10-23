@@ -54,6 +54,7 @@ USE_API_VLM = settings_service.get_bool('processing.useApiVlm', True, 'USE_API_V
 DOCLING_MAX_WORKERS = settings_service.get_int('processing.pdfWorkers', 10, 'DOCLING_MAX_WORKERS')
 ENABLE_GRAPH_EXTRACTION = settings_service.get_bool('search.useGraphSearch', True, 'ENABLE_GRAPH_EXTRACTION')
 CHUNK_SUMMARY_NEIGHBORS = settings_service.get_int('processing.summaryNeighbors', 2, 'CHUNK_SUMMARY_NEIGHBORS')
+CHUNK_MAX_TOKENS = settings_service.get_int('processing.chunkMaxTokens', 256, 'CHUNK_MAX_TOKENS')
 
 # Get model settings for logging
 VLM_MODEL = settings_service.get_string('processing.vlmModel', 'gpt-4o-mini')
@@ -70,6 +71,7 @@ logger.info("Processing:")
 logger.info(f"  • API VLM: {USE_API_VLM}")
 logger.info(f"  • VLM Model: {VLM_MODEL}")
 logger.info(f"  • PDF Workers: {DOCLING_MAX_WORKERS}")
+logger.info(f"  • Chunk Max Tokens: {CHUNK_MAX_TOKENS}")
 logger.info(f"  • Summary Workers: {CHUNK_SUMMARY_NEIGHBORS}")
 logger.info(f"  • Summary Model: {SUMMARY_MODEL}")
 logger.info(f"  • Graph Model: {GRAPH_MODEL}")
@@ -81,15 +83,18 @@ logger.info("=" * 70)
 
 # Initialize processor and chunker
 processor = DoclingProcessor(use_api_vlm=USE_API_VLM, max_workers=DOCLING_MAX_WORKERS, settings_service=settings_service)
-chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS, settings_service=settings_service)
+chunker = HybridChunker(max_tokens=CHUNK_MAX_TOKENS, summary_neighbors=CHUNK_SUMMARY_NEIGHBORS, settings_service=settings_service)
 
 
 class DocumentWorker:
     """Background worker for processing documents from the queue."""
     
     def __init__(self):
+        # Store settings service reference
+        self.settings_service = settings_service
+        
         # Initialize chunker
-        self.chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS, settings_service=settings_service)
+        self.chunker = HybridChunker(max_tokens=CHUNK_MAX_TOKENS, summary_neighbors=CHUNK_SUMMARY_NEIGHBORS, settings_service=settings_service)
         
         # Initialize embeddings generator
         self.embeddings_generator = EmbeddingsGenerator(supabase, settings_service=settings_service)
@@ -236,13 +241,14 @@ class DocumentWorker:
             return (False, True)  # Delete from queue, stop retrying
         
         try:
-            # Get document to find user_id
-            doc_result = supabase.table("documents").select("user_id").eq("id", document_id).execute()
+            # Get document to find user_id and chunking_config
+            doc_result = supabase.table("documents").select("user_id, chunking_config").eq("id", document_id).execute()
             if not doc_result.data:
                 logger.warning(f"Document {document_id} not found - was likely deleted")
                 # Document was deleted, don't retry this job
                 return (False, True)
             user_id = doc_result.data[0]["user_id"]
+            chunking_config = doc_result.data[0].get("chunking_config")
             
             # Update status to processing
             self.update_document_status(document_id, "processing")
@@ -261,17 +267,112 @@ class DocumentWorker:
             
             logger.info(f"Extracted DoclingDocument successfully")
             
-            # Chunk the document using HybridChunker
+            # Chunk the document using appropriate chunker based on config
             self.update_document_status(document_id, "chunking")
-            logger.info("Chunking document with HybridChunker")
-            chunks = self.chunker.chunk_document(docling_doc, document_id)
+            
+            # If no chunking config, use Sorting Hat to determine strategy
+            if not chunking_config:
+                logger.info("🎩 No chunking config - consulting the Sorting Hat...")
+                from chunkers.sorting_hat import SortingHat
+                
+                # Get full text for analysis
+                if isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
+                    full_text = ""
+                    for page_num, page_doc in sorted(docling_doc["pages"], key=lambda x: x[0]):
+                        full_text += page_doc.export_to_markdown() + "\n\n"
+                else:
+                    full_text = docling_doc.export_to_markdown()
+                
+                sorting_hat = SortingHat()
+                chunking_config = sorting_hat.sort(full_text, file_path)
+                
+                # Save the config to the document for future reference
+                try:
+                    supabase.table("documents").update({
+                        "chunking_config": chunking_config
+                    }).eq("id", document_id).execute()
+                    logger.info(f"🎩 Saved Sorting Hat decision to document")
+                except Exception as e:
+                    logger.warning(f"Could not save chunking config: {e}")
+            
+            # Check if custom chunking config is specified
+            if chunking_config:
+                strategy = chunking_config.get('strategy')
+                
+                # Get full text for non-Docling chunkers
+                if isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
+                    # Export each page to markdown and concatenate
+                    full_text = ""
+                    for page_num, page_doc in sorted(docling_doc["pages"], key=lambda x: x[0]):
+                        full_text += page_doc.export_to_markdown() + "\n\n"
+                else:
+                    full_text = docling_doc.export_to_markdown()
+                
+                if strategy == 'hybrid' or not strategy:
+                    # Use default HybridChunker
+                    logger.info("Using HybridChunker (Sorting Hat recommendation or default)")
+                    chunks = self.chunker.chunk_document(docling_doc, document_id)
+                    
+                elif strategy == 'custom_boundary':
+                    logger.info("Using CustomBoundaryChunker based on document config")
+                    from chunkers.custom_boundary_chunker import CustomBoundaryChunker
+                    custom_chunker = CustomBoundaryChunker(chunking_config, tokenizer=self.chunker.tokenizer)
+                    chunks = custom_chunker.chunk_document(full_text, document_id)
+                    
+                elif strategy == 'agentic':
+                    logger.info("Using AgenticChunker based on document config")
+                    from chunkers.agentic_chunker import AgenticChunker
+                    from openai import OpenAI
+                    agentic_chunker = AgenticChunker(
+                        chunking_config, 
+                        tokenizer=self.chunker.tokenizer,
+                        openai_client=OpenAI()
+                    )
+                    chunks = agentic_chunker.chunk_document(full_text, document_id)
+                    
+                elif strategy == 'planner_executor':
+                    logger.info("Using PlannerExecutorChunker (optimal pattern with large-context planner)")
+                    from chunkers.planner_executor_chunker import PlannerExecutorChunker
+                    from openai import OpenAI
+                    planner_executor = PlannerExecutorChunker(
+                        chunking_config,
+                        tokenizer=self.chunker.tokenizer,
+                        openai_client=OpenAI()
+                    )
+                    chunks = planner_executor.chunk_document(full_text, document_id)
+                    
+                else:
+                    logger.warning(f"Unknown strategy '{strategy}', falling back to HybridChunker")
+                    chunks = self.chunker.chunk_document(docling_doc, document_id)
+            else:
+                logger.info("Chunking document with HybridChunker (no config)")
+                chunks = self.chunker.chunk_document(docling_doc, document_id)
+            
+            # 🔄 Refine chunks before downstream processing
+            # This step merges/splits chunks for better semantic coherence
+            enable_refinement = self.settings_service.get_bool('processing.enableChunkRefinement', True, 'ENABLE_CHUNK_REFINEMENT') if self.settings_service else True
+            
+            if enable_refinement and len(chunks) > 0:
+                logger.info("🔄 Refining chunks for better semantic coherence...")
+                from chunkers.chunk_refiner import ChunkRefiner
+                
+                # Get refinement neighbors setting (reuse same pattern as summary_neighbors)
+                refinement_neighbors = self.settings_service.get_int('processing.refinementNeighbors', 2, 'REFINEMENT_NEIGHBORS') if self.settings_service else 2
+                
+                refiner = ChunkRefiner(refinement_neighbors=refinement_neighbors)
+                chunks, refinement_report = refiner.refine(
+                    chunks,
+                    document_context=chunking_config.get('document_type') if chunking_config else None
+                )
+                
+                logger.info(f"🔄 Refinement report: {refinement_report}")
             
             # Add user_id and storage_path to chunks
             for chunk in chunks:
                 chunk["user_id"] = user_id
                 chunk["metadata"]["storage_path"] = file_path
             
-            logger.info(f"Created {len(chunks)} chunks")
+            logger.info(f"Created {len(chunks)} chunks (after refinement)")
             
             # Store chunks in database in batches and generate embeddings immediately
             self.update_document_status(document_id, "embedding")

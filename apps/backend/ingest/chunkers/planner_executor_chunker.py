@@ -278,13 +278,14 @@ Identify 10-50 major sections. Estimate byte ranges based on document structure.
         
         This runs in parallel for each section.
         """
-        # Truncate section text if too large (leave room for prompt + response)
-        # gpt-4o-mini has 128K context, reserve 20K for prompt/response
-        max_section_tokens = 100000
+        # Note: Using planner model (gpt-4.1-mini with 1M context) for Pass 2
+        # This allows processing very large sections without truncation
+        # Reserve 50K tokens for prompt + response overhead
+        max_section_tokens = 950000
         section_tokens = len(section_text) // 4  # Rough estimate
         
         if section_tokens > max_section_tokens:
-            logger.warning(f"Section {section_meta['id']} is large ({section_tokens:,} tokens), truncating to {max_section_tokens:,} tokens")
+            logger.warning(f"Section {section_meta['id']} is extremely large ({section_tokens:,} tokens), truncating to {max_section_tokens:,} tokens")
             # Truncate to max tokens (roughly 4 chars per token)
             max_chars = max_section_tokens * 4
             section_text = section_text[:max_chars] + "\n\n[... section truncated due to size ...]"
@@ -315,9 +316,10 @@ Create a JSON chunk plan with byte offsets (relative to section start):
 }}"""
         
         try:
-            # Use cheaper model for section-level planning
+            # Use planner model (gpt-4.1-mini) for section-level planning
+            # This has 1M context vs executor's 128K, allowing large sections
             response = self.openai_client.chat.completions.create(
-                model=self.executor_model,  # Use executor model (cheaper)
+                model=self.planner_model,  # Use planner model (1M context)
                 messages=[
                     {"role": "system", "content": "You are a document chunking planner."},
                     {"role": "user", "content": prompt}

@@ -123,34 +123,37 @@ class GraphExtractor:
                     messages=[
                         {
                             "role": "system",
-                            "content": """You are an expert at extracting entities and relationships from text for knowledge graph construction.
+                            "content": """You are an expert at extracting ONLY the most important entities and relationships from text for knowledge graph construction.
 
-Analyze the text and extract:
-1. **Entities**: Important concepts, people, organizations, methodologies, frameworks, tools, etc.
-2. **Relationships**: How these entities relate to each other
+**CRITICAL: Be highly selective. Extract only 3-7 entities per chunk maximum.**
 
-Guidelines:
-- Be precise and specific with entity names
-- Include acronyms as aliases (e.g., "SDA" as alias for "Strategic Design Approaches")
-- Only extract relationships that are explicitly stated or strongly implied
-- Use descriptive relationship types that capture the nature of the connection
-- Descriptions should be concise but informative
+Extract ONLY entities that meet ALL these criteria:
+1. Appears multiple times OR is central to the text's meaning
+2. Is a proper noun (named entity) OR a significant domain-specific concept
+3. Would be useful for answering questions about this domain
+4. Is NOT a common word, number, date, or measurement
 
 **DO NOT extract:**
-- Dollar amounts, prices, or monetary values (e.g., "$1.5 billion", "$140 per ton")
-- Percentages or numeric statistics (e.g., "15%", "0.85")
-- Dates, years, or time periods (e.g., "2024", "January 2025")
-- Hex codes or color codes (e.g., "#b7c1c", "#ffffff")
-- Generic measurements or quantities (e.g., "90 tons", "1,550 per kilogram")
-- Common adjectives or descriptors (e.g., "high", "low", "significant")
-- Generic verbs or actions (e.g., "increased", "decreased")
+- Numbers, dates, years, time periods (e.g., "2024", "January")
+- Dollar amounts, prices, percentages (e.g., "$1.5 billion", "15%")
+- Measurements, quantities, statistics (e.g., "90 tons", "1,550 kg")
+- Hex codes, color codes, technical IDs (e.g., "#ffffff", "8112.99.9100")
+- Generic descriptors (e.g., "high", "low", "significant", "other")
+- Common verbs or actions (e.g., "increased", "decreased", "production")
+- Generic industry terms unless they're specific named concepts
 
 **ONLY extract:**
-- Named entities (people, organizations, locations, products)
-- Specific concepts, methodologies, or frameworks
-- Technologies, tools, or systems
-- Events or initiatives with proper names
-- Domain-specific terminology that represents a distinct concept"""
+- Named people, organizations, companies
+- Specific locations (countries, cities, regions)
+- Named products, minerals, materials (e.g., "Gallium", "Cobalt")
+- Specific technologies, methodologies, frameworks with proper names
+- Named events, initiatives, programs
+
+**Examples:**
+✅ GOOD: "United States", "China", "Gallium", "Tesla", "Paris Agreement"
+❌ BAD: "$1.5 billion", "2024", "high production", "increased", "#ffffff"
+
+**Selectivity test:** If you're unsure, DON'T extract it. Quality > Quantity."""
                         },
                         {
                             "role": "user",

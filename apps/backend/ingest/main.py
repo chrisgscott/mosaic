@@ -426,8 +426,9 @@ class DocumentWorker:
             except Exception as e:
                 logger.warning(f"Could not clean up existing chunks: {e}")
             
+            # Step 1: Insert ALL chunks first (ensures chunks are saved even if embeddings fail)
             CHUNK_BATCH_SIZE = 100
-            total_embeddings = 0
+            logger.info(f"Inserting {len(chunks)} chunks in batches of {CHUNK_BATCH_SIZE}")
             
             for i in range(0, len(chunks), CHUNK_BATCH_SIZE):
                 batch = chunks[i:i + CHUNK_BATCH_SIZE]
@@ -435,18 +436,27 @@ class DocumentWorker:
                 total_batches = (len(chunks) + CHUNK_BATCH_SIZE - 1)//CHUNK_BATCH_SIZE
                 
                 logger.debug(f"Inserting chunk batch {batch_num}/{total_batches} ({len(batch)} chunks)")
-                result = supabase.table("chunks").insert(batch).execute()
+                supabase.table("chunks").insert(batch).execute()
+            
+            logger.info(f"✅ All {len(chunks)} chunks inserted successfully")
+            
+            # Step 2: Generate embeddings for all chunks (can retry if this fails)
+            logger.info("Generating embeddings for all chunks")
+            total_embeddings = 0
+            
+            for i in range(0, len(chunks), CHUNK_BATCH_SIZE):
+                batch = chunks[i:i + CHUNK_BATCH_SIZE]
+                batch_num = i//CHUNK_BATCH_SIZE + 1
+                total_batches = (len(chunks) + CHUNK_BATCH_SIZE - 1)//CHUNK_BATCH_SIZE
                 
-                # Generate embeddings for this batch immediately
                 logger.debug(f"Generating embeddings for batch {batch_num}/{total_batches}")
-                stored_chunks = result.data
                 
                 # Prepare batch for embeddings (OpenAI supports up to 2048 inputs per request)
                 # Always embed full content for maximum search precision
                 # Summaries are metadata only, not for embedding
                 chunk_texts = [
                     chunk["content"] 
-                    for chunk in stored_chunks
+                    for chunk in batch
                 ]
                 embeddings = self.embeddings_generator.generate_embeddings_batch(chunk_texts)
                 

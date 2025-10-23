@@ -150,8 +150,8 @@ Extract ONLY entities that meet ALL these criteria:
 - Named events, initiatives, programs
 
 **Examples:**
-✅ GOOD: "United States", "China", "Gallium", "Tesla", "Paris Agreement"
-❌ BAD: "$1.5 billion", "2024", "high production", "increased", "#ffffff"
+✅ GOOD: "United States", "China", "Gallium", "Tesla", "Paris Agreement", "CCAAAPPI", "Opportunity Analysis (OA)", "Office for Bombing Prevention"
+❌ BAD: "$1.5 billion", "2024", "high production", "increased", "#ffffff", "15%"
 
 **Selectivity test:** If you're unsure, DON'T extract it. Quality > Quantity."""
                         },

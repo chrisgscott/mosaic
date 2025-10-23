@@ -326,23 +326,25 @@ class DocumentWorker:
             self.update_document_status(document_id, "chunking")
             logger.info("Chunking document with StructureAwareChunker (uses Docling structure)")
             
+            # Create a simple wrapper class for markdown content
+            class MarkdownDoc:
+                def __init__(self, markdown):
+                    self.markdown = markdown
+                def export_to_markdown(self):
+                    return self.markdown
+            
             # Get Docling document for chunking
-            if isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
+            if isinstance(docling_doc, dict) and docling_doc.get("type") == "cached_markdown":
+                # Cached extraction - already have markdown content
+                doc_for_chunking = MarkdownDoc(docling_doc["content"])
+            elif isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
                 # For page-based documents, concatenate all pages into one markdown string
-                # and create a simple wrapper for the chunker
                 full_markdown = ""
                 for page_num, page_doc in sorted(docling_doc["pages"], key=lambda x: x[0]):
                     full_markdown += page_doc.export_to_markdown() + "\n\n"
-                
-                # Create a simple object that has export_to_markdown method
-                class MarkdownDoc:
-                    def __init__(self, markdown):
-                        self.markdown = markdown
-                    def export_to_markdown(self):
-                        return self.markdown
-                
                 doc_for_chunking = MarkdownDoc(full_markdown)
             else:
+                # Regular Docling document object
                 doc_for_chunking = docling_doc
             
             # Chunk using structure-aware chunker

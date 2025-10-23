@@ -249,26 +249,17 @@ Create a JSON section map with major divisions (chapters, parts, sections):
 Identify 10-50 major sections. Estimate byte ranges based on document structure."""
         
         try:
-            if self.planner_provider == 'google':
-                response = self.planner_client.generate_content(
-                    prompt,
-                    generation_config=genai.GenerationConfig(
-                        response_mime_type="application/json",
-                        temperature=0.1
-                    )
-                )
-                return json.loads(response.text)
-            else:
-                response = self.openai_client.chat.completions.create(
-                    model=self.planner_model,
-                    messages=[
-                        {"role": "system", "content": "You are a document structure analyzer."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0.1
-                )
-                return json.loads(response.choices[0].message.content)
+            # Use OpenAI for section mapping (JSON mode, not Structured Outputs)
+            response = self.openai_client.chat.completions.create(
+                model=self.planner_model,
+                messages=[
+                    {"role": "system", "content": "You are a document structure analyzer."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1
+            )
+            return json.loads(response.choices[0].message.content)
         except Exception as e:
             logger.error(f"Error creating section map: {e}")
             return {}

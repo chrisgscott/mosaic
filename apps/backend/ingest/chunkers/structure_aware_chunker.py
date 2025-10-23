@@ -13,6 +13,7 @@ Philosophy:
 
 from typing import List, Dict, Any
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +222,7 @@ class StructureAwareChunker:
             content = f"# {section_title}\n\n{content}"
         
         return {
-            "id": f"{document_id}_chunk_{chunk_index}",
+            "id": str(uuid.uuid4()),  # Generate proper UUID
             "document_id": document_id,
             "chunk_index": chunk_index,
             "content": content,

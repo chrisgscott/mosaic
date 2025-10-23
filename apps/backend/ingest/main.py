@@ -314,11 +314,20 @@ class DocumentWorker:
             
             # Get Docling document for chunking
             if isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
-                # For page-based documents, use the first page's document
-                # (StructureAwareChunker will handle the full markdown export)
-                doc_for_chunking = docling_doc["pages"][0][1] if docling_doc["pages"] else None
-                if not doc_for_chunking:
-                    raise ValueError("No pages found in page_documents")
+                # For page-based documents, concatenate all pages into one markdown string
+                # and create a simple wrapper for the chunker
+                full_markdown = ""
+                for page_num, page_doc in sorted(docling_doc["pages"], key=lambda x: x[0]):
+                    full_markdown += page_doc.export_to_markdown() + "\n\n"
+                
+                # Create a simple object that has export_to_markdown method
+                class MarkdownDoc:
+                    def __init__(self, markdown):
+                        self.markdown = markdown
+                    def export_to_markdown(self):
+                        return self.markdown
+                
+                doc_for_chunking = MarkdownDoc(full_markdown)
             else:
                 doc_for_chunking = docling_doc
             

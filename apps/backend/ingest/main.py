@@ -388,7 +388,7 @@ class DocumentWorker:
                         "embedding": embedding,
                         "model": "text-embedding-3-small"
                     }
-                    for chunk, embedding in zip(stored_chunks, embeddings)
+                    for chunk, embedding in zip(batch, embeddings)
                 ]
                 supabase.table("embeddings").insert(embedding_records).execute()
                 total_embeddings += len(embeddings)

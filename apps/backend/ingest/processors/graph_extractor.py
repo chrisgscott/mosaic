@@ -123,37 +123,33 @@ class GraphExtractor:
                     messages=[
                         {
                             "role": "system",
-                            "content": """You are an expert at extracting ONLY the most important entities and relationships from text for knowledge graph construction.
+                            "content": """You are an expert at extracting ONLY the most important entities from text for knowledge graph construction.
 
-**CRITICAL: Be highly selective. Extract only 3-7 entities per chunk maximum.**
+**CRITICAL RULES:**
+1. Extract MAXIMUM 3-7 entities per chunk
+2. ONLY extract proper nouns (names) or significant domain concepts
+3. When in doubt, DO NOT extract
 
-Extract ONLY entities that meet ALL these criteria:
-1. Appears multiple times OR is central to the text's meaning
-2. Is a proper noun (named entity) OR a significant domain-specific concept
-3. Would be useful for answering questions about this domain
-4. Is NOT a common word, number, date, or measurement
+**NEVER extract (these are FORBIDDEN):**
+- ❌ ANY number, date, or year (e.g., "2024", "2020-2025", "January")
+- ❌ ANY dollar amount or price (e.g., "$34 billion", "$450 billion")
+- ❌ ANY percentage or statistic (e.g., "15%", "0.85")
+- ❌ ANY measurement or quantity (e.g., "90 tons", "21 States", "27 companies")
+- ❌ ANY technical ID or code (e.g., "#ffffff", "8112.99.9100", "4.1-specific-gravity")
+- ❌ Generic descriptors (e.g., "high", "low", "significant", "advanced")
+- ❌ Common industry terms (e.g., "production", "supply chains", "industry")
+- ❌ Generic compound names unless they're a specific product brand
 
-**DO NOT extract:**
-- Numbers, dates, years, time periods (e.g., "2024", "January")
-- Dollar amounts, prices, percentages (e.g., "$1.5 billion", "15%")
-- Measurements, quantities, statistics (e.g., "90 tons", "1,550 kg")
-- Hex codes, color codes, technical IDs (e.g., "#ffffff", "8112.99.9100")
-- Generic descriptors (e.g., "high", "low", "significant", "other")
-- Common verbs or actions (e.g., "increased", "decreased", "production")
-- Generic industry terms unless they're specific named concepts
+**ONLY extract (these are ALLOWED):**
+- ✅ Named people (e.g., "Adam M. Merrill")
+- ✅ Named organizations/companies (e.g., "American Petroleum Institute", "Tesla")
+- ✅ Specific countries/cities/regions (e.g., "United States", "China", "Alabama")
+- ✅ Named minerals/materials (e.g., "Gallium", "Cobalt", "Aluminum")
+- ✅ Named technologies/systems (e.g., "Airborne Visible/Infrared Imaging Spectrometer")
+- ✅ Named events/initiatives (e.g., "Paris Agreement", "American Battery Initiative")
+- ✅ Named documents (e.g., "2022 Final List of Critical Minerals" - this is a proper name)
 
-**ONLY extract:**
-- Named people, organizations, companies
-- Specific locations (countries, cities, regions)
-- Named products, minerals, materials (e.g., "Gallium", "Cobalt")
-- Specific technologies, methodologies, frameworks with proper names
-- Named events, initiatives, programs
-
-**Examples:**
-✅ GOOD: "United States", "China", "Gallium", "Tesla", "Paris Agreement", "CCAAAPPI", "Opportunity Analysis (OA)", "Office for Bombing Prevention"
-❌ BAD: "$1.5 billion", "2024", "high production", "increased", "#ffffff", "15%"
-
-**Selectivity test:** If you're unsure, DON'T extract it. Quality > Quantity."""
+**Test each entity:** Ask "Is this a proper name or specific concept?" If no, DON'T extract it."""
                         },
                         {
                             "role": "user",

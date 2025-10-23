@@ -471,11 +471,14 @@ class DoclingProcessor:
                                     # Note: doc is DoclingDocument, need to convert to markdown for storage
                                     if document_id and user_id and self.supabase:
                                         markdown = doc.export_to_markdown()
+                                        # Rough token count estimate (4 chars per token)
+                                        token_count = len(markdown) // 4
                                         checkpoint_batch.append({
                                             "document_id": document_id,
                                             "user_id": user_id,  # Required by chunks table
                                             "chunk_index": -page_num_result,  # Negative = temporary
                                             "content": markdown[:10000] if len(markdown) > 10000 else markdown,  # Store first 10K chars
+                                            "token_count": token_count,  # Required by chunks table
                                             "metadata": {
                                                 "page_number": page_num_result,
                                                 "temporary": True,

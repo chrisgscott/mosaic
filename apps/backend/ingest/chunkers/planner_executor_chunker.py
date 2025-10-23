@@ -277,7 +277,7 @@ Identify 10-50 major sections. Estimate byte ranges based on document structure.
         This runs in parallel for each section.
         """
         # Create chunk plan for this section
-        prompt = f"""Create a detailed chunk plan for this section.
+        prompt = f"""Create a detailed chunk plan for this section. Return your response as a JSON object.
 
 SECTION: {section_meta['title']}
 SECTION TYPE: {section_meta['type']}
@@ -286,7 +286,7 @@ GLOBAL CONTEXT: Document has {len(global_map['sections'])} sections total
 SECTION CONTENT:
 {section_text}
 
-Create chunk plan with byte offsets (relative to section start):
+Create a JSON chunk plan with byte offsets (relative to section start):
 {{
   "section_id": "{section_meta['id']}",
   "chunks": [

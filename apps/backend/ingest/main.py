@@ -15,7 +15,7 @@ from psycopg2.extras import RealDictCursor
 from supabase import create_client, Client
 
 from processors.docling_processor import DoclingProcessor
-from chunkers.hybrid_chunker import HybridChunker
+from chunkers.structure_aware_chunker import StructureAwareChunker
 from processors.embeddings_generator import EmbeddingsGenerator
 from processors.graph_extractor import GraphExtractor
 from settings_service import SettingsService
@@ -88,7 +88,7 @@ processor = DoclingProcessor(
     settings_service=settings_service,
     supabase_client=supabase  # Pass supabase for checkpointing
 )
-chunker = HybridChunker(max_tokens=CHUNK_MAX_TOKENS, summary_neighbors=CHUNK_SUMMARY_NEIGHBORS, settings_service=settings_service)
+chunker = StructureAwareChunker(target_size=1000, min_size=300, max_size=2000)
 
 
 class DocumentWorker:
@@ -99,7 +99,7 @@ class DocumentWorker:
         self.settings_service = settings_service
         
         # Initialize chunker
-        self.chunker = HybridChunker(max_tokens=CHUNK_MAX_TOKENS, summary_neighbors=CHUNK_SUMMARY_NEIGHBORS, settings_service=settings_service)
+        self.chunker = StructureAwareChunker(target_size=1000, min_size=300, max_size=2000)
         
         # Initialize embeddings generator
         self.embeddings_generator = EmbeddingsGenerator(supabase, settings_service=settings_service)
@@ -308,103 +308,22 @@ class DocumentWorker:
                 }).execute()
                 logger.info(f"💾 Cached extracted content ({page_count} pages, {len(full_text):,} chars, ~{token_count:,} tokens)")
             
-            # Chunk the document using appropriate chunker based on config
+            # Chunk the document using simple structure-aware chunking
             self.update_document_status(document_id, "chunking")
+            logger.info("Chunking document with StructureAwareChunker (uses Docling structure)")
             
-            # If no chunking config, use Sorting Hat to determine strategy
-            if not chunking_config:
-                logger.info("🎩 No chunking config - consulting the Sorting Hat...")
-                from chunkers.sorting_hat import SortingHat
-                
-                # Get full text for analysis
-                if isinstance(docling_doc, dict) and docling_doc.get("type") == "cached_markdown":
-                    full_text = docling_doc["content"]
-                elif isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
-                    full_text = ""
-                    for page_num, page_doc in sorted(docling_doc["pages"], key=lambda x: x[0]):
-                        full_text += page_doc.export_to_markdown() + "\n\n"
-                else:
-                    full_text = docling_doc.export_to_markdown()
-                
-                sorting_hat = SortingHat()
-                chunking_config = sorting_hat.sort(full_text, file_path)
-                
-                # Save the config to the document for future reference
-                try:
-                    supabase.table("documents").update({
-                        "chunking_config": chunking_config
-                    }).eq("id", document_id).execute()
-                    logger.info(f"🎩 Saved Sorting Hat decision to document")
-                except Exception as e:
-                    logger.warning(f"Could not save chunking config: {e}")
-            
-            # Check if custom chunking config is specified
-            if chunking_config:
-                strategy = chunking_config.get('strategy')
-                
-                # Get full text for non-Docling chunkers
-                if isinstance(docling_doc, dict) and docling_doc.get("type") == "cached_markdown":
-                    full_text = docling_doc["content"]
-                elif isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
-                    # Export each page to markdown and concatenate
-                    full_text = ""
-                    for page_num, page_doc in sorted(docling_doc["pages"], key=lambda x: x[0]):
-                        full_text += page_doc.export_to_markdown() + "\n\n"
-                else:
-                    full_text = docling_doc.export_to_markdown()
-                
-                if strategy == 'hybrid' or not strategy:
-                    # Use default HybridChunker
-                    logger.info("Using HybridChunker (Sorting Hat recommendation or default)")
-                    chunks = self.chunker.chunk_document(docling_doc, document_id)
-                    
-                elif strategy == 'custom_boundary':
-                    logger.info("Using CustomBoundaryChunker based on document config")
-                    from chunkers.custom_boundary_chunker import CustomBoundaryChunker
-                    custom_chunker = CustomBoundaryChunker(chunking_config, tokenizer=self.chunker.tokenizer)
-                    chunks = custom_chunker.chunk_document(full_text, document_id)
-                    
-                elif strategy == 'agentic':
-                    logger.info("Using AgenticChunker based on document config")
-                    from chunkers.agentic_chunker import AgenticChunker
-                    from openai import OpenAI
-                    agentic_chunker = AgenticChunker(
-                        chunking_config, 
-                        tokenizer=self.chunker.tokenizer,
-                        openai_client=OpenAI()
-                    )
-                    chunks = agentic_chunker.chunk_document(full_text, document_id)
-                    
-                elif strategy == 'planner_executor':
-                    logger.info("Using PlannerExecutorChunker (optimal pattern with large-context planner)")
-                    from chunkers.planner_executor_chunker import PlannerExecutorChunker
-                    from openai import OpenAI
-                    import os
-                    
-                    # Add API keys to config (not stored in database for security)
-                    enriched_config = {**chunking_config}
-                    enriched_config['google_api_key'] = os.getenv('GOOGLE_API_KEY')
-                    
-                    planner_executor = PlannerExecutorChunker(
-                        enriched_config,
-                        tokenizer=self.chunker.tokenizer,
-                        openai_client=OpenAI()
-                    )
-                    chunks = planner_executor.chunk_document(full_text, document_id)
-                    
-                else:
-                    logger.warning(f"Unknown strategy '{strategy}', falling back to HybridChunker")
-                    chunks = self.chunker.chunk_document(docling_doc, document_id)
+            # Get Docling document for chunking
+            if isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
+                # For page-based documents, use the first page's document
+                # (StructureAwareChunker will handle the full markdown export)
+                doc_for_chunking = docling_doc["pages"][0][1] if docling_doc["pages"] else None
+                if not doc_for_chunking:
+                    raise ValueError("No pages found in page_documents")
             else:
-                logger.info("Chunking document with HybridChunker (no config)")
-                chunks = self.chunker.chunk_document(docling_doc, document_id)
+                doc_for_chunking = docling_doc
             
-            # REMOVED: Chunk refinement (not in official plan, caused cascading merge bugs)
-            # Philosophy: Get chunking right the first time via:
-            # - Sorting Hat (optimal strategy selection)
-            # - Per-document chunk size optimization
-            # - Smart chunking strategies (Agentic, Planner-Executor)
-            # Rather than trying to fix bad chunks with expensive post-processing
+            # Chunk using structure-aware chunker
+            chunks = self.chunker.chunk_document(doc_for_chunking, document_id)
             
             # Add user_id and storage_path to chunks
             for chunk in chunks:

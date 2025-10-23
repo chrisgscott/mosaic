@@ -2,6 +2,46 @@
 
 ## 💡 Enhancements & Ideas
 
+### Migrate to OpenAI Structured Outputs
+**Priority:** Medium  
+**Effort:** 1-2 days  
+**Context:** Currently using deprecated JSON mode (`response_format: {"type": "json_object"}`). Should migrate to Structured Outputs for better reliability and streaming support.
+
+**Benefits:**
+- ✅ 100% schema adherence (vs ~95% with JSON mode)
+- ✅ Streaming support (progress visibility for long operations)
+- ✅ Type safety with Pydantic models
+- ✅ Better error handling and refusal detection
+- ✅ Automatic validation
+
+**Files to migrate:**
+1. `chunkers/planner_executor_chunker.py` - Chunk plan generation
+2. `chunkers/sorting_hat.py` - Document analysis
+3. `chunkers/agentic_chunker.py` - Boundary detection
+4. `processors/graph_extractor.py` - Entity/relationship extraction
+
+**Implementation:**
+```python
+from pydantic import BaseModel
+from openai import OpenAI
+
+class ChunkPlan(BaseModel):
+    document_id: str
+    chunks: list[ChunkSpec]
+    
+client = OpenAI()
+completion = client.beta.chat.completions.parse(
+    model="gpt-4.1-mini",
+    messages=[...],
+    response_format=ChunkPlan,
+    stream=True  # Now supported!
+)
+```
+
+**Reference:** https://platform.openai.com/docs/guides/structured-outputs
+
+---
+
 ### MCP Server for External Tool Integration
 **Context:** External automation tools (n8n, Make, Zapier) and AI assistants (Claude Desktop, Cline, etc.) need programmatic access to Mosaic's search, graph, and document capabilities.
 

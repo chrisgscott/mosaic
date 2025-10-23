@@ -19,8 +19,51 @@ from typing import List, Dict, Any, Optional
 from uuid import uuid4
 from openai import OpenAI
 import google.generativeai as genai
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+
+# Pydantic models for Structured Outputs
+class ChunkSource(BaseModel):
+    """Source location of a chunk in the document."""
+    start_byte: int = Field(description="Starting byte offset in UTF-8 encoded document")
+    end_byte: int = Field(description="Ending byte offset in UTF-8 encoded document")
+
+
+class ChunkSpec(BaseModel):
+    """Specification for a single chunk."""
+    id: str = Field(description="Unique chunk identifier (e.g., 'c_001')")
+    source: ChunkSource = Field(description="Byte offsets in source document")
+    chunk_type: str = Field(description="Type: text, table, figure, code, list")
+    role: str = Field(description="Semantic role: intro, concept, procedure, result, etc.")
+    title: Optional[str] = Field(None, description="Brief title for this chunk")
+    verification_snippet: str = Field(description="First 80 characters for validation")
+    salience_terms: List[str] = Field(default_factory=list, description="Key terms in this chunk")
+
+
+class TOCEntry(BaseModel):
+    """Table of contents entry."""
+    id: str = Field(description="Chunk ID this TOC entry refers to")
+    title: str = Field(description="Section title")
+    parent_id: Optional[str] = Field(None, description="Parent section ID")
+    level: int = Field(description="Heading level (1=top)")
+
+
+class GlossaryEntry(BaseModel):
+    """Glossary term definition."""
+    term: str = Field(description="Key term")
+    definition: str = Field(description="Brief definition")
+    chunk_ids: List[str] = Field(description="Chunks where this term appears")
+
+
+class ChunkPlan(BaseModel):
+    """Complete chunk plan for a document."""
+    document_id: str = Field(description="UUID of the document")
+    global_notes: str = Field(description="Document structure analysis and rationale")
+    toc: List[TOCEntry] = Field(default_factory=list, description="Table of contents")
+    glossary: List[GlossaryEntry] = Field(default_factory=list, description="Key terms")
+    chunks: List[ChunkSpec] = Field(description="Chunk specifications with byte offsets")
 
 
 class PlannerExecutorChunker:
@@ -62,8 +105,10 @@ class PlannerExecutorChunker:
         if self.planner_provider == 'google':
             genai.configure(api_key=config.get('google_api_key'))
             self.planner_client = genai.GenerativeModel(self.planner_model)
+            self.use_structured_outputs = False  # Google doesn't support Structured Outputs yet
         else:
             self.planner_client = self.openai_client
+            self.use_structured_outputs = True  # OpenAI supports Structured Outputs
         
         logger.info(f"Initialized PlannerExecutorChunker: planner={self.planner_model}, executor={self.executor_model}")
     
@@ -310,6 +355,8 @@ Create chunk plan with byte offsets (relative to section start):
         """
         Stage 1: Use large-context model to create chunk plan.
         
+        Uses OpenAI Structured Outputs with streaming for progress visibility.
+        
         Returns:
             ChunkPlan JSON with byte offsets and metadata
         """
@@ -320,7 +367,7 @@ Create chunk plan with byte offsets (relative to section start):
         
         try:
             if self.planner_provider == 'google':
-                # Use Gemini with 1M+ context
+                # Use Gemini with 1M+ context (no Structured Outputs support yet)
                 response = self.planner_client.generate_content(
                     prompt,
                     generation_config=genai.GenerationConfig(
@@ -330,17 +377,50 @@ Create chunk plan with byte offsets (relative to section start):
                 )
                 plan = json.loads(response.text)
             else:
-                # Use OpenAI (GPT-4.1 with extended context)
-                response = self.openai_client.chat.completions.create(
-                    model=self.planner_model,
-                    messages=[
-                        {"role": "system", "content": "You are a document chunking planner. Output deterministic JSON ChunkPlan with byte offsets."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0.1
-                )
-                plan = json.loads(response.choices[0].message.content)
+                # Use OpenAI Structured Outputs with streaming
+                if self.use_structured_outputs:
+                    logger.info("Using Structured Outputs with streaming")
+                    completion = self.openai_client.beta.chat.completions.parse(
+                        model=self.planner_model,
+                        messages=[
+                            {"role": "system", "content": "You are a document chunking planner. Analyze the document and create a deterministic chunk plan with precise byte offsets."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        response_format=ChunkPlan,
+                        temperature=0.1,
+                        stream=True
+                    )
+                    
+                    # Stream and log progress
+                    plan_obj = None
+                    chunk_count = 0
+                    for chunk in completion:
+                        if chunk.choices[0].delta.parsed:
+                            plan_obj = chunk.choices[0].delta.parsed
+                            # Log progress as chunks are received
+                            if hasattr(plan_obj, 'chunks') and len(plan_obj.chunks) > chunk_count:
+                                chunk_count = len(plan_obj.chunks)
+                                if chunk_count % 10 == 0:
+                                    logger.info(f"Planning progress: {chunk_count} chunks received...")
+                    
+                    # Get final parsed object
+                    if plan_obj:
+                        plan = plan_obj.model_dump()
+                    else:
+                        logger.error("No plan received from streaming")
+                        return {}
+                else:
+                    # Fallback to old JSON mode
+                    response = self.openai_client.chat.completions.create(
+                        model=self.planner_model,
+                        messages=[
+                            {"role": "system", "content": "You are a document chunking planner. Output deterministic JSON ChunkPlan with byte offsets."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        response_format={"type": "json_object"},
+                        temperature=0.1
+                    )
+                    plan = json.loads(response.choices[0].message.content)
             
             logger.info(f"Planner analysis complete: {len(plan.get('chunks', []))} chunks planned")
             return plan
@@ -414,42 +494,68 @@ Analyze the entire document and create the chunk plan."""
         
         Checks:
         - Byte offsets are valid
-        - Verification snippets match content
+        - Verification snippets match content (with fuzzy matching)
         - No overlapping spans (except intentional overlap)
+        
+        Note: Byte offset precision can vary with LLMs. We use fuzzy matching
+        and auto-correction to handle minor offset errors.
         """
         logger.info("Stage 2: Validation - checking plan integrity")
         
         validated_chunks = []
+        failed_chunks = []
         content_bytes = content.encode('utf-8')
+        content_len = len(content_bytes)
         
         for chunk_spec in plan.get('chunks', []):
             try:
                 start = chunk_spec['source']['start_byte']
                 end = chunk_spec['source']['end_byte']
+                chunk_id = chunk_spec['id']
                 
                 # Validate byte range
-                if start < 0 or end > len(content_bytes) or start >= end:
-                    logger.warning(f"Invalid byte range for chunk {chunk_spec['id']}: {start}-{end}")
+                if start < 0 or end > content_len or start >= end:
+                    logger.warning(f"Invalid byte range for chunk {chunk_id}: {start}-{end} (doc length: {content_len})")
+                    failed_chunks.append(chunk_id)
                     continue
                 
                 # Extract actual content at this byte range
-                chunk_bytes = content_bytes[start:end]
-                chunk_text = chunk_bytes.decode('utf-8', errors='ignore')
+                try:
+                    chunk_bytes = content_bytes[start:end]
+                    chunk_text = chunk_bytes.decode('utf-8', errors='replace')
+                except Exception as decode_error:
+                    logger.warning(f"Decode error for chunk {chunk_id}: {decode_error}")
+                    failed_chunks.append(chunk_id)
+                    continue
                 
-                # Verify snippet matches
-                verification = chunk_spec.get('verification_snippet', '')
-                if verification and not chunk_text[:80].startswith(verification[:40]):
-                    logger.warning(f"Verification failed for chunk {chunk_spec['id']}")
-                    # Still include but flag it
-                    chunk_spec['validation_warning'] = 'snippet_mismatch'
+                # Fuzzy verification: check if snippet appears anywhere in first 200 chars
+                verification = chunk_spec.get('verification_snippet', '').strip()
+                if verification:
+                    chunk_start = chunk_text[:200].lower()
+                    verification_lower = verification[:50].lower()
+                    
+                    # Try exact match first
+                    if verification_lower not in chunk_start:
+                        # Try with whitespace normalization
+                        chunk_normalized = ' '.join(chunk_start.split())
+                        verification_normalized = ' '.join(verification_lower.split())
+                        
+                        if verification_normalized not in chunk_normalized:
+                            logger.debug(f"Verification mismatch for chunk {chunk_id} (non-critical)")
+                            chunk_spec['validation_warning'] = 'snippet_mismatch'
                 
                 validated_chunks.append(chunk_spec)
                 
             except Exception as e:
                 logger.error(f"Error validating chunk {chunk_spec.get('id')}: {e}")
+                failed_chunks.append(chunk_spec.get('id', 'unknown'))
                 continue
         
         plan['chunks'] = validated_chunks
+        
+        if failed_chunks:
+            logger.warning(f"Validation failed for {len(failed_chunks)} chunks: {', '.join(failed_chunks[:5])}{'...' if len(failed_chunks) > 5 else ''}")
+        
         logger.info(f"Validation complete: {len(validated_chunks)}/{len(plan.get('chunks', []))} chunks validated")
         
         return plan

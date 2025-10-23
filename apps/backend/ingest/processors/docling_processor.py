@@ -467,17 +467,18 @@ class DoclingProcessor:
                                     logger.debug(f"Page {page_num_result} added to results")
                                     
                                     # Add to checkpoint batch
-                                    # Note: doc is already markdown string from _process_single_page_document
+                                    # Note: doc is DoclingDocument, need to convert to markdown for storage
                                     if document_id and self.supabase:
+                                        markdown = doc.export_to_markdown()
                                         checkpoint_batch.append({
                                             "document_id": document_id,
                                             "chunk_index": -page_num_result,  # Negative = temporary
-                                            "content": doc[:10000] if len(doc) > 10000 else doc,  # Store first 10K chars in content
+                                            "content": markdown[:10000] if len(markdown) > 10000 else markdown,  # Store first 10K chars
                                             "metadata": {
                                                 "page_number": page_num_result,
                                                 "temporary": True,
                                                 "stage": "extraction",
-                                                "full_content": doc  # Full content in metadata
+                                                "full_content": markdown  # Full markdown in metadata
                                             }
                                         })
                                 else:

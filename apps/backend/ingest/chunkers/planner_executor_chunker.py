@@ -278,6 +278,17 @@ Identify 10-50 major sections. Estimate byte ranges based on document structure.
         
         This runs in parallel for each section.
         """
+        # Truncate section text if too large (leave room for prompt + response)
+        # gpt-4o-mini has 128K context, reserve 20K for prompt/response
+        max_section_tokens = 100000
+        section_tokens = len(section_text) // 4  # Rough estimate
+        
+        if section_tokens > max_section_tokens:
+            logger.warning(f"Section {section_meta['id']} is large ({section_tokens:,} tokens), truncating to {max_section_tokens:,} tokens")
+            # Truncate to max tokens (roughly 4 chars per token)
+            max_chars = max_section_tokens * 4
+            section_text = section_text[:max_chars] + "\n\n[... section truncated due to size ...]"
+        
         # Create chunk plan for this section
         prompt = f"""Create a detailed chunk plan for this section. Return your response as a JSON object.
 

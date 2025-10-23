@@ -9,16 +9,16 @@
 
 **Status:**
 - ✅ `chunkers/planner_executor_chunker.py` - **COMPLETED** (Oct 23, 2025)
-  - Migrated to Pydantic models with streaming
-  - Progress logging every 10 chunks
+  - Migrated to Pydantic models (non-streaming due to SDK limitations)
   - Improved validation with fuzzy matching
+  - 100% schema adherence
 
 **Benefits:**
 - ✅ 100% schema adherence (vs ~95% with JSON mode)
-- ✅ Streaming support (progress visibility for long operations)
 - ✅ Type safety with Pydantic models
 - ✅ Better error handling and refusal detection
 - ✅ Automatic validation
+- ⏳ Streaming support (not yet available in SDK for parse())
 
 **Remaining files to migrate:**
 1. `chunkers/sorting_hat.py` - Document analysis
@@ -44,18 +44,88 @@ client = OpenAI()
 completion = client.beta.chat.completions.parse(
     model="gpt-4.1-mini",
     messages=[...],
-    response_format=ChunkPlan,
-    stream=True  # Now supported!
+    response_format=ChunkPlan
 )
 
-# Stream with progress
-for chunk in completion:
-    if chunk.choices[0].delta.parsed:
-        plan = chunk.choices[0].delta.parsed
-        # Log progress, process incrementally
+plan = completion.choices[0].message.parsed.model_dump()
 ```
 
 **Reference:** https://platform.openai.com/docs/guides/structured-outputs
+
+---
+
+### Migrate to OpenAI Responses API
+**Priority:** Low  
+**Effort:** 3-5 days  
+**Context:** OpenAI released a new Responses API that consolidates Chat Completions, Assistants, and other features into a unified interface. The Chat Completions API is not deprecated but is being superseded.
+
+**Why migrate:**
+- Cleaner, more consistent API interface
+- Better streaming support (including for Structured Outputs)
+- Unified tool/function calling patterns
+- Multi-turn conversations built-in
+- Better error handling and status tracking
+- Future-proof (this is OpenAI's direction)
+
+**Why wait:**
+- Chat Completions API is stable and working
+- No deprecation timeline announced yet
+- Significant refactor required
+- Should validate current chunking implementation first
+- Focus on Phase 1-2 completion
+
+**Files that would need migration:**
+1. `chunkers/planner_executor_chunker.py` - Planner stage
+2. `chunkers/sorting_hat.py` - Document analysis
+3. `chunkers/agentic_chunker.py` - Boundary detection
+4. `processors/graph_extractor.py` - Entity/relationship extraction
+5. Any other OpenAI API calls in the codebase
+
+**Key API differences:**
+```python
+# OLD: Chat Completions API
+response = client.chat.completions.create(
+    model="gpt-4.1-mini",
+    messages=[...],
+    response_format={"type": "json_object"}
+)
+
+# NEW: Responses API
+response = client.responses.create(
+    model="gpt-4.1-mini",
+    input=[...],  # Note: 'input' instead of 'messages'
+    text={"format": {"type": "json_object"}}  # Note: 'text' wrapper
+)
+```
+
+**Structured Outputs with Responses API:**
+```python
+from pydantic import BaseModel
+
+class ChunkPlan(BaseModel):
+    document_id: str
+    chunks: list[ChunkSpec]
+
+response = client.responses.parse(
+    model="gpt-4.1-mini",
+    input=[...],
+    text_format=ChunkPlan,  # Simpler interface
+    stream=True  # Streaming works!
+)
+
+# With streaming
+for event in response:
+    if event.type == "response.output_text.delta":
+        print(event.delta)
+```
+
+**When to migrate:**
+- After Phase 1-2 chunking improvements are validated
+- When OpenAI announces deprecation timeline for Chat Completions
+- If we need Responses API-specific features (better streaming, multi-turn, etc.)
+- As part of a larger refactor/cleanup effort
+
+**Reference:** https://platform.openai.com/docs/guides/migrate-to-responses
 
 ---
 

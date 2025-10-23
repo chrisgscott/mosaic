@@ -18,7 +18,6 @@ import json
 from typing import List, Dict, Any, Optional
 from uuid import uuid4
 from openai import OpenAI
-import google.generativeai as genai
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -89,9 +88,8 @@ class PlannerExecutorChunker:
         self.tokenizer = tokenizer
         self.openai_client = openai_client or OpenAI()
         
-        # Planner config (large context model)
-        self.planner_model = config.get('planner_model', 'gemini-2.0-flash-exp')
-        self.planner_provider = config.get('planner_provider', 'google')  # 'google' or 'openai'
+        # Planner config (large context model) - Always use OpenAI now
+        self.planner_model = config.get('planner_model', 'gpt-4.1-mini')
         
         # Executor config (cheap model)
         self.executor_model = config.get('executor_model', 'gpt-4o-mini')
@@ -100,15 +98,6 @@ class PlannerExecutorChunker:
         self.max_chunk_tokens = config.get('max_chunk_tokens', 500)
         self.overlap_ratio = config.get('overlap_ratio', 0.15)
         self.document_type = config.get('document_type', 'general')
-        
-        # Initialize planner client
-        if self.planner_provider == 'google':
-            genai.configure(api_key=config.get('google_api_key'))
-            self.planner_client = genai.GenerativeModel(self.planner_model)
-            self.use_structured_outputs = False  # Google doesn't support Structured Outputs yet
-        else:
-            self.planner_client = self.openai_client
-            self.use_structured_outputs = True  # OpenAI supports Structured Outputs
         
         logger.info(f"Initialized PlannerExecutorChunker: planner={self.planner_model}, executor={self.executor_model}")
     
@@ -366,48 +355,24 @@ Create chunk plan with byte offsets (relative to section start):
         prompt = self._build_planner_prompt(content, document_id)
         
         try:
-            if self.planner_provider == 'google':
-                # Use Gemini with 1M+ context (no Structured Outputs support yet)
-                response = self.planner_client.generate_content(
-                    prompt,
-                    generation_config=genai.GenerationConfig(
-                        response_mime_type="application/json",
-                        temperature=0.1
-                    )
-                )
-                plan = json.loads(response.text)
+            # Use OpenAI Structured Outputs (non-streaming)
+            logger.info("Using Structured Outputs (non-streaming)")
+            completion = self.openai_client.beta.chat.completions.parse(
+                model=self.planner_model,
+                messages=[
+                    {"role": "system", "content": "You are a document chunking planner. Analyze the document and create a deterministic chunk plan with precise byte offsets."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format=ChunkPlan,
+                temperature=0.1
+            )
+            
+            # Get parsed object
+            if completion.choices[0].message.parsed:
+                plan = completion.choices[0].message.parsed.model_dump()
             else:
-                # Use OpenAI Structured Outputs (non-streaming for now)
-                if self.use_structured_outputs:
-                    logger.info("Using Structured Outputs (non-streaming)")
-                    completion = self.openai_client.beta.chat.completions.parse(
-                        model=self.planner_model,
-                        messages=[
-                            {"role": "system", "content": "You are a document chunking planner. Analyze the document and create a deterministic chunk plan with precise byte offsets."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        response_format=ChunkPlan,
-                        temperature=0.1
-                    )
-                    
-                    # Get parsed object
-                    if completion.choices[0].message.parsed:
-                        plan = completion.choices[0].message.parsed.model_dump()
-                    else:
-                        logger.error("No parsed plan received")
-                        return {}
-                else:
-                    # Fallback to old JSON mode
-                    response = self.openai_client.chat.completions.create(
-                        model=self.planner_model,
-                        messages=[
-                            {"role": "system", "content": "You are a document chunking planner. Output deterministic JSON ChunkPlan with byte offsets."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        response_format={"type": "json_object"},
-                        temperature=0.1
-                    )
-                    plan = json.loads(response.choices[0].message.content)
+                logger.error("No parsed plan received")
+                return {}
             
             logger.info(f"Planner analysis complete: {len(plan.get('chunks', []))} chunks planned")
             return plan

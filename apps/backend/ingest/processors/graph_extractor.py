@@ -134,8 +134,23 @@ Guidelines:
 - Include acronyms as aliases (e.g., "SDA" as alias for "Strategic Design Approaches")
 - Only extract relationships that are explicitly stated or strongly implied
 - Use descriptive relationship types that capture the nature of the connection
-- Focus on meaningful entities (not common words or generic concepts)
-- Descriptions should be concise but informative"""
+- Descriptions should be concise but informative
+
+**DO NOT extract:**
+- Dollar amounts, prices, or monetary values (e.g., "$1.5 billion", "$140 per ton")
+- Percentages or numeric statistics (e.g., "15%", "0.85")
+- Dates, years, or time periods (e.g., "2024", "January 2025")
+- Hex codes or color codes (e.g., "#b7c1c", "#ffffff")
+- Generic measurements or quantities (e.g., "90 tons", "1,550 per kilogram")
+- Common adjectives or descriptors (e.g., "high", "low", "significant")
+- Generic verbs or actions (e.g., "increased", "decreased")
+
+**ONLY extract:**
+- Named entities (people, organizations, locations, products)
+- Specific concepts, methodologies, or frameworks
+- Technologies, tools, or systems
+- Events or initiatives with proper names
+- Domain-specific terminology that represents a distinct concept"""
                         },
                         {
                             "role": "user",

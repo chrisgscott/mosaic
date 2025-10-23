@@ -475,8 +475,14 @@ Analyze the entire document and create the chunk plan."""
                 chunk_id = chunk_spec['id']
                 
                 # Validate and auto-correct byte range
-                if start < 0 or end > content_len or start >= end:
+                if start < 0 or end > content_len or start >= end or start >= content_len:
                     logger.warning(f"Invalid byte range for chunk {chunk_id}: {start}-{end} (doc length: {content_len})")
+                    
+                    # Skip if start is beyond content (no content to extract)
+                    if start >= content_len:
+                        logger.warning(f"Chunk {chunk_id} starts beyond section boundary - skipping (LLM hallucinated this chunk)")
+                        failed_chunks.append(chunk_id)
+                        continue
                     
                     # Auto-correct instead of dropping
                     if start < 0:
@@ -484,7 +490,8 @@ Analyze the entire document and create the chunk plan."""
                     if end > content_len:
                         end = content_len
                     if start >= end:
-                        # Skip this chunk - can't fix
+                        # This shouldn't happen after above checks, but just in case
+                        logger.warning(f"Chunk {chunk_id} has invalid range after correction - skipping")
                         failed_chunks.append(chunk_id)
                         continue
                     

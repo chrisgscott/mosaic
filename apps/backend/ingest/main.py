@@ -266,13 +266,13 @@ class DocumentWorker:
             cached_extraction = supabase.table("extracted_documents")\
                 .select("content, page_count, extraction_method")\
                 .eq("document_id", document_id)\
-                .maybeSingle()\
                 .execute()
             
-            if cached_extraction.data:
-                logger.info(f"📦 Using cached extracted content ({cached_extraction.data.get('page_count', '?')} pages, method: {cached_extraction.data.get('extraction_method', 'unknown')})")
+            if cached_extraction.data and len(cached_extraction.data) > 0:
+                cached = cached_extraction.data[0]
+                logger.info(f"📦 Using cached extracted content ({cached.get('page_count', '?')} pages, method: {cached.get('extraction_method', 'unknown')})")
                 # Reconstruct docling_doc format from cached content
-                docling_doc = {"type": "cached_markdown", "content": cached_extraction.data["content"]}
+                docling_doc = {"type": "cached_markdown", "content": cached["content"]}
             else:
                 # Extract document with Docling
                 self.update_document_status(document_id, "extracting")

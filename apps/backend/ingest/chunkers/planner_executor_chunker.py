@@ -472,11 +472,25 @@ Analyze the entire document and create the chunk plan."""
                 end = chunk_spec['source']['end_byte']
                 chunk_id = chunk_spec['id']
                 
-                # Validate byte range
+                # Validate and auto-correct byte range
                 if start < 0 or end > content_len or start >= end:
                     logger.warning(f"Invalid byte range for chunk {chunk_id}: {start}-{end} (doc length: {content_len})")
-                    failed_chunks.append(chunk_id)
-                    continue
+                    
+                    # Auto-correct instead of dropping
+                    if start < 0:
+                        start = 0
+                    if end > content_len:
+                        end = content_len
+                    if start >= end:
+                        # Skip this chunk - can't fix
+                        failed_chunks.append(chunk_id)
+                        continue
+                    
+                    # Update corrected offsets
+                    chunk_spec['source']['start_byte'] = start
+                    chunk_spec['source']['end_byte'] = end
+                    chunk_spec['validation_warning'] = 'byte_range_corrected'
+                    logger.info(f"Auto-corrected chunk {chunk_id} to {start}-{end}")
                 
                 # Extract actual content at this byte range
                 try:

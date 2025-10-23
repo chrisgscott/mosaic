@@ -369,7 +369,7 @@ Consider:
                 "max_chunk_tokens": chunk_size,
                 "overlap_ratio": 0.15,
                 "document_type": analysis.get('document_type'),
-                "max_planner_tokens": 1_000_000,
+                "max_planner_tokens": 100_000,  # Use two-pass for docs >100K tokens (output limit constraint)
                 "section_parallel_workers": 10
             })
         

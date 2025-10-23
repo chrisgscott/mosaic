@@ -371,6 +371,16 @@ class DocumentWorker:
             # Store chunks in database in batches and generate embeddings immediately
             self.update_document_status(document_id, "embedding")
             logger.info("Storing chunks and generating embeddings")
+            
+            # Clean up any existing chunks from previous failed attempts
+            try:
+                existing = supabase.table("chunks").select("id").eq("document_id", document_id).execute()
+                if existing.data:
+                    logger.info(f"Deleting {len(existing.data)} existing chunks from previous attempt")
+                    supabase.table("chunks").delete().eq("document_id", document_id).execute()
+            except Exception as e:
+                logger.warning(f"Could not clean up existing chunks: {e}")
+            
             CHUNK_BATCH_SIZE = 100
             total_embeddings = 0
             

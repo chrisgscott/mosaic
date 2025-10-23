@@ -265,7 +265,7 @@ class DocumentWorker:
             # Extract document with Docling
             self.update_document_status(document_id, "extracting")
             logger.info(f"Extracting document with Docling ({'API VLM' if USE_API_VLM else 'Local VLM'})")
-            docling_doc = processor.extract_document(file_data, file_path, document_id=document_id)
+            docling_doc = processor.extract_document(file_data, file_path, document_id=document_id, user_id=user_id)
             
             if not docling_doc:
                 raise ValueError("No document extracted from file")

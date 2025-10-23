@@ -367,7 +367,7 @@ class DoclingProcessor:
             logger.error(f"✗ Error processing page {page_num}: {e}")
             return (page_num, None)
     
-    def extract_document(self, file_data: bytes, file_path: str, document_id: Optional[str] = None):
+    def extract_document(self, file_data: bytes, file_path: str, document_id: Optional[str] = None, user_id: Optional[str] = None):
         """
         Extract DoclingDocument object for use with HybridChunker.
         
@@ -375,6 +375,7 @@ class DoclingProcessor:
             file_data: Raw file bytes
             file_path: Original file path (for logging/context)
             document_id: Optional document ID for checkpointing progress
+            user_id: Optional user ID for checkpointing (required if document_id provided)
         
         Returns:
             DoclingDocument object, or None if processing fails.
@@ -384,8 +385,8 @@ class DoclingProcessor:
             with Docling's native chunkers (HybridChunker, HierarchicalChunker).
             For parallel processing, pages are combined into a single document.
             
-            If document_id and supabase_client are provided, progress is checkpointed
-            every 10 pages to allow resuming from failures.
+            If document_id, user_id, and supabase_client are provided, progress is 
+            checkpointed every 10 pages to allow resuming from failures.
         """
         temp_path = None
         page_paths = []
@@ -468,10 +469,11 @@ class DoclingProcessor:
                                     
                                     # Add to checkpoint batch
                                     # Note: doc is DoclingDocument, need to convert to markdown for storage
-                                    if document_id and self.supabase:
+                                    if document_id and user_id and self.supabase:
                                         markdown = doc.export_to_markdown()
                                         checkpoint_batch.append({
                                             "document_id": document_id,
+                                            "user_id": user_id,  # Required by chunks table
                                             "chunk_index": -page_num_result,  # Negative = temporary
                                             "content": markdown[:10000] if len(markdown) > 10000 else markdown,  # Store first 10K chars
                                             "metadata": {
@@ -494,7 +496,7 @@ class DoclingProcessor:
                             completed += 1
                             
                             # Checkpoint every 10 pages
-                            if document_id and self.supabase and len(checkpoint_batch) >= 10:
+                            if document_id and user_id and self.supabase and len(checkpoint_batch) >= 10:
                                 try:
                                     self.supabase.table("chunks").insert(checkpoint_batch).execute()
                                     logger.info(f"📍 Checkpointed pages {checkpoint_batch[0]['metadata']['page_number']} to {checkpoint_batch[-1]['metadata']['page_number']}")
@@ -514,7 +516,7 @@ class DoclingProcessor:
                                 future.cancel()
                 
                 # Checkpoint any remaining pages
-                if document_id and self.supabase and checkpoint_batch:
+                if document_id and user_id and self.supabase and checkpoint_batch:
                     try:
                         self.supabase.table("chunks").insert(checkpoint_batch).execute()
                         logger.info(f"📍 Checkpointed final {len(checkpoint_batch)} pages")

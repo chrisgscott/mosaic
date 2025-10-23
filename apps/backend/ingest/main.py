@@ -348,31 +348,19 @@ class DocumentWorker:
                 logger.info("Chunking document with HybridChunker (no config)")
                 chunks = self.chunker.chunk_document(docling_doc, document_id)
             
-            # 🔄 Refine chunks before downstream processing
-            # This step merges/splits chunks for better semantic coherence
-            enable_refinement = self.settings_service.get_bool('processing.enableChunkRefinement', True, 'ENABLE_CHUNK_REFINEMENT') if self.settings_service else True
-            
-            if enable_refinement and len(chunks) > 0:
-                logger.info("🔄 Refining chunks for better semantic coherence...")
-                from chunkers.chunk_refiner import ChunkRefiner
-                
-                # Get refinement neighbors setting (reuse same pattern as summary_neighbors)
-                refinement_neighbors = self.settings_service.get_int('processing.refinementNeighbors', 2, 'REFINEMENT_NEIGHBORS') if self.settings_service else 2
-                
-                refiner = ChunkRefiner(refinement_neighbors=refinement_neighbors)
-                chunks, refinement_report = refiner.refine(
-                    chunks,
-                    document_context=chunking_config.get('document_type') if chunking_config else None
-                )
-                
-                logger.info(f"🔄 Refinement report: {refinement_report}")
+            # REMOVED: Chunk refinement (not in official plan, caused cascading merge bugs)
+            # Philosophy: Get chunking right the first time via:
+            # - Sorting Hat (optimal strategy selection)
+            # - Per-document chunk size optimization
+            # - Smart chunking strategies (Agentic, Planner-Executor)
+            # Rather than trying to fix bad chunks with expensive post-processing
             
             # Add user_id and storage_path to chunks
             for chunk in chunks:
                 chunk["user_id"] = user_id
                 chunk["metadata"]["storage_path"] = file_path
             
-            logger.info(f"Created {len(chunks)} chunks (after refinement)")
+            logger.info(f"Created {len(chunks)} chunks")
             
             # Store chunks in database in batches and generate embeddings immediately
             self.update_document_status(document_id, "embedding")

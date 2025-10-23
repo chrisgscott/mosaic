@@ -1,17 +1,17 @@
--- Disable chunk refinement temporarily
--- The chunk refiner is merging too aggressively (131 chunks → 2 chunks)
--- causing embedding failures due to chunks exceeding 8192 token limit
+-- Remove chunk refinement feature
+-- Decision: Not in official chunking improvements plan
+-- Reason: Expensive, buggy (cascading merges), redundant with better initial chunking
+-- Philosophy: Get chunking right the first time via Sorting Hat + optimal strategies
 
-INSERT INTO system_settings (category, key, value, description, updated_at)
-VALUES (
-  'processing',
-  'processing.enableChunkRefinement',
-  'false',
-  'Enable chunk refinement to improve semantic boundaries (EXPERIMENTAL - currently disabled due to over-merging)',
-  NOW()
-)
-ON CONFLICT (category, key) 
-DO UPDATE SET 
-  value = 'false',
-  description = 'Enable chunk refinement to improve semantic boundaries (EXPERIMENTAL - currently disabled due to over-merging)',
-  updated_at = NOW();
+-- Remove the setting if it exists
+DELETE FROM system_settings 
+WHERE category = 'processing' 
+  AND key = 'processing.enableChunkRefinement';
+
+-- Remove refinement neighbors setting if it exists
+DELETE FROM system_settings 
+WHERE category = 'processing' 
+  AND key = 'processing.refinementNeighbors';
+
+-- Note: chunk_refiner.py file kept for reference but not used in main.py
+-- Can be re-added later if needed after completing official plan phases

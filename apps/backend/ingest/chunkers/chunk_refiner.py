@@ -309,36 +309,14 @@ Guidelines:
         # Start with original chunks
         refined = list(chunks)
         
-        # Track which chunks have been merged (to prevent cascading merges)
-        merged_indices = set()
+        # Build merge chains: if 0→1 and 1→2, create chain [0,1,2]
+        # This prevents cascading but allows legitimate multi-chunk merges
+        merge_chains = self._build_merge_chains(plan.get('merges', []), len(refined))
         
-        # Apply merges first (work backwards to preserve indices)
-        merges = sorted(plan.get('merges', []), key=lambda x: x['start_index'], reverse=True)
+        logger.info(f"   Built {len(merge_chains)} merge chains from {len(plan.get('merges', []))} merge requests")
         
-        # Filter out overlapping merges
-        valid_merges = []
-        for merge in merges:
-            start_idx = merge['start_index']
-            end_idx = merge['end_index']
-            
-            # Skip if any chunk in this range is already merged
-            if any(i in merged_indices for i in range(start_idx, end_idx + 1)):
-                logger.debug(f"Skipping merge {start_idx}-{end_idx}: overlaps with previous merge")
-                continue
-            
-            # Skip if end_idx is out of bounds
-            if end_idx >= len(refined):
-                logger.debug(f"Skipping merge {start_idx}-{end_idx}: out of bounds")
-                continue
-            
-            valid_merges.append(merge)
-            # Mark these indices as merged
-            for i in range(start_idx, end_idx + 1):
-                merged_indices.add(i)
-        
-        logger.info(f"   Filtered merges: {len(merges)} → {len(valid_merges)} (removed {len(merges) - len(valid_merges)} overlapping)")
-        
-        # Apply valid merges
+        # Apply merge chains (work backwards to preserve indices)
+        merge_chains = sorted(merge_chains, key=lambda x: x[0], reverse=True)
         for merge in valid_merges:
             start_idx = merge['start_index']
             end_idx = merge['end_index']

@@ -687,13 +687,18 @@ Return ONLY the names of entities to DELETE, one per line. If an entity should b
                 if line.strip() and not line.strip().startswith('#')
             ]
             
+            # Deduplicate the list (LLM might return duplicates)
+            to_delete_names = list(set(to_delete_names))
+            
             logger.info(f"Found {len(to_delete_names)} junk entities to delete")
             
             # Delete junk entities
             deleted_count = 0
+            deleted_ids = set()  # Track deleted IDs to avoid duplicates
+            
             for name in to_delete_names:
                 # Find entity ID by name
-                entity = next((e for e in entities if e['name'] == name), None)
+                entity = next((e for e in entities if e['name'] == name and e['id'] not in deleted_ids), None)
                 if entity:
                     # Delete relationships first
                     self.supabase.table("relationships")\
@@ -707,6 +712,7 @@ Return ONLY the names of entities to DELETE, one per line. If an entity should b
                         .eq("id", entity['id'])\
                         .execute()
                     
+                    deleted_ids.add(entity['id'])  # Mark as deleted
                     deleted_count += 1
                     logger.debug(f"Deleted junk entity: {name}")
             

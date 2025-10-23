@@ -147,20 +147,34 @@ class DocumentWorker:
     def connect_db(self):
         """Establish database connection for pgmq."""
         try:
+            logger.info(f"Attempting to connect to database...")
+            logger.debug(f"DATABASE_URL: {DATABASE_URL[:50]}...")  # Log first 50 chars only
+            
             # Try connection pooling URL first, fall back to direct connection
             try:
-                self.db_conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+                self.db_conn = psycopg2.connect(
+                    DATABASE_URL, 
+                    cursor_factory=RealDictCursor,
+                    connect_timeout=10  # 10 second timeout
+                )
             except psycopg2.OperationalError as e:
+                logger.warning(f"Connection attempt failed: {e}")
                 if "Tenant or user not found" in str(e):
                     # Pooler might not be configured, try direct connection
                     logger.warning("Connection pooling failed, trying direct connection")
                     direct_url = DATABASE_URL.replace("pooler.supabase.com:6543", "supabase.co:5432").replace("postgres.cqtxfjcpgaudugkqjpdc", "postgres")
-                    self.db_conn = psycopg2.connect(direct_url, cursor_factory=RealDictCursor)
+                    logger.debug(f"Trying direct URL: {direct_url[:50]}...")
+                    self.db_conn = psycopg2.connect(
+                        direct_url, 
+                        cursor_factory=RealDictCursor,
+                        connect_timeout=10
+                    )
                 else:
                     raise
-            logger.info("Connected to database")
+            logger.info("✅ Connected to database successfully")
         except Exception as e:
-            logger.error(f"Failed to connect to database: {e}")
+            logger.error(f"❌ Failed to connect to database: {e}")
+            logger.error(f"DATABASE_URL format: {DATABASE_URL[:80]}...")
             raise
     
     def poll_queue(self) -> Optional[Dict[str, Any]]:

@@ -359,22 +359,12 @@ Consider:
             })
         
         elif strategy == 'planner_executor':
-            # Choose planner model based on size
-            # GPT-4o: 128K context (safe limit: ~100K with prompt overhead)
-            # GPT-4.1: 1M context (safe limit: ~900K with overhead) - April 2025
-            # Gemini 2.0 Flash: 1M context (safe limit: ~900K with overhead)
-            if estimated_tokens > 100_000:
-                # Use GPT-4.1 for large documents (1M context, OpenAI family)
-                planner_model = "gpt-4.1"  # 1M context
-                planner_provider = "openai"
-            else:
-                # Use GPT-4o for smaller documents (128K context, faster/cheaper)
-                planner_model = "gpt-4o"  # 128K context
-                planner_provider = "openai"
-            
+            # Always use GPT-4.1-mini: 1M context, good quality, predictable cost
+            # Cost: ~$0.006/1K tokens (2x GPT-4o-mini, 5x cheaper than GPT-4.1)
+            # Handles any document size up to ~750 pages
             config.update({
-                "planner_model": planner_model,
-                "planner_provider": planner_provider,
+                "planner_model": "gpt-4.1-mini",  # 1M context
+                "planner_provider": "openai",
                 "executor_model": "gpt-4o-mini",
                 "max_chunk_tokens": chunk_size,
                 "overlap_ratio": 0.15,

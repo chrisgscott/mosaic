@@ -505,6 +505,29 @@ Analyze the entire document and create the chunk plan."""
                 try:
                     chunk_bytes = content_bytes[start:end]
                     chunk_text = chunk_bytes.decode('utf-8', errors='replace')
+                    
+                    # Expand to word boundaries to avoid mid-word cuts
+                    # Find the full content for boundary expansion
+                    full_text = content_bytes.decode('utf-8', errors='replace')
+                    
+                    # Find start position in full text (approximate due to byte/char mismatch)
+                    # Use the chunk_text to locate it in full_text
+                    char_start = full_text.find(chunk_text[:50]) if len(chunk_text) >= 50 else full_text.find(chunk_text)
+                    
+                    if char_start >= 0:
+                        char_end = char_start + len(chunk_text)
+                        
+                        # Expand start backward to word boundary (but not past previous chunk)
+                        while char_start > 0 and full_text[char_start - 1].isalnum():
+                            char_start -= 1
+                        
+                        # Expand end forward to word boundary (but not past section end)
+                        while char_end < len(full_text) and full_text[char_end].isalnum():
+                            char_end += 1
+                        
+                        # Extract expanded chunk
+                        chunk_text = full_text[char_start:char_end]
+                    
                 except Exception as decode_error:
                     logger.warning(f"Decode error for chunk {chunk_id}: {decode_error}")
                     failed_chunks.append(chunk_id)

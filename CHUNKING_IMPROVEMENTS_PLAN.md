@@ -1,225 +1,175 @@
-# Chunking Improvements Plan
+# Chunking Improvements Plan (Simplified Architecture)
 
-**Date:** October 22, 2025  
-**Status:** Proposed  
-**Goal:** Improve chunking quality to maximize the effectiveness of our existing world-class retrieval system (Multi-Query + Reranking + Hybrid Search)
+**Date:** October 23, 2025  
+**Status:** Revised - Back to Basics  
+**Goal:** Simple, structure-aware base chunking + composable enhancements
 
 ---
 
 ## Executive Summary
 
-**Current State:**
-- ✅ **Excellent retrieval**: Multi-Query, Cohere Reranking, Hybrid Search (RRF)
-- ⚠️ **Good chunking**: Semantic chunking with HybridChunker (256 tokens fixed)
-- ❌ **Missing**: Per-document optimization, atomic propositions, hierarchical storage
+**Current State (Overcomplicated):**
+- ❌ **Too complex**: Sorting Hat → Multiple strategies → Byte offsets → Corrections → Mid-word cuts
+- ❌ **Fighting self-inflicted problems**: Byte offset math, encoding issues, hallucinated chunks
+- ❌ **Maintenance burden**: 4 chunking strategies, 3-pass processing, complex routing
 
-**The Opportunity:**
-Our retrieval is top-tier, but it can only work with the chunks we give it. By improving chunking quality, we can dramatically improve search results without changing retrieval logic.
+**The Realization:**
+We've been overengineering the base chunking layer. Docling already gives us excellent structure - we should use it directly.
 
-**Key Insight from Research:**
-Different documents need different chunk sizes, even within the same project. Per-document analysis (not document type classification) is the optimal approach.
+**New Approach:**
+```
+Simple Base Chunking (Docling structure)
+  ↓
+Optional Enhancements (RAPTOR, propositions, etc.)
+  ↓
+High-quality chunks
+```
+
+**Key Principles:**
+1. **Base chunking should be simple** - Use Docling's natural structure
+2. **Enhancements are composable** - Stack them independently
+3. **No LLM for base chunking** - Fast, deterministic, free
+4. **LLM only for enhancements** - Where it adds real value
 
 **Expected Impact:**
-- **Precision**: 75% → 90% (+15%)
-- **Recall**: 80% → 85% (+5%)
-- **User Satisfaction**: Good → Excellent (+20%)
-- **Cost per query**: $0.02 → $0.015 (-25%)
-
-**Major Changes from Original Plan:**
-1. **Per-Document Chunk Sizing**: Extend Sorting Hat to analyze each document and recommend optimal chunk size (128, 256, 512, or 1024 tokens) based on text characteristics
-2. **No Manual Benchmarking**: Automatic analysis using fast heuristics (no LLM needed)
-3. **Mixed Chunk Sizes**: Acceptable with our Multi-Query + Reranking stack; optional normalization in Phase 2
-4. **Zero Configuration**: Fully automatic, transparent, and overridable
+- **Simplicity**: 4 strategies → 1 base chunker (80% less code)
+- **Quality**: No mid-word cuts, respects document structure
+- **Speed**: No LLM calls for base chunking (10x faster)
+- **Cost**: $0 base + optional enhancements
+- **Maintainability**: Simple, testable, debuggable
 
 ---
 
-## Phase 1: Quick Wins (Week 1)
+## Phase 1: Simplify Base Chunking (Week 1)
 
-### 1.1 Per-Document Chunk Size Optimization ⭐⭐⭐⭐⭐
+### 1.1 Structure-Aware Base Chunker ⭐⭐⭐⭐⭐
 
-**Problem:** Different documents need different chunk sizes, even within the same project. A one-size-fits-all approach is suboptimal.
+**Problem:** Current chunking is overcomplicated with multiple strategies, byte offsets, and corrections.
 
-**Solution:** Extend Sorting Hat to analyze each document and automatically recommend optimal chunk size based on document characteristics.
+**Solution:** Simple chunker that uses Docling's natural document structure.
 
-**Why Per-Document:**
-- Technical docs with dense content → 128 tokens (precise)
-- Well-structured articles → 256 tokens (balanced)
-- Long-form narratives → 512 tokens (contextual)
-- Same "document type" can have vastly different characteristics
+**How It Works:**
+1. Docling extracts document structure (sections, paragraphs, tables)
+2. Use sections as natural chunk boundaries
+3. If section too large, split on paragraphs
+4. If section too small, merge with neighbors
+5. Target size: ~1000 characters (flexible)
 
 **Implementation:**
 ```python
-# Extend sorting_hat.py
+# apps/backend/ingest/chunkers/structure_aware_chunker.py
 
-def _analyze_for_chunk_size(self, doc_text: str) -> dict:
+class StructureAwareChunker:
     """
-    Fast heuristic-based chunk size analysis.
-    No LLM needed - just text statistics!
+    Simple chunker that respects Docling's document structure.
+    No LLM calls, no byte offsets, no complexity.
     """
-    # Calculate metrics
-    sentences = sent_tokenize(doc_text)
-    paragraphs = doc_text.split('\n\n')
     
-    avg_sentence_len = np.mean([len(s.split()) for s in sentences])
-    avg_para_len = np.mean([len(p.split()) for p in paragraphs if p.strip()])
+    def __init__(self, target_size=1000, min_size=500, max_size=2000):
+        self.target_size = target_size  # characters
+        self.min_size = min_size
+        self.max_size = max_size
     
-    # Detect structure
-    has_headers = bool(re.search(r'^#{1,6}\s', doc_text, re.MULTILINE))
-    has_lists = bool(re.search(r'^\s*[-*•]\s', doc_text, re.MULTILINE))
-    has_code = bool(re.search(r'```|`[^`]+`', doc_text))
+    def chunk_document(self, docling_doc, document_id):
+        """
+        Chunk document using Docling's natural structure.
+        """
+        chunks = []
+        
+        # Iterate through Docling's structured elements
+        for item in docling_doc.iterate_items():
+            if item.type == "section_header":
+                current_section = {
+                    "title": item.text,
+                    "level": item.level,
+                    "content": []
+                }
+            
+            elif item.type == "paragraph":
+                current_section["content"].append(item.text)
+                
+                # Check if section is large enough to chunk
+                section_text = "\n\n".join(current_section["content"])
+                if len(section_text) >= self.target_size:
+                    chunks.append(self._create_chunk(
+                        current_section, 
+                        document_id,
+                        len(chunks)
+                    ))
+                    current_section["content"] = []
+            
+            elif item.type == "table":
+                # Tables become their own chunks
+                chunks.append(self._create_table_chunk(
+                    item,
+                    document_id,
+                    len(chunks)
+                ))
+        
+        return chunks
     
-    structure_score = sum([has_headers, has_lists, has_code]) / 3
-    
-    # Information density (technical terms, numbers, acronyms)
-    technical_terms = len(re.findall(r'\b[A-Z]{2,}\b', doc_text))
-    numbers = len(re.findall(r'\b\d+\.?\d*\b', doc_text))
-    density_score = (technical_terms + numbers) / len(doc_text.split())
-    
-    # Decision logic
-    if avg_sentence_len < 15 and density_score > 0.15:
-        # Dense, technical: small chunks
+    def _create_chunk(self, section, document_id, index):
+        """Create chunk from section data."""
+        content = "\n\n".join(section["content"])
+        
         return {
-            'optimal_size': 128,
-            'reasoning': 'Dense technical content with short sentences',
-            'confidence': 0.9
+            "id": f"{document_id}_chunk_{index}",
+            "document_id": document_id,
+            "chunk_index": index,
+            "content": content,
+            "metadata": {
+                "section_title": section["title"],
+                "section_level": section["level"],
+                "chunk_type": "section",
+                "char_count": len(content)
+            }
         }
-    
-    elif structure_score > 0.6 and avg_para_len < 100:
-        # Well-structured, medium paragraphs: medium chunks
-        return {
-            'optimal_size': 256,
-            'reasoning': 'Well-structured with clear sections',
-            'confidence': 0.85
-        }
-    
-    elif avg_para_len > 150:
-        # Long-form narrative: large chunks
-        return {
-            'optimal_size': 512,
-            'reasoning': 'Long-form narrative content',
-            'confidence': 0.8
-        }
-    
-    else:
-        # Default: medium chunks
-        return {
-            'optimal_size': 256,
-            'reasoning': 'Standard mixed content',
-            'confidence': 0.7
-        }
-
-def route_document(self, doc_text: str, document_id: str) -> dict:
-    """
-    Analyze document and recommend:
-    1. Chunking strategy (hybrid, agentic, planner-executor)
-    2. Chunk size (128, 256, 512, 1024)
-    3. Other parameters (overlap, etc.)
-    """
-    analysis = self.analyze_document(doc_text)
-    
-    # Choose strategy (existing logic)
-    strategy = self._choose_strategy(analysis)
-    
-    # Choose chunk size (NEW!)
-    chunk_size_analysis = self._analyze_for_chunk_size(doc_text)
-    chunk_size = chunk_size_analysis['optimal_size']
-    
-    # Calculate overlap (proportional to chunk size)
-    overlap = int(chunk_size * 0.2)  # 20% overlap
-    
-    config = {
-        'strategy': strategy,
-        'chunk_size': chunk_size,
-        'chunk_overlap': overlap,
-        'reasoning': {
-            'strategy': analysis.get('strategy_reasoning', ''),
-            'chunk_size': chunk_size_analysis['reasoning']
-        },
-        'confidence': {
-            'strategy': analysis.get('strategy_confidence', 0.8),
-            'chunk_size': chunk_size_analysis['confidence']
-        }
-    }
-    
-    # Save to database
-    self._save_config(document_id, config)
-    
-    return config
 ```
 
-**Handling Mixed Chunk Sizes:**
-
-Mixed chunk sizes create minor issues (embedding bias toward smaller chunks), but our Multi-Query + Reranking system handles it well. We'll add optional size normalization in Phase 2:
-
-```typescript
-// Optional: Normalize reranking scores by chunk size
-const normalized = rerankedResults.map(r => ({
-  ...r,
-  final_score: r.rerank_score * (1 + Math.log(r.chunk_size / 256) * 0.05)
-}));
-```
-
-**Files to Modify:**
-- `apps/backend/ingest/chunkers/sorting_hat.py` (add chunk size analysis)
-- `apps/backend/ingest/main.py` (use chunk_size from config)
+**Benefits:**
+- ✅ **Simple**: ~100 lines of code vs 1000+
+- ✅ **Fast**: No LLM calls, instant chunking
+- ✅ **Quality**: Respects document structure, no mid-word cuts
+- ✅ **Free**: $0 cost for base chunking
+- ✅ **Maintainable**: Easy to understand and debug
 
 **Files to Create:**
-- `apps/backend/ingest/tests/test_chunk_size_analysis.py`
+- `apps/backend/ingest/chunkers/structure_aware_chunker.py`
+- `apps/backend/ingest/tests/test_structure_aware_chunker.py`
+
+**Files to Remove:**
+- `apps/backend/ingest/chunkers/sorting_hat.py` (no longer needed)
+- `apps/backend/ingest/chunkers/agentic_chunker.py` (no longer needed)
+- `apps/backend/ingest/chunkers/planner_executor_chunker.py` (no longer needed)
+- `apps/backend/ingest/chunkers/custom_boundary_chunker.py` (no longer needed)
+
+**Files to Modify:**
+- `apps/backend/ingest/main.py` (use StructureAwareChunker)
 
 **Effort:** 4 hours  
-**Impact:** Very High (automatic per-document optimization)  
-**Cost:** $0 (no LLM calls, just text statistics)  
+**Impact:** Very High (massive simplification)  
+**Cost:** $0  
 **Dependencies:** None
 
 **Success Criteria:**
-- Chunk size automatically determined for each document
-- Reasoning and confidence logged
-- Config stored in database
-- Can be overridden manually if needed
-
-**Example Outputs:**
-```python
-# Technical API docs
-{
-  'strategy': 'hybrid',
-  'chunk_size': 128,
-  'chunk_overlap': 25,
-  'reasoning': {
-    'strategy': 'Well-structured with clear sections',
-    'chunk_size': 'Dense technical content with short sentences'
-  }
-}
-
-# Strategy Tactics card deck
-{
-  'strategy': 'agentic',
-  'chunk_size': 256,
-  'chunk_overlap': 50,
-  'reasoning': {
-    'strategy': 'Variable structure with inconsistent markers',
-    'chunk_size': 'Medium-length cards with mixed content'
-  }
-}
-
-# Long-form article
-{
-  'strategy': 'hybrid',
-  'chunk_size': 512,
-  'chunk_overlap': 100,
-  'reasoning': {
-    'strategy': 'Clear hierarchical structure',
-    'chunk_size': 'Long-form narrative with large paragraphs'
-  }
-}
-```
+- All documents chunk successfully
+- No mid-word cuts
+- Respects document structure
+- 10x faster than current approach
 
 ---
 
-### 1.2 Document Augmentation (Question Generation) ⭐⭐⭐⭐⭐
+---
+
+## Phase 2: Composable Enhancements (Weeks 2-3)
+
+**Note:** All enhancements work on top of the simple base chunker. They're independent and optional.
+
+### 2.1 Document Augmentation (Question Generation) ⭐⭐⭐⭐⭐
 
 **Problem:** HyDE makes up facts (especially for acronyms). We need better query-to-document matching without hallucination.
 
-**Solution:** Generate questions from documents during ingestion, store alongside chunks.
+**Solution:** Generate questions from base chunks during ingestion, store alongside chunks.
 
 **Why This Works:**
 ```
@@ -343,9 +293,7 @@ const processedResults = results.map(result => {
 
 ---
 
-## Phase 2: Foundational Improvements (Weeks 2-3)
-
-### 2.1 Proposition Chunking (Atomic Facts) ⭐⭐⭐⭐⭐
+### 2.2 Proposition Chunking (Atomic Facts) ⭐⭐⭐⭐⭐
 
 **Problem:** Chunks contain multiple concepts, making retrieval less precise.
 
@@ -945,25 +893,62 @@ INSERT INTO system_settings (category, key, value, description) VALUES
 
 ---
 
+## Final Architecture
+
+### Simple & Composable
+
+```
+PDF
+  ↓
+Docling (extraction + structure parsing)
+  ↓
+StructureAwareChunker (base chunks, free, fast)
+  ↓
+Optional Enhancements (composable, independent):
+  ├─ Question Generation ($0.05/doc)
+  ├─ Proposition Extraction ($0.10/doc)
+  ├─ RAPTOR Hierarchical Summaries ($0.15/doc)
+  ├─ Contextual Enrichment ($0.02/doc)
+  └─ Graph Extraction (already implemented)
+  ↓
+High-Quality Chunks
+```
+
+### Benefits of New Approach
+
+**vs Current (Complex):**
+- ✅ 80% less code (4 strategies → 1 base)
+- ✅ 10x faster (no LLM for base)
+- ✅ $0 base cost (vs $0.07-0.30)
+- ✅ No mid-word cuts
+- ✅ No byte offset issues
+- ✅ Easy to understand & debug
+
+**Enhancements:**
+- ✅ Independent (can enable/disable)
+- ✅ Composable (stack as needed)
+- ✅ Testable (each layer separate)
+- ✅ Cost-controlled (pay for what you use)
+
+---
+
 ## Next Steps
 
-1. **Review this plan** - Discuss priorities, timeline, resources
-2. **Approve Phase 1** - Get buy-in for quick wins
-3. **Set up benchmarking** - Create test queries and metrics
-4. **Start implementation** - Begin with chunk size optimization
-5. **Iterate** - Measure, learn, improve
+1. **Approve simplified approach** - Rip out complexity, start fresh
+2. **Implement StructureAwareChunker** - 4 hours, replaces 4 strategies
+3. **Test with existing documents** - Verify quality improvement
+4. **Add enhancements incrementally** - Start with question generation
+5. **Measure & iterate** - Track precision, recall, user satisfaction
 
 ---
 
 ## Questions for Discussion
 
-1. **Priority**: Do we agree on the Phase 1 priorities?
-2. **Timeline**: Is 4 weeks realistic for Phases 1-3?
-3. **Resources**: Who will work on this? Full-time or part-time?
-4. **Testing**: What's our testing strategy? A/B test everything?
-5. **Rollout**: Gradual or all-at-once?
-6. **Metrics**: What metrics matter most to us?
-7. **Budget**: Are we comfortable with $0.17 per document ingestion cost?
+1. **Agree to simplify?** - Remove Sorting Hat, Agentic, Planner-Executor, Custom Boundary?
+2. **Timeline**: 1 week for base + 2 weeks for enhancements?
+3. **Which enhancements first?** - Question generation? Propositions? RAPTOR?
+4. **Testing strategy**: A/B test base chunker vs current?
+5. **Rollout**: Deploy base immediately, then add enhancements?
 
 ---
 

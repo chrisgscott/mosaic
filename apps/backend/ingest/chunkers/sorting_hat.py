@@ -12,6 +12,8 @@ Like the Harry Potter Sorting Hat, but for chunking strategies! 🎩✨
 
 import logging
 import json
+import re
+import numpy as np
 from typing import Dict, Any, Optional
 from openai import OpenAI
 
@@ -61,13 +63,137 @@ class SortingHat:
         # Analyze document
         analysis = self._analyze_document(sample, file_name, user_preferences)
         
+        # NEW: Analyze optimal chunk size using fast heuristics
+        chunk_size_analysis = self._analyze_chunk_size(content)
+        
         # Determine strategy
-        config = self._determine_strategy(analysis, len(content), user_preferences)
+        config = self._determine_strategy(analysis, len(content), user_preferences, chunk_size_analysis)
         
         logger.info(f"🎩 Sorted into: {config['strategy']} (confidence: {config.get('confidence', 'N/A')})")
         logger.info(f"   Reasoning: {config.get('reasoning', 'N/A')}")
+        logger.info(f"   Chunk size: {config.get('chunk_size', 'N/A')} tokens (overlap: {config.get('chunk_overlap', 'N/A')})")
+        logger.info(f"   Chunk size reasoning: {chunk_size_analysis.get('reasoning', 'N/A')}")
         
         return config
+    
+    def _analyze_chunk_size(self, content: str) -> Dict[str, Any]:
+        """
+        Fast heuristic-based chunk size analysis.
+        No LLM needed - just text statistics!
+        
+        Returns optimal chunk size (128, 256, 512, or 1024 tokens) based on:
+        - Sentence length
+        - Paragraph length
+        - Document structure
+        - Information density
+        """
+        try:
+            # Split into sentences (simple approximation)
+            sentences = re.split(r'[.!?]+\s+', content)
+            sentences = [s.strip() for s in sentences if s.strip()]
+            
+            # Split into paragraphs
+            paragraphs = content.split('\n\n')
+            paragraphs = [p.strip() for p in paragraphs if p.strip()]
+            
+            # Calculate metrics
+            avg_sentence_len = np.mean([len(s.split()) for s in sentences]) if sentences else 0
+            avg_para_len = np.mean([len(p.split()) for p in paragraphs]) if paragraphs else 0
+            
+            # Detect structure
+            has_headers = bool(re.search(r'^#{1,6}\s', content, re.MULTILINE))
+            has_lists = bool(re.search(r'^\s*[-*•]\s', content, re.MULTILINE))
+            has_code = bool(re.search(r'```|`[^`]+`', content))
+            
+            structure_score = sum([has_headers, has_lists, has_code]) / 3
+            
+            # Information density (technical terms, numbers, acronyms)
+            words = content.split()
+            technical_terms = len(re.findall(r'\b[A-Z]{2,}\b', content))
+            numbers = len(re.findall(r'\b\d+\.?\d*\b', content))
+            density_score = (technical_terms + numbers) / len(words) if words else 0
+            
+            # Decision logic (order matters - most specific first)
+            
+            # Very long sentences/paragraphs: extra large chunks
+            if avg_sentence_len > 40 or avg_para_len > 120:
+                return {
+                    'optimal_size': 1024,
+                    'reasoning': 'Very long sentences/paragraphs - using extra large chunks to preserve context',
+                    'confidence': 0.75,
+                    'metrics': {
+                        'avg_sentence_len': avg_sentence_len,
+                        'avg_para_len': avg_para_len,
+                        'density_score': density_score,
+                        'structure_score': structure_score
+                    }
+                }
+            
+            # Dense, technical: small chunks for precision
+            elif density_score > 0.2:
+                return {
+                    'optimal_size': 128,
+                    'reasoning': 'Dense technical content with high information density - using small chunks for precision',
+                    'confidence': 0.9,
+                    'metrics': {
+                        'avg_sentence_len': avg_sentence_len,
+                        'avg_para_len': avg_para_len,
+                        'density_score': density_score,
+                        'structure_score': structure_score
+                    }
+                }
+            
+            # Long-form narrative: large chunks for context
+            elif avg_para_len > 50 and avg_sentence_len > 15:
+                return {
+                    'optimal_size': 512,
+                    'reasoning': 'Long-form narrative content with large paragraphs - using larger chunks for context',
+                    'confidence': 0.8,
+                    'metrics': {
+                        'avg_sentence_len': avg_sentence_len,
+                        'avg_para_len': avg_para_len,
+                        'density_score': density_score,
+                        'structure_score': structure_score
+                    }
+                }
+            
+            # Well-structured, medium paragraphs: medium chunks
+            elif structure_score > 0.6 or (avg_para_len < 50 and avg_para_len > 5):
+                return {
+                    'optimal_size': 256,
+                    'reasoning': 'Well-structured with clear sections and medium paragraphs - balanced chunk size',
+                    'confidence': 0.85,
+                    'metrics': {
+                        'avg_sentence_len': avg_sentence_len,
+                        'avg_para_len': avg_para_len,
+                        'density_score': density_score,
+                        'structure_score': structure_score
+                    }
+                }
+            
+            else:
+                # Default: medium chunks
+                return {
+                    'optimal_size': 256,
+                    'reasoning': 'Standard mixed content - using default balanced chunk size',
+                    'confidence': 0.7,
+                    'metrics': {
+                        'avg_sentence_len': avg_sentence_len,
+                        'avg_para_len': avg_para_len,
+                        'density_score': density_score,
+                        'structure_score': structure_score
+                    }
+                }
+        
+        except Exception as e:
+            logger.error(f"Error analyzing chunk size: {e}")
+            # Safe fallback
+            return {
+                'optimal_size': 256,
+                'reasoning': 'Analysis failed - using safe default',
+                'confidence': 0.5,
+                'metrics': {}
+            }
     
     def _create_sample(self, content: str, sample_size: int = 10000) -> str:
         """
@@ -166,7 +292,8 @@ Consider:
         self, 
         analysis: Dict[str, Any], 
         content_length: int,
-        user_preferences: Optional[Dict[str, Any]]
+        user_preferences: Optional[Dict[str, Any]],
+        chunk_size_analysis: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Determine final chunking configuration based on analysis.
@@ -187,19 +314,32 @@ Consider:
             strategy = user_preferences['force_strategy']
             logger.info(f"User preference override: {strategy}")
         
+        # Get optimal chunk size from analysis
+        chunk_size = chunk_size_analysis.get('optimal_size', 256)
+        chunk_overlap = int(chunk_size * 0.2)  # 20% overlap
+        
+        # Check user preference for chunk size override
+        if user_preferences and user_preferences.get('chunk_size'):
+            chunk_size = user_preferences['chunk_size']
+            chunk_overlap = user_preferences.get('chunk_overlap', int(chunk_size * 0.2))
+            logger.info(f"User preference chunk size override: {chunk_size}")
+        
         # Build configuration based on strategy
         config = {
             "strategy": strategy,
+            "chunk_size": chunk_size,
+            "chunk_overlap": chunk_overlap,
             "confidence": analysis.get('confidence', 'medium'),
             "reasoning": analysis.get('reasoning', 'Based on document analysis'),
             "document_type": analysis.get('document_type'),
-            "analysis": analysis
+            "analysis": analysis,
+            "chunk_size_analysis": chunk_size_analysis
         }
         
         # Add strategy-specific parameters
         if strategy == 'hybrid':
             config.update({
-                "max_chunk_tokens": 512,
+                "max_chunk_tokens": chunk_size,
                 "respect_headings": True
             })
         
@@ -207,14 +347,14 @@ Consider:
             # Suggest boundary markers based on patterns
             config.update({
                 "boundary_markers": analysis.get('repeating_patterns', []),
-                "max_chunk_tokens": 512
+                "max_chunk_tokens": chunk_size
             })
         
         elif strategy == 'agentic':
             config.update({
                 "model": "gpt-4o-mini",
                 "document_type": analysis.get('document_type'),
-                "max_chunk_tokens": 512,
+                "max_chunk_tokens": chunk_size,
                 "instructions": self._generate_instructions(analysis)
             })
         
@@ -231,7 +371,7 @@ Consider:
                 "planner_model": planner_model,
                 "planner_provider": planner_provider,
                 "executor_model": "gpt-4o-mini",
-                "max_chunk_tokens": 500,
+                "max_chunk_tokens": chunk_size,
                 "overlap_ratio": 0.15,
                 "document_type": analysis.get('document_type'),
                 "max_planner_tokens": 1_000_000,

@@ -434,7 +434,7 @@ class DoclingProcessor:
                             for row in result.data:
                                 page_num = row["metadata"].get("page_number")
                                 if page_num:
-                                    checkpointed_pages[page_num] = row["metadata"].get("content", "")
+                                    checkpointed_pages[page_num] = row["metadata"].get("full_content", "")
                             logger.info(f"📍 Found {len(checkpointed_pages)} checkpointed pages - resuming from page {len(checkpointed_pages) + 1}")
                     except Exception as e:
                         logger.warning(f"Could not load checkpointed pages: {e}")
@@ -467,16 +467,17 @@ class DoclingProcessor:
                                     logger.debug(f"Page {page_num_result} added to results")
                                     
                                     # Add to checkpoint batch
+                                    # Note: doc is already markdown string from _process_single_page_document
                                     if document_id and self.supabase:
                                         checkpoint_batch.append({
                                             "document_id": document_id,
                                             "chunk_index": -page_num_result,  # Negative = temporary
-                                            "content": doc[:10000],  # Store first 10K chars
+                                            "content": doc[:10000] if len(doc) > 10000 else doc,  # Store first 10K chars in content
                                             "metadata": {
                                                 "page_number": page_num_result,
                                                 "temporary": True,
                                                 "stage": "extraction",
-                                                "content": doc  # Full content in metadata
+                                                "full_content": doc  # Full content in metadata
                                             }
                                         })
                                 else:

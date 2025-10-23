@@ -303,41 +303,70 @@ Guidelines:
     ) -> List[Dict[str, Any]]:
         """
         Apply refinement plan to chunks.
+        
+        CRITICAL: Prevent cascading merges by tracking which chunks are already merged.
         """
         # Start with original chunks
         refined = list(chunks)
         
+        # Track which chunks have been merged (to prevent cascading merges)
+        merged_indices = set()
+        
         # Apply merges first (work backwards to preserve indices)
         merges = sorted(plan.get('merges', []), key=lambda x: x['start_index'], reverse=True)
+        
+        # Filter out overlapping merges
+        valid_merges = []
         for merge in merges:
             start_idx = merge['start_index']
             end_idx = merge['end_index']
             
-            if end_idx < len(refined):
-                # Merge chunks
-                merged_content = '\n\n'.join([
-                    refined[i]['content'] 
-                    for i in range(start_idx, end_idx + 1)
-                ])
-                
-                merged_chunk = {
-                    'id': str(uuid4()),
-                    'document_id': refined[start_idx]['document_id'],
-                    'content': merged_content,
-                    'chunk_index': start_idx,  # Will be re-indexed later
-                    'token_count': self._count_tokens(merged_content),
-                    'summary': None,
-                    'metadata': {
-                        **refined[start_idx].get('metadata', {}),
-                        'refined': True,
-                        'refinement_type': 'merge',
-                        'merge_reason': merge['reason'],
-                        'original_indices': list(range(start_idx, end_idx + 1))
-                    }
+            # Skip if any chunk in this range is already merged
+            if any(i in merged_indices for i in range(start_idx, end_idx + 1)):
+                logger.debug(f"Skipping merge {start_idx}-{end_idx}: overlaps with previous merge")
+                continue
+            
+            # Skip if end_idx is out of bounds
+            if end_idx >= len(refined):
+                logger.debug(f"Skipping merge {start_idx}-{end_idx}: out of bounds")
+                continue
+            
+            valid_merges.append(merge)
+            # Mark these indices as merged
+            for i in range(start_idx, end_idx + 1):
+                merged_indices.add(i)
+        
+        logger.info(f"   Filtered merges: {len(merges)} → {len(valid_merges)} (removed {len(merges) - len(valid_merges)} overlapping)")
+        
+        # Apply valid merges
+        for merge in valid_merges:
+            start_idx = merge['start_index']
+            end_idx = merge['end_index']
+            
+            # Merge chunks (only merge start with immediate next, not cascading)
+            merged_content = '\n\n'.join([
+                refined[i]['content'] 
+                for i in range(start_idx, end_idx + 1)
+            ])
+            
+            merged_chunk = {
+                'id': str(uuid4()),
+                'document_id': refined[start_idx]['document_id'],
+                'content': merged_content,
+                'chunk_index': start_idx,  # Will be re-indexed later
+                'token_count': self._count_tokens(merged_content),
+                'summary': None,
+                'metadata': {
+                    **refined[start_idx].get('metadata', {}),
+                    'refined': True,
+                    'refinement_type': 'merge',
+                    'merge_reason': merge['reason'],
+                    'original_indices': list(range(start_idx, end_idx + 1))
                 }
-                
-                # Replace merged chunks with single chunk
-                refined[start_idx:end_idx + 1] = [merged_chunk]
+            }
+            
+            # Replace merged chunks with single chunk
+            refined[start_idx:end_idx + 1] = [merged_chunk]
         
         # Apply splits (work forwards)
         splits = sorted(plan.get('splits', []), key=lambda x: x['index'])

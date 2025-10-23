@@ -377,9 +377,9 @@ Create chunk plan with byte offsets (relative to section start):
                 )
                 plan = json.loads(response.text)
             else:
-                # Use OpenAI Structured Outputs with streaming
+                # Use OpenAI Structured Outputs (non-streaming for now)
                 if self.use_structured_outputs:
-                    logger.info("Using Structured Outputs with streaming")
+                    logger.info("Using Structured Outputs (non-streaming)")
                     completion = self.openai_client.beta.chat.completions.parse(
                         model=self.planner_model,
                         messages=[
@@ -387,27 +387,14 @@ Create chunk plan with byte offsets (relative to section start):
                             {"role": "user", "content": prompt}
                         ],
                         response_format=ChunkPlan,
-                        temperature=0.1,
-                        stream=True
+                        temperature=0.1
                     )
                     
-                    # Stream and log progress
-                    plan_obj = None
-                    chunk_count = 0
-                    for chunk in completion:
-                        if chunk.choices[0].delta.parsed:
-                            plan_obj = chunk.choices[0].delta.parsed
-                            # Log progress as chunks are received
-                            if hasattr(plan_obj, 'chunks') and len(plan_obj.chunks) > chunk_count:
-                                chunk_count = len(plan_obj.chunks)
-                                if chunk_count % 10 == 0:
-                                    logger.info(f"Planning progress: {chunk_count} chunks received...")
-                    
-                    # Get final parsed object
-                    if plan_obj:
-                        plan = plan_obj.model_dump()
+                    # Get parsed object
+                    if completion.choices[0].message.parsed:
+                        plan = completion.choices[0].message.parsed.model_dump()
                     else:
-                        logger.error("No plan received from streaming")
+                        logger.error("No parsed plan received")
                         return {}
                 else:
                     # Fallback to old JSON mode

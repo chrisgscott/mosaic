@@ -7,6 +7,12 @@
 **Effort:** 1-2 days  
 **Context:** Currently using deprecated JSON mode (`response_format: {"type": "json_object"}`). Should migrate to Structured Outputs for better reliability and streaming support.
 
+**Status:**
+- ✅ `chunkers/planner_executor_chunker.py` - **COMPLETED** (Oct 23, 2025)
+  - Migrated to Pydantic models with streaming
+  - Progress logging every 10 chunks
+  - Improved validation with fuzzy matching
+
 **Benefits:**
 - ✅ 100% schema adherence (vs ~95% with JSON mode)
 - ✅ Streaming support (progress visibility for long operations)
@@ -14,20 +20,25 @@
 - ✅ Better error handling and refusal detection
 - ✅ Automatic validation
 
-**Files to migrate:**
-1. `chunkers/planner_executor_chunker.py` - Chunk plan generation
-2. `chunkers/sorting_hat.py` - Document analysis
-3. `chunkers/agentic_chunker.py` - Boundary detection
-4. `processors/graph_extractor.py` - Entity/relationship extraction
+**Remaining files to migrate:**
+1. `chunkers/sorting_hat.py` - Document analysis
+2. `chunkers/agentic_chunker.py` - Boundary detection
+3. `processors/graph_extractor.py` - Entity/relationship extraction
 
-**Implementation:**
+**Additional areas to investigate:**
+- Search across codebase for `response_format: {"type": "json_object"}` or `.json()` patterns
+- Check web app (apps/web) for any OpenAI API calls using JSON mode
+- Review any CrewAI or other agent configurations that might use JSON mode
+- Look for custom JSON parsing that could benefit from Pydantic validation
+
+**Implementation pattern:**
 ```python
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from openai import OpenAI
 
 class ChunkPlan(BaseModel):
-    document_id: str
-    chunks: list[ChunkSpec]
+    document_id: str = Field(description="UUID of document")
+    chunks: list[ChunkSpec] = Field(description="Chunk specifications")
     
 client = OpenAI()
 completion = client.beta.chat.completions.parse(
@@ -36,6 +47,12 @@ completion = client.beta.chat.completions.parse(
     response_format=ChunkPlan,
     stream=True  # Now supported!
 )
+
+# Stream with progress
+for chunk in completion:
+    if chunk.choices[0].delta.parsed:
+        plan = chunk.choices[0].delta.parsed
+        # Log progress, process incrementally
 ```
 
 **Reference:** https://platform.openai.com/docs/guides/structured-outputs

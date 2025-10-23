@@ -503,12 +503,101 @@ class GraphExtractor:
         logger.info(f"Graph extraction complete: {total_entities} entities, {total_relationships} relationships from {len(chunks)} chunks")
         return total_entities, total_relationships
     
+    def _merge_duplicate_entities(self, entities: List[Dict[str, Any]], user_id: str) -> int:
+        """
+        Merge entities with the same canonical name but different types.
+        
+        Args:
+            entities: List of entity dictionaries
+            user_id: User ID
+            
+        Returns:
+            Number of entities merged
+        """
+        # Group entities by canonical name
+        from collections import defaultdict
+        by_canonical = defaultdict(list)
+        
+        for entity in entities:
+            canonical = self.normalize_entity_name(entity['name'])
+            by_canonical[canonical].append(entity)
+        
+        # Find duplicates (same canonical name, multiple entities)
+        duplicates = {k: v for k, v in by_canonical.items() if len(v) > 1}
+        
+        if not duplicates:
+            return 0
+        
+        logger.info(f"Found {len(duplicates)} sets of duplicate entities to merge")
+        
+        merged_count = 0
+        for canonical_name, dupe_entities in duplicates.items():
+            # Pick the "best" entity to keep (prefer more specific types)
+            type_priority = {
+                'person': 1,
+                'organization': 2,
+                'location': 3,
+                'technology': 4,
+                'framework': 5,
+                'methodology': 6,
+                'event': 7,
+                'document': 8,
+                'concept': 9,
+                'other': 10
+            }
+            
+            # Sort by type priority (lower = better)
+            dupe_entities.sort(key=lambda e: type_priority.get(e['type'], 99))
+            
+            # Keep the first (best) entity
+            keep_entity = dupe_entities[0]
+            merge_entities = dupe_entities[1:]
+            
+            # Merge document_ids and chunk_ids from all duplicates
+            all_doc_ids = set(keep_entity.get('document_ids', []))
+            all_chunk_ids = set(keep_entity.get('chunk_ids', []))
+            
+            for merge_entity in merge_entities:
+                all_doc_ids.update(merge_entity.get('document_ids', []))
+                all_chunk_ids.update(merge_entity.get('chunk_ids', []))
+                
+                # Update relationships to point to keep_entity
+                self.supabase.table("relationships")\
+                    .update({"source_entity_id": keep_entity['id']})\
+                    .eq("source_entity_id", merge_entity['id'])\
+                    .execute()
+                
+                self.supabase.table("relationships")\
+                    .update({"target_entity_id": keep_entity['id']})\
+                    .eq("target_entity_id", merge_entity['id'])\
+                    .execute()
+                
+                # Delete the duplicate entity
+                self.supabase.table("entities")\
+                    .delete()\
+                    .eq("id", merge_entity['id'])\
+                    .execute()
+                
+                merged_count += 1
+                logger.debug(f"Merged '{merge_entity['name']}' ({merge_entity['type']}) into '{keep_entity['name']}' ({keep_entity['type']})")
+            
+            # Update keep_entity with merged IDs
+            self.supabase.table("entities")\
+                .update({
+                    "document_ids": list(all_doc_ids),
+                    "chunk_ids": list(all_chunk_ids)
+                })\
+                .eq("id", keep_entity['id'])\
+                .execute()
+        
+        return merged_count
+    
     def cleanup_junk_entities(self, user_id: str, document_id: str) -> int:
         """
         Second-pass cleanup: Review all entities for a document and remove junk.
         
         This catches entities that slipped through the extraction rules by reviewing
-        the full list with global context.
+        the full list with global context. Also merges duplicates across types.
         
         Args:
             user_id: User ID
@@ -521,7 +610,7 @@ class GraphExtractor:
         
         # Get all entities for this document
         result = self.supabase.table("entities")\
-            .select("id, name, type, description")\
+            .select("id, name, type, description, document_ids, chunk_ids")\
             .eq("user_id", user_id)\
             .contains("document_ids", [document_id])\
             .execute()
@@ -532,6 +621,20 @@ class GraphExtractor:
         
         entities = result.data
         logger.info(f"Reviewing {len(entities)} entities for cleanup...")
+        
+        # First, merge duplicates (same name, different types)
+        merged_count = self._merge_duplicate_entities(entities, user_id)
+        if merged_count > 0:
+            logger.info(f"Merged {merged_count} duplicate entities")
+            # Refresh entity list after merging
+            result = self.supabase.table("entities")\
+                .select("id, name, type, description, document_ids, chunk_ids")\
+                .eq("user_id", user_id)\
+                .contains("document_ids", [document_id])\
+                .execute()
+            entities = result.data
+        
+        logger.info(f"Reviewing {len(entities)} entities for junk removal...")
         
         # Prepare entity list for LLM review
         entity_list = "\n".join([

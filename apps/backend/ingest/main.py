@@ -404,7 +404,8 @@ class DocumentWorker:
                 ]
                 embeddings = self.embeddings_generator.generate_embeddings_batch(chunk_texts)
                 
-                # Store embeddings
+                # Store embeddings in smaller batches (embeddings are large - 1536 floats each)
+                # Split into batches of 20 to avoid timeout
                 embedding_records = [
                     {
                         "chunk_id": chunk["id"],
@@ -415,7 +416,12 @@ class DocumentWorker:
                     }
                     for chunk, embedding in zip(batch, embeddings)
                 ]
-                supabase.table("embeddings").insert(embedding_records).execute()
+                
+                # Insert embeddings in sub-batches of 20
+                for j in range(0, len(embedding_records), 20):
+                    sub_batch = embedding_records[j:j+20]
+                    supabase.table("embeddings").insert(sub_batch).execute()
+                
                 total_embeddings += len(embeddings)
                 
                 logger.debug(f"Batch {batch_num}/{total_batches} complete: {len(batch)} chunks + {len(embeddings)} embeddings")

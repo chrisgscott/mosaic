@@ -14,6 +14,7 @@ Philosophy:
 from typing import List, Dict, Any
 import logging
 import uuid
+import tiktoken
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ class StructureAwareChunker:
         self.target_size = target_size
         self.min_size = min_size
         self.max_size = max_size
+        self.tokenizer = tiktoken.get_encoding("cl100k_base")  # For token counting
         logger.info(f"StructureAwareChunker initialized (target={target_size}, min={min_size}, max={max_size})")
     
     def chunk_document(self, docling_doc, document_id: str) -> List[Dict[str, Any]]:
@@ -221,11 +223,15 @@ class StructureAwareChunker:
         if section_title:
             content = f"# {section_title}\n\n{content}"
         
+        # Calculate token count
+        token_count = len(self.tokenizer.encode(content))
+        
         return {
             "id": str(uuid.uuid4()),  # Generate proper UUID
             "document_id": document_id,
             "chunk_index": chunk_index,
             "content": content,
+            "token_count": token_count,  # Add required token_count field
             "metadata": {
                 "section_title": section_title,
                 "section_level": section_level,

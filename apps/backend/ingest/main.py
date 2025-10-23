@@ -262,15 +262,51 @@ class DocumentWorker:
             logger.info(f"Downloading file from storage: {file_path}")
             file_data = supabase.storage.from_("documents").download(file_path)
             
-            # Extract document with Docling
-            self.update_document_status(document_id, "extracting")
-            logger.info(f"Extracting document with Docling ({'API VLM' if USE_API_VLM else 'Local VLM'})")
-            docling_doc = processor.extract_document(file_data, file_path, document_id=document_id, user_id=user_id)
+            # Check for cached extracted content first
+            cached_extraction = supabase.table("extracted_documents")\
+                .select("content, page_count, extraction_method")\
+                .eq("document_id", document_id)\
+                .maybeSingle()\
+                .execute()
             
-            if not docling_doc:
-                raise ValueError("No document extracted from file")
-            
-            logger.info(f"Extracted DoclingDocument successfully")
+            if cached_extraction.data:
+                logger.info(f"📦 Using cached extracted content ({cached_extraction.data.get('page_count', '?')} pages, method: {cached_extraction.data.get('extraction_method', 'unknown')})")
+                # Reconstruct docling_doc format from cached content
+                docling_doc = {"type": "cached_markdown", "content": cached_extraction.data["content"]}
+            else:
+                # Extract document with Docling
+                self.update_document_status(document_id, "extracting")
+                logger.info(f"Extracting document with Docling ({'API VLM' if USE_API_VLM else 'Local VLM'})")
+                docling_doc = processor.extract_document(file_data, file_path, document_id=document_id, user_id=user_id)
+                
+                if not docling_doc:
+                    raise ValueError("No document extracted from file")
+                
+                logger.info(f"Extracted DoclingDocument successfully")
+                
+                # Cache the extracted content
+                if isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
+                    full_text = ""
+                    page_count = len(docling_doc["pages"])
+                    for page_num, page_doc in sorted(docling_doc["pages"], key=lambda x: x[0]):
+                        full_text += page_doc.export_to_markdown() + "\n\n"
+                else:
+                    full_text = docling_doc.export_to_markdown()
+                    page_count = 1
+                
+                # Estimate token count
+                token_count = len(full_text) // 4
+                
+                supabase.table("extracted_documents").upsert({
+                    "document_id": document_id,
+                    "user_id": user_id,
+                    "content": full_text,
+                    "page_count": page_count,
+                    "extraction_method": "docling_api_vlm" if USE_API_VLM else "docling_local_vlm",
+                    "content_length": len(full_text),
+                    "token_count": token_count
+                }).execute()
+                logger.info(f"💾 Cached extracted content ({page_count} pages, {len(full_text):,} chars, ~{token_count:,} tokens)")
             
             # Chunk the document using appropriate chunker based on config
             self.update_document_status(document_id, "chunking")
@@ -281,7 +317,9 @@ class DocumentWorker:
                 from chunkers.sorting_hat import SortingHat
                 
                 # Get full text for analysis
-                if isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
+                if isinstance(docling_doc, dict) and docling_doc.get("type") == "cached_markdown":
+                    full_text = docling_doc["content"]
+                elif isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
                     full_text = ""
                     for page_num, page_doc in sorted(docling_doc["pages"], key=lambda x: x[0]):
                         full_text += page_doc.export_to_markdown() + "\n\n"
@@ -305,7 +343,9 @@ class DocumentWorker:
                 strategy = chunking_config.get('strategy')
                 
                 # Get full text for non-Docling chunkers
-                if isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
+                if isinstance(docling_doc, dict) and docling_doc.get("type") == "cached_markdown":
+                    full_text = docling_doc["content"]
+                elif isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
                     # Export each page to markdown and concatenate
                     full_text = ""
                     for page_num, page_doc in sorted(docling_doc["pages"], key=lambda x: x[0]):
@@ -459,6 +499,13 @@ class DocumentWorker:
             
             # Update document status to ready
             self.update_document_status(document_id, "ready")
+            
+            # Clean up extracted content cache (no longer needed)
+            try:
+                supabase.table("extracted_documents").delete().eq("document_id", document_id).execute()
+                logger.info("🧹 Cleaned up extracted content cache")
+            except Exception as e:
+                logger.warning(f"Could not clean up extracted content cache: {e}")
             
             logger.info(f"Successfully processed document {document_id}")
             return (True, True)

@@ -360,13 +360,16 @@ Consider:
         
         elif strategy == 'planner_executor':
             # Choose planner model based on size
-            # GPT-4o has 128K context, but we need buffer for prompt + response
-            # Safe threshold: 100K tokens for document content
+            # GPT-4o: 128K context (safe limit: ~100K with prompt overhead)
+            # GPT-4.1: 1M context (safe limit: ~900K with overhead) - April 2025
+            # Gemini 2.0 Flash: 1M context (safe limit: ~900K with overhead)
             if estimated_tokens > 100_000:
-                planner_model = "gemini-2.0-flash-exp"  # 2M context
-                planner_provider = "google"
+                # Use GPT-4.1 for large documents (1M context, OpenAI family)
+                planner_model = "gpt-4.1"  # 1M context
+                planner_provider = "openai"
             else:
-                planner_model = "gpt-4o"  # 128K context (for smaller docs)
+                # Use GPT-4o for smaller documents (128K context, faster/cheaper)
+                planner_model = "gpt-4o"  # 128K context
                 planner_provider = "openai"
             
             config.update({

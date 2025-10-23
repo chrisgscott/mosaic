@@ -316,7 +316,7 @@ Create chunk plan with byte offsets (relative to section start):
         logger.info("Stage 1: Planning - analyzing full document with large-context model")
         
         # Build planner prompt
-        prompt = self._build_planner_prompt(content)
+        prompt = self._build_planner_prompt(content, document_id)
         
         try:
             if self.planner_provider == 'google':
@@ -349,7 +349,7 @@ Create chunk plan with byte offsets (relative to section start):
             logger.error(f"Error in planning stage: {e}")
             return {}
     
-    def _build_planner_prompt(self, content: str) -> str:
+    def _build_planner_prompt(self, content: str, document_id: str) -> str:
         """Build prompt for planner stage."""
         
         role_schema = self.config.get('role_schema', [

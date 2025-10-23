@@ -13,6 +13,7 @@ from openai import OpenAI, RateLimitError
 from pydantic import BaseModel, Field
 from enum import Enum
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,16 @@ class GraphExtractor:
         self.openai = OpenAI(api_key=openai_api_key or os.getenv("OPENAI_API_KEY"))
         self.settings_service = settings_service
         self.similarity_threshold = float(os.getenv("ENTITY_SIMILARITY_THRESHOLD", "0.85"))
-        self.max_workers = int(os.getenv("GRAPH_EXTRACTION_WORKERS", "20"))
+        self.max_workers = int(os.getenv("GRAPH_EXTRACTION_WORKERS", "5"))  # Reduced from 20 to 5
+        
+        # Entity cache to avoid redundant lookups within same document
+        self.entity_cache: Dict[str, str] = {}  # canonical_name -> entity_id
+        self.cache_hits = 0
+        self.cache_misses = 0
+        
+        # Rate limiting
+        self.last_db_call = 0
+        self.min_db_interval = 0.1  # 100ms between DB calls
         
         logger.info(f"Initialized GraphExtractor (similarity_threshold={self.similarity_threshold}, max_workers={self.max_workers})")
     
@@ -198,6 +208,13 @@ class GraphExtractor:
             logger.error(f"Error generating entity embedding: {e}")
             raise
     
+    def _rate_limit_db_call(self):
+        """Rate limit database calls to avoid overwhelming Supabase"""
+        elapsed = time.time() - self.last_db_call
+        if elapsed < self.min_db_interval:
+            time.sleep(self.min_db_interval - elapsed)
+        self.last_db_call = time.time()
+    
     def find_similar_entity(
         self, 
         user_id: str, 
@@ -206,7 +223,7 @@ class GraphExtractor:
         embedding: List[float]
     ) -> Optional[str]:
         """
-        Find similar entity in database using pgvector similarity.
+        Find similar entity in database using pgvector similarity with caching.
         
         Args:
             user_id: User ID for filtering
@@ -217,8 +234,21 @@ class GraphExtractor:
         Returns:
             Entity ID if similar entity found, None otherwise
         """
+        # Check cache first
+        canonical_name = self.normalize_entity_name(name)
+        cache_key = f"{canonical_name}:{entity_type}"
+        
+        if cache_key in self.entity_cache:
+            self.cache_hits += 1
+            return self.entity_cache[cache_key]
+        
+        self.cache_misses += 1
+        
         try:
-            # Call the find_similar_entities function
+            # Rate limit to avoid overwhelming Supabase
+            self._rate_limit_db_call()
+            
+            # Call the find_similar_entities function with timeout
             result = self.supabase.rpc(
                 "find_similar_entities",
                 {
@@ -234,8 +264,13 @@ class GraphExtractor:
                 entity_id = result.data[0]["entity_id"]
                 similarity = result.data[0]["similarity_score"]
                 logger.debug(f"Found similar entity '{name}' (similarity={similarity:.3f})")
+                
+                # Cache the result
+                self.entity_cache[cache_key] = entity_id
                 return entity_id
             
+            # Cache negative result (no match found)
+            self.entity_cache[cache_key] = None
             return None
             
         except Exception as e:
@@ -278,6 +313,9 @@ class GraphExtractor:
             
             if existing_entity_id:
                 # Entity exists - update arrays
+                # Rate limit before DB call
+                self._rate_limit_db_call()
+                
                 # Fetch current entity
                 result = self.supabase.table("entities").select("document_ids, chunk_ids").eq("id", existing_entity_id).single().execute()
                 
@@ -291,6 +329,9 @@ class GraphExtractor:
                     if chunk_id not in chunk_ids:
                         chunk_ids.append(chunk_id)
                     
+                    # Rate limit before DB call
+                    self._rate_limit_db_call()
+                    
                     # Update entity
                     self.supabase.table("entities").update({
                         "document_ids": doc_ids,
@@ -301,6 +342,9 @@ class GraphExtractor:
                     return existing_entity_id
             
             # New entity - insert
+            # Rate limit before DB call
+            self._rate_limit_db_call()
+            
             result = self.supabase.table("entities").insert({
                 "user_id": user_id,
                 "name": entity.name,
@@ -500,7 +544,17 @@ class GraphExtractor:
                     logger.error(f"Error processing chunk {chunk.get('id')}: {e}")
                     continue
         
+        # Log cache statistics
+        total_lookups = self.cache_hits + self.cache_misses
+        cache_hit_rate = (self.cache_hits / total_lookups * 100) if total_lookups > 0 else 0
         logger.info(f"Graph extraction complete: {total_entities} entities, {total_relationships} relationships from {len(chunks)} chunks")
+        logger.info(f"Entity cache stats: {self.cache_hits} hits, {self.cache_misses} misses ({cache_hit_rate:.1f}% hit rate)")
+        
+        # Clear cache after batch to free memory
+        self.entity_cache.clear()
+        self.cache_hits = 0
+        self.cache_misses = 0
+        
         return total_entities, total_relationships
     
     def _merge_duplicate_entities(self, entities: List[Dict[str, Any]], user_id: str) -> int:

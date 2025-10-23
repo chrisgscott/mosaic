@@ -417,10 +417,26 @@ class DocumentWorker:
                     for chunk, embedding in zip(batch, embeddings)
                 ]
                 
-                # Insert embeddings in sub-batches of 20
+                # Insert embeddings in sub-batches of 20 with retry
                 for j in range(0, len(embedding_records), 20):
                     sub_batch = embedding_records[j:j+20]
-                    supabase.table("embeddings").insert(sub_batch).execute()
+                    max_retries = 3
+                    for attempt in range(max_retries):
+                        try:
+                            supabase.table("embeddings").insert(sub_batch).execute()
+                            break
+                        except Exception as e:
+                            if attempt < max_retries - 1:
+                                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                                logger.warning(f"Embedding insert failed (attempt {attempt+1}/{max_retries}), retrying in {wait_time}s: {e}")
+                                time.sleep(wait_time)
+                            else:
+                                logger.error(f"Failed to insert embeddings after {max_retries} attempts: {e}")
+                                raise
+                    
+                    # Small delay between sub-batches to avoid overwhelming DB
+                    if j + 20 < len(embedding_records):
+                        time.sleep(0.1)
                 
                 total_embeddings += len(embeddings)
                 

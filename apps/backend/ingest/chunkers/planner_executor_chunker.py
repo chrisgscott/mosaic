@@ -186,7 +186,8 @@ class PlannerExecutorChunker:
                     section_text,
                     section,
                     section_map,
-                    document_id
+                    document_id,
+                    content  # Pass full content for global offset slicing
                 )
                 futures[future] = section['id']
             
@@ -269,7 +270,8 @@ Identify 10-50 major sections. Estimate byte ranges based on document structure.
         section_text: str,
         section_meta: Dict[str, Any],
         global_map: Dict[str, Any],
-        document_id: str
+        document_id: str,
+        full_content: str = None
     ) -> List[Dict[str, Any]]:
         """
         Pass 2: Create detailed chunk plan for one section.
@@ -315,15 +317,18 @@ Create a JSON chunk plan with byte offsets (relative to section start):
             
             section_plan = json.loads(response.choices[0].message.content)
             
-            # Adjust byte offsets to be global (add section start)
+            # Validate BEFORE adjusting offsets (validate against section text with section-relative offsets)
+            validated = self._validate_plan(section_text, section_plan)
+            
+            # NOW adjust byte offsets to be global (add section start)
             section_start = section_meta['byte_range']['start']
-            for chunk_spec in section_plan.get('chunks', []):
+            for chunk_spec in validated.get('chunks', []):
                 chunk_spec['source']['start_byte'] += section_start
                 chunk_spec['source']['end_byte'] += section_start
             
-            # Validate and execute this section's plan
-            validated = self._validate_plan(section_text, section_plan)
-            chunks = self._execute_plan(section_text, validated, document_id)
+            # Execute with FULL content (since offsets are now global)
+            content_to_use = full_content if full_content else section_text
+            chunks = self._execute_plan(content_to_use, validated, document_id)
             
             return chunks
             

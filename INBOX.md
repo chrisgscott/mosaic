@@ -568,7 +568,121 @@ const { data: chunks } = await supabase
 
 ## 🐛 Bugs & Issues
 
-*No items pending - INBOX is clean!*
+### Document Processing Resilience: Page-Level Checkpointing
+**Context:** Large document processing (200+ pages) is vulnerable to failures that require complete restart, wasting time and API costs.
+
+**Current State:**
+- Document pages processed in parallel (10-15 workers)
+- All results held in memory until completion
+- If processing fails at any stage → restart from scratch
+- Re-process all pages (re-pay for all OpenAI VLM API calls)
+- No incremental progress saved
+
+**Problem Example:**
+- 216-page PDF takes ~10 minutes to process
+- Failure at chunking stage (after all pages extracted)
+- Must re-extract all 216 pages again
+- Cost: ~$2-5 in duplicate API calls
+- Time: Another 10 minutes wasted
+
+**Current Flow (Fragile):**
+```
+1. Split PDF into 216 pages
+2. Process all pages in parallel → [IN MEMORY]
+3. Merge all results → [IN MEMORY]
+4. Chunk document → [FAILURE HERE]
+5. → Restart from step 1 (lose everything)
+```
+
+**Proposed Solution: Page-Level Checkpointing**
+
+**Phase 1: Database Schema (1 day)**
+```sql
+CREATE TABLE page_processing_cache (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+  page_number INTEGER NOT NULL,
+  page_content TEXT NOT NULL,
+  text_elements JSONB,
+  tables JSONB,
+  processed_at TIMESTAMPTZ DEFAULT NOW(),
+  processing_time_ms INTEGER,
+  UNIQUE(document_id, page_number)
+);
+
+CREATE INDEX idx_page_cache_document ON page_processing_cache(document_id);
+```
+
+**Phase 2: Incremental Processing (2-3 days)**
+- [ ] Check cache before processing each page
+- [ ] Save page results immediately after extraction
+- [ ] Resume from last completed page on failure
+- [ ] Merge cached pages when all complete
+- [ ] Clean up cache after successful document completion
+- [ ] Add cache expiration (7 days)
+
+**Phase 3: Progress Tracking (1 day)**
+- [ ] Update document status with progress percentage
+- [ ] Show "Resuming from page X" in logs
+- [ ] Display progress in UI: "Processing: 145/216 pages (67%)"
+- [ ] Estimate time remaining based on average page time
+
+**Improved Flow (Resilient):**
+```
+1. Split PDF into 216 pages
+2. For each page:
+   - Check if cached → skip if exists
+   - Process page → save immediately to DB
+   - Update progress counter
+3. Merge cached pages (fast, from DB)
+4. Chunk document → [FAILURE HERE]
+5. → Resume: pages already cached, just re-run chunking
+```
+
+**Benefits:**
+- ✅ No duplicate API costs on failure
+- ✅ Resume from failure point (not from scratch)
+- ✅ Progress visible in real-time
+- ✅ Faster recovery from errors
+- ✅ Reduced frustration for large documents
+- ✅ Cache can be reused for re-processing
+
+**Trade-offs:**
+- ❌ Additional database storage (~1-2MB per page)
+- ❌ More complex code (cache management)
+- ❌ Need cache cleanup logic
+- ❌ Slightly slower (DB writes per page)
+
+**Technical Considerations:**
+- Cache expiration: 7 days (configurable)
+- Cleanup: Delete cache after successful completion
+- Invalidation: Clear cache if document re-uploaded
+- Concurrency: Handle multiple workers writing to cache
+- Storage: ~200MB for 100-page document (acceptable)
+- Performance: DB writes add ~50-100ms per page (minimal)
+
+**Alternative: Document-Level Caching**
+Instead of page-level, cache the full Docling result:
+- Simpler implementation
+- All-or-nothing (less granular)
+- Still saves API costs on chunking failures
+- Easier to implement as Phase 1
+
+**Priority:** Medium-High (Quality of life improvement, cost savings)
+
+**Estimated Effort:** 
+- Phase 1 (Document-level cache): 1-2 days
+- Phase 2 (Page-level cache): 3-4 days
+- Phase 3 (Progress tracking): 1 day
+
+**When to Implement:**
+- After completing chunking improvements (Phase 1-2)
+- Before scaling to production (prevents cost blowup)
+- Consider document-level caching as quick win first
+
+---
+
+*No other bugs pending*
 
 ---
 

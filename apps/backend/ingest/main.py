@@ -334,8 +334,14 @@ class DocumentWorker:
                     logger.info("Using PlannerExecutorChunker (optimal pattern with large-context planner)")
                     from chunkers.planner_executor_chunker import PlannerExecutorChunker
                     from openai import OpenAI
+                    import os
+                    
+                    # Add API keys to config (not stored in database for security)
+                    enriched_config = {**chunking_config}
+                    enriched_config['google_api_key'] = os.getenv('GOOGLE_API_KEY')
+                    
                     planner_executor = PlannerExecutorChunker(
-                        chunking_config,
+                        enriched_config,
                         tokenizer=self.chunker.tokenizer,
                         openai_client=OpenAI()
                     )

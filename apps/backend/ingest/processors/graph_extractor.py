@@ -502,3 +502,114 @@ class GraphExtractor:
         
         logger.info(f"Graph extraction complete: {total_entities} entities, {total_relationships} relationships from {len(chunks)} chunks")
         return total_entities, total_relationships
+    
+    def cleanup_junk_entities(self, user_id: str, document_id: str) -> int:
+        """
+        Second-pass cleanup: Review all entities for a document and remove junk.
+        
+        This catches entities that slipped through the extraction rules by reviewing
+        the full list with global context.
+        
+        Args:
+            user_id: User ID
+            document_id: Document ID
+            
+        Returns:
+            Number of entities deleted
+        """
+        logger.info("🧹 Starting second-pass entity cleanup...")
+        
+        # Get all entities for this document
+        result = self.supabase.table("entities")\
+            .select("id, name, type, description")\
+            .eq("user_id", user_id)\
+            .contains("document_ids", [document_id])\
+            .execute()
+        
+        if not result.data or len(result.data) == 0:
+            logger.info("No entities to clean up")
+            return 0
+        
+        entities = result.data
+        logger.info(f"Reviewing {len(entities)} entities for cleanup...")
+        
+        # Prepare entity list for LLM review
+        entity_list = "\n".join([
+            f"- {e['name']} ({e['type']})"
+            for e in entities
+        ])
+        
+        # Ask LLM to identify junk entities
+        try:
+            response = self.openai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """Review this list of extracted entities and identify which ones are JUNK that should be deleted.
+
+**JUNK entities (mark for deletion):**
+- Years, dates, time periods (e.g., "2024", "2021", "1959")
+- Dollar amounts, prices (e.g., "$34 billion")
+- Counts, quantities (e.g., "20 companies", "20 States")
+- Generic descriptors (e.g., "American", "advanced", "high")
+- Technical measurements (e.g., "4.1-specific-gravity")
+- Common industry terms (e.g., "production", "industry")
+
+**KEEP entities (legitimate):**
+- Proper names (people, organizations, locations)
+- Specific minerals, materials, chemicals
+- Named technologies, systems, initiatives
+- Named documents, acts, programs
+
+Return ONLY the names of entities to DELETE, one per line. If an entity should be kept, don't include it."""
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Entity list:\n\n{entity_list}\n\nWhich entities should be DELETED?"
+                    }
+                ],
+                temperature=0.1
+            )
+            
+            # Parse response to get entity names to delete
+            to_delete_text = response.choices[0].message.content.strip()
+            if not to_delete_text or to_delete_text.lower() in ["none", "no entities", ""]:
+                logger.info("✅ No junk entities found!")
+                return 0
+            
+            to_delete_names = [
+                line.strip().lstrip('-').strip()
+                for line in to_delete_text.split('\n')
+                if line.strip() and not line.strip().startswith('#')
+            ]
+            
+            logger.info(f"Found {len(to_delete_names)} junk entities to delete")
+            
+            # Delete junk entities
+            deleted_count = 0
+            for name in to_delete_names:
+                # Find entity ID by name
+                entity = next((e for e in entities if e['name'] == name), None)
+                if entity:
+                    # Delete relationships first
+                    self.supabase.table("relationships")\
+                        .delete()\
+                        .or_(f"source_entity_id.eq.{entity['id']},target_entity_id.eq.{entity['id']}")\
+                        .execute()
+                    
+                    # Delete entity
+                    self.supabase.table("entities")\
+                        .delete()\
+                        .eq("id", entity['id'])\
+                        .execute()
+                    
+                    deleted_count += 1
+                    logger.debug(f"Deleted junk entity: {name}")
+            
+            logger.info(f"🧹 Cleanup complete: Deleted {deleted_count} junk entities")
+            return deleted_count
+            
+        except Exception as e:
+            logger.error(f"Error during entity cleanup: {e}")
+            return 0

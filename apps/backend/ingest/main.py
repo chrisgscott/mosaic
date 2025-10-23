@@ -453,6 +453,14 @@ class DocumentWorker:
                     )
                     
                     logger.info(f"Graph extraction complete: {entity_count} entities, {rel_count} relationships")
+                    
+                    # Second-pass cleanup: Remove junk entities
+                    try:
+                        deleted_count = self.graph_extractor.cleanup_junk_entities(user_id, document_id)
+                        logger.info(f"Entity cleanup: Removed {deleted_count} junk entities")
+                    except Exception as e:
+                        logger.warning(f"Entity cleanup failed (non-fatal): {e}")
+                        
                 except Exception as e:
                     # Don't fail the whole job if graph extraction fails
                     logger.error(f"Graph extraction failed (non-fatal): {e}")

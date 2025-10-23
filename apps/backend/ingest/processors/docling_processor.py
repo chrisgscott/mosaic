@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class DoclingProcessor:
     """Document processor using Docling with VLM support."""
     
-    def __init__(self, use_api_vlm: bool = True, max_workers: int = 10, settings_service=None):
+    def __init__(self, use_api_vlm: bool = True, max_workers: int = 10, settings_service=None, supabase_client=None):
         """
         Initialize Docling processor.
         
@@ -27,10 +27,12 @@ class DoclingProcessor:
                         If False, use local VLM (GraniteDocling).
             max_workers: Number of parallel workers for page processing (default: 10).
             settings_service: Optional settings service for reading model configuration.
+            supabase_client: Optional Supabase client for checkpointing progress.
         """
         self.use_api_vlm = use_api_vlm
         self.max_workers = max_workers
         self.settings_service = settings_service
+        self.supabase = supabase_client
         self.converter = None
         
         # Lazy initialization - only import and configure when needed
@@ -365,13 +367,14 @@ class DoclingProcessor:
             logger.error(f"✗ Error processing page {page_num}: {e}")
             return (page_num, None)
     
-    def extract_document(self, file_data: bytes, file_path: str):
+    def extract_document(self, file_data: bytes, file_path: str, document_id: Optional[str] = None):
         """
         Extract DoclingDocument object for use with HybridChunker.
         
         Args:
             file_data: Raw file bytes
             file_path: Original file path (for logging/context)
+            document_id: Optional document ID for checkpointing progress
         
         Returns:
             DoclingDocument object, or None if processing fails.
@@ -380,6 +383,9 @@ class DoclingProcessor:
             This method returns the full DoclingDocument object which can be used
             with Docling's native chunkers (HybridChunker, HierarchicalChunker).
             For parallel processing, pages are combined into a single document.
+            
+            If document_id and supabase_client are provided, progress is checkpointed
+            every 10 pages to allow resuming from failures.
         """
         temp_path = None
         page_paths = []
@@ -414,11 +420,31 @@ class DoclingProcessor:
                 page_paths = self._split_pdf_pages(temp_path)
                 total_pages = len(page_paths)
                 
+                # Check for existing checkpointed pages (resumability)
+                checkpointed_pages = {}
+                if document_id and self.supabase:
+                    try:
+                        result = self.supabase.table("chunks")\
+                            .select("metadata")\
+                            .eq("document_id", document_id)\
+                            .lt("chunk_index", 0)\
+                            .execute()
+                        
+                        if result.data:
+                            for row in result.data:
+                                page_num = row["metadata"].get("page_number")
+                                if page_num:
+                                    checkpointed_pages[page_num] = row["metadata"].get("content", "")
+                            logger.info(f"📍 Found {len(checkpointed_pages)} checkpointed pages - resuming from page {len(checkpointed_pages) + 1}")
+                    except Exception as e:
+                        logger.warning(f"Could not load checkpointed pages: {e}")
+                
                 # Process pages in parallel
                 page_documents = []
                 completed = 0
                 
                 failed_pages = []
+                checkpoint_batch = []  # For batching checkpoint writes
                 
                 with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                     # Submit all page processing tasks
@@ -439,6 +465,20 @@ class DoclingProcessor:
                                 if doc:
                                     page_documents.append((page_num_result, doc))
                                     logger.debug(f"Page {page_num_result} added to results")
+                                    
+                                    # Add to checkpoint batch
+                                    if document_id and self.supabase:
+                                        checkpoint_batch.append({
+                                            "document_id": document_id,
+                                            "chunk_index": -page_num_result,  # Negative = temporary
+                                            "content": doc[:10000],  # Store first 10K chars
+                                            "metadata": {
+                                                "page_number": page_num_result,
+                                                "temporary": True,
+                                                "stage": "extraction",
+                                                "content": doc  # Full content in metadata
+                                            }
+                                        })
                                 else:
                                     failed_pages.append(page_num_result)
                                     logger.warning(f"Page {page_num_result} returned None")
@@ -451,6 +491,15 @@ class DoclingProcessor:
                             
                             completed += 1
                             
+                            # Checkpoint every 10 pages
+                            if document_id and self.supabase and len(checkpoint_batch) >= 10:
+                                try:
+                                    self.supabase.table("chunks").insert(checkpoint_batch).execute()
+                                    logger.info(f"📍 Checkpointed pages {checkpoint_batch[0]['metadata']['page_number']} to {checkpoint_batch[-1]['metadata']['page_number']}")
+                                    checkpoint_batch = []
+                                except Exception as e:
+                                    logger.warning(f"Could not checkpoint pages: {e}")
+                            
                             if completed % 10 == 0 or completed == total_pages:
                                 logger.info(f"Progress: {completed}/{total_pages} pages processed (success: {len(page_documents)}, failed: {len(failed_pages)})")
                     
@@ -461,6 +510,14 @@ class DoclingProcessor:
                             if not future.done():
                                 failed_pages.append(page_num)
                                 future.cancel()
+                
+                # Checkpoint any remaining pages
+                if document_id and self.supabase and checkpoint_batch:
+                    try:
+                        self.supabase.table("chunks").insert(checkpoint_batch).execute()
+                        logger.info(f"📍 Checkpointed final {len(checkpoint_batch)} pages")
+                    except Exception as e:
+                        logger.warning(f"Could not checkpoint final pages: {e}")
                 
                 # Report results
                 if failed_pages:

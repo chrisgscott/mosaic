@@ -82,7 +82,12 @@ logger.info(f"  • Temperature: {TEMPERATURE}")
 logger.info("=" * 70)
 
 # Initialize processor and chunker
-processor = DoclingProcessor(use_api_vlm=USE_API_VLM, max_workers=DOCLING_MAX_WORKERS, settings_service=settings_service)
+processor = DoclingProcessor(
+    use_api_vlm=USE_API_VLM, 
+    max_workers=DOCLING_MAX_WORKERS, 
+    settings_service=settings_service,
+    supabase_client=supabase  # Pass supabase for checkpointing
+)
 chunker = HybridChunker(max_tokens=CHUNK_MAX_TOKENS, summary_neighbors=CHUNK_SUMMARY_NEIGHBORS, settings_service=settings_service)
 
 
@@ -260,7 +265,7 @@ class DocumentWorker:
             # Extract document with Docling
             self.update_document_status(document_id, "extracting")
             logger.info(f"Extracting document with Docling ({'API VLM' if USE_API_VLM else 'Local VLM'})")
-            docling_doc = processor.extract_document(file_data, file_path)
+            docling_doc = processor.extract_document(file_data, file_path, document_id=document_id)
             
             if not docling_doc:
                 raise ValueError("No document extracted from file")
@@ -422,6 +427,14 @@ class DocumentWorker:
                 logger.debug(f"Batch {batch_num}/{total_batches} complete: {len(batch)} chunks + {len(embeddings)} embeddings")
             
             logger.info(f"Successfully stored {len(chunks)} chunks and generated {total_embeddings} embeddings")
+            
+            # Clean up temporary checkpoint chunks
+            try:
+                deleted = supabase.table("chunks").delete().eq("document_id", document_id).lt("chunk_index", 0).execute()
+                if deleted.data:
+                    logger.info(f"🧹 Cleaned up {len(deleted.data)} temporary checkpoint chunks")
+            except Exception as e:
+                logger.warning(f"Could not clean up checkpoint chunks: {e}")
             
             # Extract graph (entities and relationships) if enabled
             if self.graph_extractor:

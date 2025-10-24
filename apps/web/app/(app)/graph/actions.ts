@@ -730,3 +730,251 @@ export async function bulkCreateRelationships(data: {
     skipped,
   };
 }
+
+export async function createEntity(data: {
+  name: string;
+  type: string;
+  description?: string | null;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  // Check if entity with this name already exists
+  const { data: existing } = await supabase
+    .from("entities")
+    .select("id, name")
+    .eq("user_id", user.id)
+    .ilike("name", data.name)
+    .maybeSingle();
+
+  if (existing) {
+    return { error: `An entity named "${existing.name}" already exists` };
+  }
+
+  // Create the entity
+  const { data: newEntity, error: createError } = await supabase
+    .from("entities")
+    .insert({
+      user_id: user.id,
+      name: data.name,
+      type: data.type,
+      description: data.description || null,
+      canonical_name: data.name,
+      aliases: [],
+      document_ids: [],
+      chunk_ids: [],
+      metadata: {},
+      extraction_confidence: null, // Manual entities have no confidence
+    })
+    .select()
+    .single();
+
+  if (createError) {
+    console.error("Create entity error:", createError);
+    return { error: `Failed to create entity: ${createError.message}` };
+  }
+
+  revalidatePath("/graph");
+
+  return { success: true, entity: newEntity };
+}
+
+export async function generateEntityDescription(data: {
+  entityName: string;
+  entityType: string;
+  existingEntities: Array<{ name: string; type: string }>;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  try {
+    // Get AI settings
+    const { data: settings } = await supabase
+      .from("llm_settings")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
+
+    const standardModel = settings?.standard_model || "gpt-4o-mini";
+
+    // Import OpenAI
+    const { OpenAI } = await import("openai");
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    // Build context about existing entities
+    const entityContext = data.existingEntities
+      .slice(0, 50) // Limit to prevent token overflow
+      .map((e) => `- ${e.name} (${e.type})`)
+      .join("\n");
+
+    const prompt = `You are helping to build a knowledge graph. Generate a concise, informative description for the following entity:
+
+Entity Name: ${data.entityName}
+Entity Type: ${data.entityType}
+
+Context - Other entities in the knowledge graph:
+${entityContext}
+
+Generate a 2-3 sentence description that:
+1. Explains what this entity is
+2. Highlights its key characteristics or purpose
+3. Is specific and informative (not generic)
+
+Description:`;
+
+    const response = await openai.chat.completions.create({
+      model: standardModel,
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert at writing clear, concise entity descriptions for knowledge graphs. Keep descriptions factual and informative.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 200,
+    });
+
+    const description = response.choices[0]?.message?.content?.trim() || "";
+
+    return { success: true, description };
+  } catch (error) {
+    console.error("Generate description error:", error);
+    return { error: "Failed to generate description" };
+  }
+}
+
+export async function suggestEntityRelationships(data: {
+  entityName: string;
+  entityType: string;
+  entityDescription?: string;
+  existingEntities: Array<{ id: string; name: string; type: string; description?: string | null }>;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  try {
+    // Get AI settings
+    const { data: settings } = await supabase
+      .from("llm_settings")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
+
+    const standardModel = settings?.standard_model || "gpt-4o-mini";
+
+    // Import OpenAI
+    const { OpenAI } = await import("openai");
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    // Build context about existing entities
+    const entityContext = data.existingEntities
+      .slice(0, 100) // Limit to prevent token overflow
+      .map((e) => {
+        const desc = e.description ? ` - ${e.description.slice(0, 100)}` : "";
+        return `- ${e.name} (${e.type})${desc}`;
+      })
+      .join("\n");
+
+    const prompt = `You are analyzing a knowledge graph to suggest relationships for a new entity.
+
+New Entity:
+- Name: ${data.entityName}
+- Type: ${data.entityType}
+${data.entityDescription ? `- Description: ${data.entityDescription}` : ""}
+
+Existing Entities in Knowledge Graph:
+${entityContext}
+
+Analyze the new entity and suggest up to 5 most relevant relationships with existing entities.
+
+For each relationship, provide:
+1. target_entity_name: The name of the existing entity (must match exactly from the list above)
+2. relationship_type: One of [uses, requires, relates_to, part_of, implements, extends, depends_on, collaborates_with, manages, creates, analyzes, evaluates, other]
+3. confidence: A score from 0.0 to 1.0 indicating how confident you are
+4. reasoning: Brief explanation of why this relationship makes sense
+
+Only suggest relationships where confidence >= 0.6. Be conservative - only suggest relationships that are clearly supported.
+
+Respond with a JSON array of relationship suggestions:`;
+
+    const response = await openai.chat.completions.create({
+      model: standardModel,
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert at analyzing knowledge graphs and identifying meaningful relationships between entities. Be precise and conservative in your suggestions.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 1000,
+      response_format: { type: "json_object" },
+    });
+
+    const content = response.choices[0]?.message?.content?.trim() || "{}";
+    const parsed = JSON.parse(content);
+    const suggestions = parsed.relationships || parsed.suggestions || [];
+
+    // Validate and map to entity IDs
+    const validSuggestions = suggestions
+      .filter((s: { target_entity_name?: string; relationship_type?: string; confidence?: number }) => {
+        const entity = data.existingEntities.find(
+          (e) => e.name.toLowerCase() === s.target_entity_name?.toLowerCase()
+        );
+        return entity && s.relationship_type && s.confidence && s.confidence >= 0.6;
+      })
+      .map((s: { target_entity_name: string; relationship_type: string; confidence: number; reasoning?: string }) => {
+        const entity = data.existingEntities.find(
+          (e) => e.name.toLowerCase() === s.target_entity_name.toLowerCase()
+        )!;
+        return {
+          targetEntityId: entity.id,
+          targetEntityName: entity.name,
+          targetEntityType: entity.type,
+          relationshipType: s.relationship_type,
+          confidence: s.confidence,
+          reasoning: s.reasoning || "",
+        };
+      });
+
+    return { success: true, suggestions: validSuggestions };
+  } catch (error) {
+    console.error("Suggest relationships error:", error);
+    return { error: "Failed to suggest relationships" };
+  }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Network, Trash2, MoreHorizontal, Loader2, FileText, ArrowUpDown, GitMerge, Tag, Link } from "lucide-react";
+import { Network, Trash2, MoreHorizontal, Loader2, FileText, ArrowUpDown, GitMerge, Tag, Link, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -33,6 +33,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { MergeEntitiesDialog } from "@/components/merge-entities-dialog";
 import { BulkAddRelationshipsDialog } from "@/components/bulk-add-relationships-dialog";
+import { CreateEntityDialog } from "@/components/create-entity-dialog";
 
 type SortColumn = "created_at" | "name" | "confidence" | "docs" | "type" | "relationships";
 type SortDirection = "asc" | "desc";
@@ -73,6 +74,7 @@ export function EntityList({
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [showRelationshipsDialog, setShowRelationshipsDialog] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [isUpdatingType, setIsUpdatingType] = useState(false);
   const [selectedType, setSelectedType] = useState<string>("");
 
@@ -336,7 +338,25 @@ export function EntityList({
       <div className="p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Knowledge Graph</h2>
-          {selectedIds.size > 0 && (
+          <div className="flex gap-2 items-center">
+            {/* Create Entity Button */}
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setShowCreateDialog(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Create Entity
+            </Button>
+          </div>
+        </div>
+
+        {selectedIds.size > 0 && (
+          <div className="mb-4">
+            <div className="flex items-center justify-between p-3 border rounded bg-muted/30">
+              <span className="text-sm text-muted-foreground">
+                {selectedIds.size} entit{selectedIds.size > 1 ? "ies" : "y"} selected
+              </span>
             <div className="flex gap-2 items-center">
               {/* Bulk Type Update */}
               <div className="flex gap-2 items-center">
@@ -414,8 +434,9 @@ export function EntityList({
                 )}
               </Button>
             </div>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
 
         {/* Filters and Search */}
         <div className="flex gap-4 mb-4">
@@ -627,6 +648,17 @@ export function EntityList({
         allEntities={entities}
         onComplete={() => {
           setSelectedIds(new Set());
+          router.refresh();
+        }}
+      />
+
+      {/* Create Entity Dialog */}
+      <CreateEntityDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        allEntities={entities}
+        allEntityTypes={allEntityTypes}
+        onComplete={() => {
           router.refresh();
         }}
       />

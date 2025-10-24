@@ -7,6 +7,7 @@ import { models } from '@/lib/ai/gateway';
 import { getPrompt } from '@/lib/ai/prompts';
 import { createProgressEvent, type ProgressCallback } from "@/lib/search-progress";
 import { graphEnhancedSearch, isRelationshipQuery } from "@/lib/graph/graph-search";
+import { logSearchSignal } from "@/lib/graph/search-signals";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -512,6 +513,17 @@ export async function POST(request: NextRequest) {
       }
 
       const processingTime = Date.now() - startTime;
+
+      // Log search signal for graph learning (fire-and-forget, async)
+      logSearchSignal(user.id, {
+        query,
+        queryEmbedding: queryEmbedding,
+        chunkIds: finalResults.map(r => r.chunk_id),
+        rerankScores: finalResults.map(r => r.rerank_score || 0),
+        // Entity IDs will be extracted asynchronously in the background
+      }).catch((err: Error) => {
+        console.warn("[Search] Failed to log search signal:", err);
+      });
 
       return NextResponse.json({
         results: finalResults,

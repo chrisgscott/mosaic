@@ -70,12 +70,14 @@ class HybridChunker:
             raise
         
         # Initialize Docling's HybridChunker
+        # NOTE: merge_peers=False prevents aggressive merging of content
+        # This ensures we get more granular chunks even from documents with few headings
         self.chunker = DoclingHybridChunker(
             tokenizer=self.tokenizer,
             max_tokens=max_tokens,
-            merge_peers=merge_peers
+            merge_peers=False  # Disable merging to get more chunks
         )
-        logger.info(f"HybridChunker initialized (max_tokens={max_tokens}, merge_peers={merge_peers})")
+        logger.info(f"HybridChunker initialized (max_tokens={max_tokens}, merge_peers=False)")
     
     def _generate_chunk_summary(self, 
                                 current_chunk: str,
@@ -179,12 +181,129 @@ class HybridChunker:
             logger.error(f"Error generating chunk summary: {e}", exc_info=True)
             return None
     
-    def chunk_document(self, docling_doc: DoclingDocument, document_id: str) -> List[Dict[str, Any]]:
+    def _chunk_page_documents(self, page_documents: List[tuple], document_id: str) -> List[Dict[str, Any]]:
+        """
+        Chunk individual page documents without merging them first.
+        This avoids the Docling export_to_markdown() bug that loses content on merged documents.
+        
+        Args:
+            page_documents: List of (page_num, DoclingDocument) tuples
+            document_id: UUID of the document
+        
+        Returns:
+            List of chunk dictionaries ready for database insertion
+        """
+        logger.info(f"Chunking {len(page_documents)} pages individually to avoid content loss")
+        
+        all_chunks = []
+        chunk_index = 0
+        
+        # Sort pages by page number
+        sorted_pages = sorted(page_documents, key=lambda x: x[0])
+        
+        for page_num, page_doc in sorted_pages:
+            try:
+                # Chunk this individual page
+                chunk_iter = self.chunker.chunk(dl_doc=page_doc)
+                page_chunks = list(chunk_iter)
+                
+                logger.debug(f"Page {page_num}: created {len(page_chunks)} chunks")
+                
+                # Convert to database format
+                for chunk in page_chunks:
+                    chunk_text = self.chunker.contextualize(chunk=chunk)
+                    token_count = self.tokenizer.count_tokens(text=chunk_text)
+                    
+                    metadata = {
+                        "processor": "docling_hybrid",
+                        "page_number": page_num,
+                        "chunk_size": len(chunk_text),
+                        "token_count": token_count,
+                        "embedding_model": self.embedding_model,
+                    }
+                    
+                    # Add document item references if available
+                    if hasattr(chunk, 'meta') and hasattr(chunk.meta, 'doc_items'):
+                        doc_items_refs = [it.self_ref for it in chunk.meta.doc_items]
+                        metadata["doc_items"] = doc_items_refs
+                    
+                    # Add headings if available
+                    if hasattr(chunk, 'meta') and hasattr(chunk.meta, 'headings'):
+                        metadata["headings"] = chunk.meta.headings
+                    
+                    all_chunks.append({
+                        "id": str(uuid4()),
+                        "document_id": document_id,
+                        "content": chunk_text.strip(),
+                        "chunk_index": chunk_index,
+                        "token_count": token_count,
+                        "summary": None,  # Will be populated later
+                        "metadata": metadata
+                    })
+                    
+                    chunk_index += 1
+                    
+            except Exception as e:
+                logger.error(f"Error chunking page {page_num}: {e}", exc_info=True)
+                continue
+        
+        logger.info(f"Created {len(all_chunks)} total chunks from {len(page_documents)} pages")
+        
+        # Generate summaries for all chunks
+        if self.summary_neighbors > 0 and all_chunks:
+            logger.info(f"Generating summaries with {self.summary_neighbors} neighbors per chunk")
+            
+            # Get parallel workers from settings
+            if self.settings_service:
+                max_workers = self.settings_service.get_int('processing.summaryParallelWorkers', 20, 'SUMMARY_GENERATION_WORKERS')
+            else:
+                max_workers = int(os.getenv('SUMMARY_GENERATION_WORKERS', '20'))
+            
+            # Generate summaries in parallel
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = []
+                for i, chunk in enumerate(all_chunks):
+                    # Get neighbors
+                    start_idx = max(0, i - self.summary_neighbors)
+                    end_idx = min(len(all_chunks), i + self.summary_neighbors + 1)
+                    
+                    previous_chunks = [all_chunks[j]["content"] for j in range(start_idx, i)]
+                    next_chunks = [all_chunks[j]["content"] for j in range(i + 1, end_idx)]
+                    
+                    future = executor.submit(
+                        self._generate_chunk_summary,
+                        chunk["content"],
+                        chunk["token_count"],
+                        previous_chunks,
+                        next_chunks
+                    )
+                    futures.append((i, future))
+                
+                # Collect results
+                successful = 0
+                failed = 0
+                for i, future in futures:
+                    try:
+                        summary = future.result(timeout=30)
+                        if summary:
+                            all_chunks[i]["summary"] = summary
+                            successful += 1
+                        else:
+                            failed += 1
+                    except Exception as e:
+                        logger.error(f"Failed to generate summary for chunk {i}: {e}")
+                        failed += 1
+                
+                logger.info(f"Summary generation complete: {successful} successful, {failed} failed")
+        
+        return all_chunks
+    
+    def chunk_document(self, docling_doc, document_id: str) -> List[Dict[str, Any]]:
         """
         Chunk a DoclingDocument using HybridChunker.
         
         Args:
-            docling_doc: DoclingDocument object from Docling processor
+            docling_doc: DoclingDocument object OR dict with page_documents from Docling processor
             document_id: UUID of the document
         
         Returns:
@@ -194,7 +313,32 @@ class HybridChunker:
             logger.warning(f"Empty DoclingDocument for document {document_id}")
             return []
         
+        # Check if we received page documents instead of a merged document
+        if isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
+            logger.info(f"Received {len(docling_doc['pages'])} page documents - chunking individually")
+            return self._chunk_page_documents(docling_doc["pages"], document_id)
+        
         logger.info(f"Chunking document {document_id} with HybridChunker")
+        
+        # Debug: Log document structure
+        logger.info(f"DoclingDocument has {len(docling_doc.texts)} text elements")
+        if hasattr(docling_doc, 'tables'):
+            logger.info(f"DoclingDocument has {len(docling_doc.tables)} tables")
+        
+        # Debug: Check total document content
+        try:
+            from docling.document_converter import DocumentConverter
+            full_markdown = docling_doc.export_to_markdown()
+            logger.info(f"Full document markdown length: {len(full_markdown)} characters")
+            
+            # CRITICAL BUG: export_to_markdown() is broken for merged documents
+            # It only returns a tiny fraction of content (1,402 chars for 113 pages!)
+            # Calculate what the actual content should be by summing text elements
+            total_text_chars = sum(len(text.text) for text in docling_doc.texts if hasattr(text, 'text'))
+            logger.warning(f"⚠️  CONTENT LOSS DETECTED: markdown export={len(full_markdown)} chars, but text elements contain {total_text_chars} chars")
+            logger.warning(f"⚠️  This is a Docling bug - export_to_markdown() loses content on merged documents")
+        except Exception as e:
+            logger.warning(f"Could not export to markdown: {e}")
         
         try:
             # Use Docling's HybridChunker to create chunks
@@ -202,6 +346,10 @@ class HybridChunker:
             chunks = list(chunk_iter)
             
             logger.info(f"HybridChunker created {len(chunks)} chunks")
+            
+            # Debug: Log total content length
+            total_chars = sum(len(self.chunker.contextualize(chunk=chunk)) for chunk in chunks)
+            logger.info(f"Total characters in chunks: {total_chars}")
             
             # First pass: Convert to database format with text
             db_chunks = []

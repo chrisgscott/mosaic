@@ -13,6 +13,7 @@ from openai import OpenAI, RateLimitError
 from pydantic import BaseModel, Field
 from enum import Enum
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,16 @@ class GraphExtractor:
         self.openai = OpenAI(api_key=openai_api_key or os.getenv("OPENAI_API_KEY"))
         self.settings_service = settings_service
         self.similarity_threshold = float(os.getenv("ENTITY_SIMILARITY_THRESHOLD", "0.85"))
-        self.max_workers = int(os.getenv("GRAPH_EXTRACTION_WORKERS", "20"))
+        self.max_workers = int(os.getenv("GRAPH_EXTRACTION_WORKERS", "5"))  # Reduced from 20 to 5
+        
+        # Entity cache to avoid redundant lookups within same document
+        self.entity_cache: Dict[str, str] = {}  # canonical_name -> entity_id
+        self.cache_hits = 0
+        self.cache_misses = 0
+        
+        # Rate limiting
+        self.last_db_call = 0
+        self.min_db_interval = 0.1  # 100ms between DB calls
         
         logger.info(f"Initialized GraphExtractor (similarity_threshold={self.similarity_threshold}, max_workers={self.max_workers})")
     
@@ -125,17 +135,45 @@ class GraphExtractor:
                             "role": "system",
                             "content": """You are an expert at extracting entities and relationships from text for knowledge graph construction.
 
-Analyze the text and extract:
-1. **Entities**: Important concepts, people, organizations, methodologies, frameworks, tools, etc.
-2. **Relationships**: How these entities relate to each other
+**ENTITY EXTRACTION RULES:**
 
-Guidelines:
-- Be precise and specific with entity names
-- Include acronyms as aliases (e.g., "SDA" as alias for "Strategic Design Approaches")
-- Only extract relationships that are explicitly stated or strongly implied
-- Use descriptive relationship types that capture the nature of the connection
-- Focus on meaningful entities (not common words or generic concepts)
-- Descriptions should be concise but informative"""
+Extract MAXIMUM 3-7 entities per chunk. ONLY extract proper nouns or significant domain concepts.
+
+**NEVER extract (FORBIDDEN):**
+- ❌ ANY number, date, or year (e.g., "2024", "2020-2025", "January")
+- ❌ ANY dollar amount or price (e.g., "$34 billion", "$450 billion")
+- ❌ ANY percentage or statistic (e.g., "15%", "0.85")
+- ❌ ANY measurement or quantity (e.g., "90 tons", "21 States", "27 companies")
+- ❌ ANY technical ID or code (e.g., "#ffffff", "8112.99.9100", "4.1-specific-gravity")
+- ❌ Generic descriptors (e.g., "high", "low", "significant", "advanced")
+- ❌ Common industry terms (e.g., "production", "supply chains", "industry")
+
+**ONLY extract (ALLOWED):**
+- ✅ Named people (e.g., "Adam M. Merrill")
+- ✅ Named organizations/companies (e.g., "American Petroleum Institute", "Tesla")
+- ✅ Specific countries/cities/regions (e.g., "United States", "China", "Alabama")
+- ✅ Named minerals/materials (e.g., "Gallium", "Cobalt", "Aluminum")
+- ✅ Named technologies/systems (e.g., "Airborne Visible/Infrared Imaging Spectrometer")
+- ✅ Named events/initiatives (e.g., "Paris Agreement", "American Battery Initiative")
+- ✅ Named documents (e.g., "2022 Final List of Critical Minerals")
+
+**RELATIONSHIP EXTRACTION RULES:**
+
+For each pair of entities that are meaningfully connected in the text, extract their relationship.
+
+**Extract relationships when:**
+- ✅ One entity uses, requires, or depends on another
+- ✅ One entity is part of or belongs to another
+- ✅ One entity creates, manages, or analyzes another
+- ✅ Entities collaborate, compete, or interact
+- ✅ There's a clear action or connection between entities
+
+**DO NOT extract relationships when:**
+- ❌ Entities are only mentioned in the same sentence but not connected
+- ❌ The connection is vague or unclear
+- ❌ You're guessing at a relationship not stated in the text
+
+**Relationship quality:** Only extract relationships that are explicitly stated or strongly implied in the text."""
                         },
                         {
                             "role": "user",
@@ -184,6 +222,13 @@ Guidelines:
             logger.error(f"Error generating entity embedding: {e}")
             raise
     
+    def _rate_limit_db_call(self):
+        """Rate limit database calls to avoid overwhelming Supabase"""
+        elapsed = time.time() - self.last_db_call
+        if elapsed < self.min_db_interval:
+            time.sleep(self.min_db_interval - elapsed)
+        self.last_db_call = time.time()
+    
     def find_similar_entity(
         self, 
         user_id: str, 
@@ -192,7 +237,7 @@ Guidelines:
         embedding: List[float]
     ) -> Optional[str]:
         """
-        Find similar entity in database using pgvector similarity.
+        Find similar entity in database using pgvector similarity with caching.
         
         Args:
             user_id: User ID for filtering
@@ -203,8 +248,21 @@ Guidelines:
         Returns:
             Entity ID if similar entity found, None otherwise
         """
+        # Check cache first
+        canonical_name = self.normalize_entity_name(name)
+        cache_key = f"{canonical_name}:{entity_type}"
+        
+        if cache_key in self.entity_cache:
+            self.cache_hits += 1
+            return self.entity_cache[cache_key]
+        
+        self.cache_misses += 1
+        
         try:
-            # Call the find_similar_entities function
+            # Rate limit to avoid overwhelming Supabase
+            self._rate_limit_db_call()
+            
+            # Call the find_similar_entities function with timeout
             result = self.supabase.rpc(
                 "find_similar_entities",
                 {
@@ -220,8 +278,13 @@ Guidelines:
                 entity_id = result.data[0]["entity_id"]
                 similarity = result.data[0]["similarity_score"]
                 logger.debug(f"Found similar entity '{name}' (similarity={similarity:.3f})")
+                
+                # Cache the result
+                self.entity_cache[cache_key] = entity_id
                 return entity_id
             
+            # Cache negative result (no match found)
+            self.entity_cache[cache_key] = None
             return None
             
         except Exception as e:
@@ -264,6 +327,9 @@ Guidelines:
             
             if existing_entity_id:
                 # Entity exists - update arrays
+                # Rate limit before DB call
+                self._rate_limit_db_call()
+                
                 # Fetch current entity
                 result = self.supabase.table("entities").select("document_ids, chunk_ids").eq("id", existing_entity_id).single().execute()
                 
@@ -277,6 +343,9 @@ Guidelines:
                     if chunk_id not in chunk_ids:
                         chunk_ids.append(chunk_id)
                     
+                    # Rate limit before DB call
+                    self._rate_limit_db_call()
+                    
                     # Update entity
                     self.supabase.table("entities").update({
                         "document_ids": doc_ids,
@@ -287,6 +356,9 @@ Guidelines:
                     return existing_entity_id
             
             # New entity - insert
+            # Rate limit before DB call
+            self._rate_limit_db_call()
+            
             result = self.supabase.table("entities").insert({
                 "user_id": user_id,
                 "name": entity.name,
@@ -333,8 +405,26 @@ Guidelines:
             True if stored successfully, False otherwise
         """
         try:
+            # Try to get entity IDs from local mapping first
             source_id = entity_name_to_id.get(relationship.source)
             target_id = entity_name_to_id.get(relationship.target)
+            
+            # If not in local mapping, look up in database by canonical name
+            if not source_id:
+                self._rate_limit_db_call()
+                source_canonical = self.normalize_entity_name(relationship.source)
+                result = self.supabase.table("entities").select("id").eq("user_id", user_id).eq("canonical_name", source_canonical).limit(1).execute()
+                if result.data and len(result.data) > 0:
+                    source_id = result.data[0]["id"]
+                    logger.debug(f"Found source entity '{relationship.source}' in database")
+            
+            if not target_id:
+                self._rate_limit_db_call()
+                target_canonical = self.normalize_entity_name(relationship.target)
+                result = self.supabase.table("entities").select("id").eq("user_id", user_id).eq("canonical_name", target_canonical).limit(1).execute()
+                if result.data and len(result.data) > 0:
+                    target_id = result.data[0]["id"]
+                    logger.debug(f"Found target entity '{relationship.target}' in database")
             
             if not source_id or not target_id:
                 logger.warning(f"Missing entity IDs for relationship: {relationship.source} -> {relationship.target}")
@@ -486,5 +576,241 @@ Guidelines:
                     logger.error(f"Error processing chunk {chunk.get('id')}: {e}")
                     continue
         
+        # Log cache statistics
+        total_lookups = self.cache_hits + self.cache_misses
+        cache_hit_rate = (self.cache_hits / total_lookups * 100) if total_lookups > 0 else 0
         logger.info(f"Graph extraction complete: {total_entities} entities, {total_relationships} relationships from {len(chunks)} chunks")
+        logger.info(f"Entity cache stats: {self.cache_hits} hits, {self.cache_misses} misses ({cache_hit_rate:.1f}% hit rate)")
+        
+        # Clear cache after batch to free memory
+        self.entity_cache.clear()
+        self.cache_hits = 0
+        self.cache_misses = 0
+        
         return total_entities, total_relationships
+    
+    def _merge_duplicate_entities(self, entities: List[Dict[str, Any]], user_id: str) -> int:
+        """
+        Merge entities with the same canonical name but different types.
+        
+        Args:
+            entities: List of entity dictionaries
+            user_id: User ID
+            
+        Returns:
+            Number of entities merged
+        """
+        # Group entities by canonical name
+        from collections import defaultdict
+        by_canonical = defaultdict(list)
+        
+        for entity in entities:
+            canonical = self.normalize_entity_name(entity['name'])
+            by_canonical[canonical].append(entity)
+        
+        # Find duplicates (same canonical name, multiple entities)
+        duplicates = {k: v for k, v in by_canonical.items() if len(v) > 1}
+        
+        if not duplicates:
+            return 0
+        
+        logger.info(f"Found {len(duplicates)} sets of duplicate entities to merge")
+        
+        merged_count = 0
+        for canonical_name, dupe_entities in duplicates.items():
+            # Pick the "best" entity to keep (prefer more specific types)
+            type_priority = {
+                'person': 1,
+                'organization': 2,
+                'location': 3,
+                'technology': 4,
+                'framework': 5,
+                'methodology': 6,
+                'event': 7,
+                'document': 8,
+                'concept': 9,
+                'other': 10
+            }
+            
+            # Sort by type priority (lower = better)
+            dupe_entities.sort(key=lambda e: type_priority.get(e['type'], 99))
+            
+            # Keep the first (best) entity
+            keep_entity = dupe_entities[0]
+            merge_entities = dupe_entities[1:]
+            
+            # Merge document_ids and chunk_ids from all duplicates
+            all_doc_ids = set(keep_entity.get('document_ids', []))
+            all_chunk_ids = set(keep_entity.get('chunk_ids', []))
+            
+            for merge_entity in merge_entities:
+                all_doc_ids.update(merge_entity.get('document_ids', []))
+                all_chunk_ids.update(merge_entity.get('chunk_ids', []))
+                
+                # Update relationships to point to keep_entity
+                self.supabase.table("relationships")\
+                    .update({"source_entity_id": keep_entity['id']})\
+                    .eq("source_entity_id", merge_entity['id'])\
+                    .execute()
+                
+                self.supabase.table("relationships")\
+                    .update({"target_entity_id": keep_entity['id']})\
+                    .eq("target_entity_id", merge_entity['id'])\
+                    .execute()
+                
+                # Delete the duplicate entity
+                self.supabase.table("entities")\
+                    .delete()\
+                    .eq("id", merge_entity['id'])\
+                    .execute()
+                
+                merged_count += 1
+                logger.debug(f"Merged '{merge_entity['name']}' ({merge_entity['type']}) into '{keep_entity['name']}' ({keep_entity['type']})")
+            
+            # Update keep_entity with merged IDs
+            self.supabase.table("entities")\
+                .update({
+                    "document_ids": list(all_doc_ids),
+                    "chunk_ids": list(all_chunk_ids)
+                })\
+                .eq("id", keep_entity['id'])\
+                .execute()
+        
+        return merged_count
+    
+    def cleanup_junk_entities(self, user_id: str, document_id: str) -> int:
+        """
+        Second-pass cleanup: Review all entities for a document and remove junk.
+        
+        This catches entities that slipped through the extraction rules by reviewing
+        the full list with global context. Also merges duplicates across types.
+        
+        Args:
+            user_id: User ID
+            document_id: Document ID
+            
+        Returns:
+            Number of entities deleted
+        """
+        logger.info("🧹 Starting second-pass entity cleanup...")
+        
+        # Get all entities for this document
+        result = self.supabase.table("entities")\
+            .select("id, name, type, description, document_ids, chunk_ids")\
+            .eq("user_id", user_id)\
+            .contains("document_ids", [document_id])\
+            .execute()
+        
+        if not result.data or len(result.data) == 0:
+            logger.info("No entities to clean up")
+            return 0
+        
+        entities = result.data
+        logger.info(f"Reviewing {len(entities)} entities for cleanup...")
+        
+        # First, merge duplicates (same name, different types)
+        merged_count = self._merge_duplicate_entities(entities, user_id)
+        if merged_count > 0:
+            logger.info(f"Merged {merged_count} duplicate entities")
+            # Refresh entity list after merging
+            result = self.supabase.table("entities")\
+                .select("id, name, type, description, document_ids, chunk_ids")\
+                .eq("user_id", user_id)\
+                .contains("document_ids", [document_id])\
+                .execute()
+            entities = result.data
+        
+        logger.info(f"Reviewing {len(entities)} entities for junk removal...")
+        
+        # Prepare entity list for LLM review
+        entity_list = "\n".join([
+            f"- {e['name']} ({e['type']})"
+            for e in entities
+        ])
+        
+        # Ask LLM to identify junk entities
+        try:
+            response = self.openai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """Review this list of extracted entities and identify ONLY the most obvious junk that should be deleted.
+
+**BE CONSERVATIVE - When in doubt, KEEP the entity!**
+
+**ONLY DELETE if entity is clearly:**
+- A standalone number/year (e.g., "2024", "1959") - NOT part of a name
+- A dollar amount (e.g., "$34 billion", "$450 billion")
+- A percentage (e.g., "15%", "0.85")
+- A generic measurement (e.g., "90 tons", "4.1-specific-gravity")
+- A technical code/ID (e.g., "#ffffff", "8112.99.9100")
+- A single generic word (e.g., "advanced", "high", "production")
+
+**ALWAYS KEEP (even if they seem generic):**
+- ANY proper name (person, organization, location, country, state, city)
+- ANY mineral, material, chemical, or element name
+- ANY technology, system, or product name
+- ANY document, act, program, or initiative name
+- ANY compound term with multiple words (e.g., "United States", "Silicon carbide")
+- ANY entity that could be part of a relationship
+
+**CRITICAL:** Only return entities you are 100% certain are junk. If unsure, DO NOT include it.
+
+Return ONLY the names of entities to DELETE, one per line. If no entities should be deleted, return "none"."""
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Entity list:\n\n{entity_list}\n\nWhich entities are DEFINITELY junk and should be DELETED?"
+                    }
+                ],
+                temperature=0.0
+            )
+            
+            # Parse response to get entity names to delete
+            to_delete_text = response.choices[0].message.content.strip()
+            if not to_delete_text or to_delete_text.lower() in ["none", "no entities", ""]:
+                logger.info("✅ No junk entities found!")
+                return 0
+            
+            to_delete_names = [
+                line.strip().lstrip('-').strip()
+                for line in to_delete_text.split('\n')
+                if line.strip() and not line.strip().startswith('#')
+            ]
+            
+            # Deduplicate the list (LLM might return duplicates)
+            to_delete_names = list(set(to_delete_names))
+            
+            logger.info(f"Found {len(to_delete_names)} junk entities to delete")
+            
+            # Delete junk entities
+            deleted_count = 0
+            deleted_ids = set()  # Track deleted IDs to avoid duplicates
+            
+            for name in to_delete_names:
+                # Find entity ID by name
+                entity = next((e for e in entities if e['name'] == name and e['id'] not in deleted_ids), None)
+                if entity:
+                    # Delete relationships first
+                    self.supabase.table("relationships")\
+                        .delete()\
+                        .or_(f"source_entity_id.eq.{entity['id']},target_entity_id.eq.{entity['id']}")\
+                        .execute()
+                    
+                    # Delete entity
+                    self.supabase.table("entities")\
+                        .delete()\
+                        .eq("id", entity['id'])\
+                        .execute()
+                    
+                    deleted_ids.add(entity['id'])  # Mark as deleted
+                    deleted_count += 1
+                    logger.debug(f"Deleted junk entity: {name}")
+            
+            logger.info(f"🧹 Cleanup complete: Deleted {deleted_count} junk entities")
+            return deleted_count
+            
+        except Exception as e:
+            logger.error(f"Error during entity cleanup: {e}")
+            return 0

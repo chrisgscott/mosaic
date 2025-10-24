@@ -1,0 +1,31 @@
+{
+  "strategy": "planner_executor",
+  "description": "Optimal planner-executor pattern for Strategy Tactics - uses Gemini 2.0 Flash (2M context) as planner",
+  
+  "planner_model": "gemini-2.0-flash-exp",
+  "planner_provider": "google",
+  "google_api_key": "${GOOGLE_API_KEY}",
+  
+  "executor_model": "gpt-4o-mini",
+  
+  "max_chunk_tokens": 500,
+  "overlap_ratio": 0.15,
+  
+  "document_type": "card_deck",
+  
+  "role_schema": [
+    "card_intro",
+    "card_description", 
+    "card_steps",
+    "overview",
+    "system_map"
+  ],
+  
+  "instructions": "This is a Strategy Tactics card deck. Each card is a complete tactic with:\n- Category label (Purpose, Recipe, Identify, Connect, Evolve, Adapt, Plays, Lead)\n- Title\n- Description\n- 5 numbered steps\n- Footer (pipdecks.com/...)\n\nCreate one chunk per card. Preserve hierarchy and relationships between cards.",
+  
+  "notes": {
+    "why_planner_executor": "The planner (Gemini 2.0 Flash with 2M context) reads the ENTIRE 113-page document once and outputs a deterministic chunk plan with byte offsets. The executor (gpt-4o-mini) then does cheap slicing and enrichment. This is much more efficient than processing in segments.",
+    "cost_estimate": "Planner: ~$0.02 (one pass), Executor: ~$0.05 (enrichment), Total: ~$0.07 vs $0.30+ for segment-based agentic chunking",
+    "accuracy": "Global context means the planner sees all cards and their relationships, leading to better boundary detection"
+  }
+}

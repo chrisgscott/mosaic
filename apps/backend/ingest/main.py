@@ -15,7 +15,7 @@ from psycopg2.extras import RealDictCursor
 from supabase import create_client, Client
 
 from processors.docling_processor import DoclingProcessor
-from chunkers.hybrid_chunker import HybridChunker
+from chunkers.structure_aware_chunker import StructureAwareChunker
 from processors.embeddings_generator import EmbeddingsGenerator
 from processors.graph_extractor import GraphExtractor
 from settings_service import SettingsService
@@ -54,6 +54,7 @@ USE_API_VLM = settings_service.get_bool('processing.useApiVlm', True, 'USE_API_V
 DOCLING_MAX_WORKERS = settings_service.get_int('processing.pdfWorkers', 10, 'DOCLING_MAX_WORKERS')
 ENABLE_GRAPH_EXTRACTION = settings_service.get_bool('search.useGraphSearch', True, 'ENABLE_GRAPH_EXTRACTION')
 CHUNK_SUMMARY_NEIGHBORS = settings_service.get_int('processing.summaryNeighbors', 2, 'CHUNK_SUMMARY_NEIGHBORS')
+CHUNK_MAX_TOKENS = settings_service.get_int('processing.chunkMaxTokens', 256, 'CHUNK_MAX_TOKENS')
 
 # Get model settings for logging
 VLM_MODEL = settings_service.get_string('llm.vlmModel', 'gpt-4o')
@@ -70,6 +71,7 @@ logger.info("Processing:")
 logger.info(f"  • API VLM: {USE_API_VLM}")
 logger.info(f"  • VLM Model: {VLM_MODEL}")
 logger.info(f"  • PDF Workers: {DOCLING_MAX_WORKERS}")
+logger.info(f"  • Chunk Max Tokens: {CHUNK_MAX_TOKENS}")
 logger.info(f"  • Summary Workers: {CHUNK_SUMMARY_NEIGHBORS}")
 logger.info(f"  • Summary Model: {SUMMARY_MODEL}")
 logger.info(f"  • Graph Model: {GRAPH_MODEL}")
@@ -80,16 +82,24 @@ logger.info(f"  • Temperature: {TEMPERATURE}")
 logger.info("=" * 70)
 
 # Initialize processor and chunker
-processor = DoclingProcessor(use_api_vlm=USE_API_VLM, max_workers=DOCLING_MAX_WORKERS, settings_service=settings_service)
-chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS, settings_service=settings_service)
+processor = DoclingProcessor(
+    use_api_vlm=USE_API_VLM, 
+    max_workers=DOCLING_MAX_WORKERS, 
+    settings_service=settings_service,
+    supabase_client=supabase  # Pass supabase for checkpointing
+)
+chunker = StructureAwareChunker(target_size=1000, min_size=300, max_size=2000)
 
 
 class DocumentWorker:
     """Background worker for processing documents from the queue."""
     
     def __init__(self):
+        # Store settings service reference
+        self.settings_service = settings_service
+        
         # Initialize chunker
-        self.chunker = HybridChunker(summary_neighbors=CHUNK_SUMMARY_NEIGHBORS, settings_service=settings_service)
+        self.chunker = StructureAwareChunker(target_size=1000, min_size=300, max_size=2000)
         
         # Initialize embeddings generator
         self.embeddings_generator = EmbeddingsGenerator(supabase, settings_service=settings_service)
@@ -137,20 +147,34 @@ class DocumentWorker:
     def connect_db(self):
         """Establish database connection for pgmq."""
         try:
+            logger.info(f"Attempting to connect to database...")
+            logger.debug(f"DATABASE_URL: {DATABASE_URL[:50]}...")  # Log first 50 chars only
+            
             # Try connection pooling URL first, fall back to direct connection
             try:
-                self.db_conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+                self.db_conn = psycopg2.connect(
+                    DATABASE_URL, 
+                    cursor_factory=RealDictCursor,
+                    connect_timeout=10  # 10 second timeout
+                )
             except psycopg2.OperationalError as e:
+                logger.warning(f"Connection attempt failed: {e}")
                 if "Tenant or user not found" in str(e):
                     # Pooler might not be configured, try direct connection
                     logger.warning("Connection pooling failed, trying direct connection")
                     direct_url = DATABASE_URL.replace("pooler.supabase.com:6543", "supabase.co:5432").replace("postgres.cqtxfjcpgaudugkqjpdc", "postgres")
-                    self.db_conn = psycopg2.connect(direct_url, cursor_factory=RealDictCursor)
+                    logger.debug(f"Trying direct URL: {direct_url[:50]}...")
+                    self.db_conn = psycopg2.connect(
+                        direct_url, 
+                        cursor_factory=RealDictCursor,
+                        connect_timeout=10
+                    )
                 else:
                     raise
-            logger.info("Connected to database")
+            logger.info("✅ Connected to database successfully")
         except Exception as e:
-            logger.error(f"Failed to connect to database: {e}")
+            logger.error(f"❌ Failed to connect to database: {e}")
+            logger.error(f"DATABASE_URL format: {DATABASE_URL[:80]}...")
             raise
     
     def poll_queue(self) -> Optional[Dict[str, Any]]:
@@ -236,13 +260,14 @@ class DocumentWorker:
             return (False, True)  # Delete from queue, stop retrying
         
         try:
-            # Get document to find user_id
-            doc_result = supabase.table("documents").select("user_id").eq("id", document_id).execute()
+            # Get document to find user_id and chunking_config
+            doc_result = supabase.table("documents").select("user_id, chunking_config").eq("id", document_id).execute()
             if not doc_result.data:
                 logger.warning(f"Document {document_id} not found - was likely deleted")
                 # Document was deleted, don't retry this job
                 return (False, True)
             user_id = doc_result.data[0]["user_id"]
+            chunking_config = doc_result.data[0].get("chunking_config")
             
             # Update status to processing
             self.update_document_status(document_id, "processing")
@@ -251,20 +276,79 @@ class DocumentWorker:
             logger.info(f"Downloading file from storage: {file_path}")
             file_data = supabase.storage.from_("documents").download(file_path)
             
-            # Extract document with Docling
-            self.update_document_status(document_id, "extracting")
-            logger.info(f"Extracting document with Docling ({'API VLM' if USE_API_VLM else 'Local VLM'})")
-            docling_doc = processor.extract_document(file_data, file_path)
+            # Check for cached extracted content first
+            cached_extraction = supabase.table("extracted_documents")\
+                .select("content, page_count, extraction_method")\
+                .eq("document_id", document_id)\
+                .execute()
             
-            if not docling_doc:
-                raise ValueError("No document extracted from file")
+            if cached_extraction.data and len(cached_extraction.data) > 0:
+                cached = cached_extraction.data[0]
+                logger.info(f"📦 Using cached extracted content ({cached.get('page_count', '?')} pages, method: {cached.get('extraction_method', 'unknown')})")
+                # Reconstruct docling_doc format from cached content
+                docling_doc = {"type": "cached_markdown", "content": cached["content"]}
+            else:
+                # Extract document with Docling
+                self.update_document_status(document_id, "extracting")
+                logger.info(f"Extracting document with Docling ({'API VLM' if USE_API_VLM else 'Local VLM'})")
+                docling_doc = processor.extract_document(file_data, file_path, document_id=document_id, user_id=user_id)
+                
+                if not docling_doc:
+                    raise ValueError("No document extracted from file")
+                
+                logger.info(f"Extracted DoclingDocument successfully")
+                
+                # Cache the extracted content
+                if isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
+                    full_text = ""
+                    page_count = len(docling_doc["pages"])
+                    for page_num, page_doc in sorted(docling_doc["pages"], key=lambda x: x[0]):
+                        full_text += page_doc.export_to_markdown() + "\n\n"
+                else:
+                    full_text = docling_doc.export_to_markdown()
+                    page_count = 1
+                
+                # Estimate token count
+                token_count = len(full_text) // 4
+                
+                supabase.table("extracted_documents").upsert({
+                    "document_id": document_id,
+                    "user_id": user_id,
+                    "content": full_text,
+                    "page_count": page_count,
+                    "extraction_method": "docling_api_vlm" if USE_API_VLM else "docling_local_vlm",
+                    "content_length": len(full_text),
+                    "token_count": token_count
+                }).execute()
+                logger.info(f"💾 Cached extracted content ({page_count} pages, {len(full_text):,} chars, ~{token_count:,} tokens)")
             
-            logger.info(f"Extracted DoclingDocument successfully")
-            
-            # Chunk the document using HybridChunker
+            # Chunk the document using simple structure-aware chunking
             self.update_document_status(document_id, "chunking")
-            logger.info("Chunking document with HybridChunker")
-            chunks = self.chunker.chunk_document(docling_doc, document_id)
+            logger.info("Chunking document with StructureAwareChunker (uses Docling structure)")
+            
+            # Create a simple wrapper class for markdown content
+            class MarkdownDoc:
+                def __init__(self, markdown):
+                    self.markdown = markdown
+                def export_to_markdown(self):
+                    return self.markdown
+            
+            # Get Docling document for chunking
+            if isinstance(docling_doc, dict) and docling_doc.get("type") == "cached_markdown":
+                # Cached extraction - already have markdown content
+                doc_for_chunking = MarkdownDoc(docling_doc["content"])
+            elif isinstance(docling_doc, dict) and docling_doc.get("type") == "page_documents":
+                # For page-based documents, concatenate all pages into one markdown string
+                full_markdown = ""
+                for page_num, page_doc in sorted(docling_doc["pages"], key=lambda x: x[0]):
+                    full_markdown += page_doc.export_to_markdown() + "\n\n"
+                doc_for_chunking = MarkdownDoc(full_markdown)
+            else:
+                # Regular Docling document object
+                doc_for_chunking = docling_doc
+            
+            # Chunk using structure-aware chunker
+            chunks = self.chunker.chunk_document(doc_for_chunking, document_id)
             
             # Add user_id and storage_path to chunks
             for chunk in chunks:
@@ -276,8 +360,19 @@ class DocumentWorker:
             # Store chunks in database in batches and generate embeddings immediately
             self.update_document_status(document_id, "embedding")
             logger.info("Storing chunks and generating embeddings")
+            
+            # Clean up any existing chunks from previous failed attempts
+            try:
+                existing = supabase.table("chunks").select("id").eq("document_id", document_id).execute()
+                if existing.data:
+                    logger.info(f"Deleting {len(existing.data)} existing chunks from previous attempt")
+                    supabase.table("chunks").delete().eq("document_id", document_id).execute()
+            except Exception as e:
+                logger.warning(f"Could not clean up existing chunks: {e}")
+            
+            # Step 1: Insert ALL chunks first (ensures chunks are saved even if embeddings fail)
             CHUNK_BATCH_SIZE = 100
-            total_embeddings = 0
+            logger.info(f"Inserting {len(chunks)} chunks in batches of {CHUNK_BATCH_SIZE}")
             
             for i in range(0, len(chunks), CHUNK_BATCH_SIZE):
                 batch = chunks[i:i + CHUNK_BATCH_SIZE]
@@ -285,22 +380,32 @@ class DocumentWorker:
                 total_batches = (len(chunks) + CHUNK_BATCH_SIZE - 1)//CHUNK_BATCH_SIZE
                 
                 logger.debug(f"Inserting chunk batch {batch_num}/{total_batches} ({len(batch)} chunks)")
-                result = supabase.table("chunks").insert(batch).execute()
+                supabase.table("chunks").insert(batch).execute()
+            
+            logger.info(f"✅ All {len(chunks)} chunks inserted successfully")
+            
+            # Step 2: Generate embeddings for all chunks (can retry if this fails)
+            logger.info("Generating embeddings for all chunks")
+            total_embeddings = 0
+            
+            for i in range(0, len(chunks), CHUNK_BATCH_SIZE):
+                batch = chunks[i:i + CHUNK_BATCH_SIZE]
+                batch_num = i//CHUNK_BATCH_SIZE + 1
+                total_batches = (len(chunks) + CHUNK_BATCH_SIZE - 1)//CHUNK_BATCH_SIZE
                 
-                # Generate embeddings for this batch immediately
                 logger.debug(f"Generating embeddings for batch {batch_num}/{total_batches}")
-                stored_chunks = result.data
                 
                 # Prepare batch for embeddings (OpenAI supports up to 2048 inputs per request)
                 # Always embed full content for maximum search precision
                 # Summaries are metadata only, not for embedding
                 chunk_texts = [
                     chunk["content"] 
-                    for chunk in stored_chunks
+                    for chunk in batch
                 ]
                 embeddings = self.embeddings_generator.generate_embeddings_batch(chunk_texts)
                 
-                # Store embeddings
+                # Store embeddings in smaller batches (embeddings are large - 1536 floats each)
+                # Split into batches of 20 to avoid timeout
                 embedding_records = [
                     {
                         "chunk_id": chunk["id"],
@@ -309,14 +414,43 @@ class DocumentWorker:
                         "embedding": embedding,
                         "model": "text-embedding-3-small"
                     }
-                    for chunk, embedding in zip(stored_chunks, embeddings)
+                    for chunk, embedding in zip(batch, embeddings)
                 ]
-                supabase.table("embeddings").insert(embedding_records).execute()
+                
+                # Insert embeddings in sub-batches of 20 with retry
+                for j in range(0, len(embedding_records), 20):
+                    sub_batch = embedding_records[j:j+20]
+                    max_retries = 3
+                    for attempt in range(max_retries):
+                        try:
+                            supabase.table("embeddings").insert(sub_batch).execute()
+                            break
+                        except Exception as e:
+                            if attempt < max_retries - 1:
+                                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                                logger.warning(f"Embedding insert failed (attempt {attempt+1}/{max_retries}), retrying in {wait_time}s: {e}")
+                                time.sleep(wait_time)
+                            else:
+                                logger.error(f"Failed to insert embeddings after {max_retries} attempts: {e}")
+                                raise
+                    
+                    # Small delay between sub-batches to avoid overwhelming DB
+                    if j + 20 < len(embedding_records):
+                        time.sleep(0.1)
+                
                 total_embeddings += len(embeddings)
                 
                 logger.debug(f"Batch {batch_num}/{total_batches} complete: {len(batch)} chunks + {len(embeddings)} embeddings")
             
             logger.info(f"Successfully stored {len(chunks)} chunks and generated {total_embeddings} embeddings")
+            
+            # Clean up temporary checkpoint chunks
+            try:
+                deleted = supabase.table("chunks").delete().eq("document_id", document_id).lt("chunk_index", 0).execute()
+                if deleted.data:
+                    logger.info(f"🧹 Cleaned up {len(deleted.data)} temporary checkpoint chunks")
+            except Exception as e:
+                logger.warning(f"Could not clean up checkpoint chunks: {e}")
             
             # Extract graph (entities and relationships) if enabled
             if self.graph_extractor:
@@ -335,12 +469,24 @@ class DocumentWorker:
                     )
                     
                     logger.info(f"Graph extraction complete: {entity_count} entities, {rel_count} relationships")
+                    
+                    # Note: Automated cleanup disabled - use UI for entity management
+                    # The UI has sophisticated entity/relationship management tools
+                    # that provide better control than automated cleanup
+                        
                 except Exception as e:
                     # Don't fail the whole job if graph extraction fails
                     logger.error(f"Graph extraction failed (non-fatal): {e}")
             
             # Update document status to ready
             self.update_document_status(document_id, "ready")
+            
+            # Clean up extracted content cache (no longer needed)
+            try:
+                supabase.table("extracted_documents").delete().eq("document_id", document_id).execute()
+                logger.info("🧹 Cleaned up extracted content cache")
+            except Exception as e:
+                logger.warning(f"Could not clean up extracted content cache: {e}")
             
             logger.info(f"Successfully processed document {document_id}")
             return (True, True)

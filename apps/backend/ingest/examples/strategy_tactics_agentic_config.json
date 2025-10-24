@@ -1,0 +1,9 @@
+{
+  "strategy": "agentic",
+  "description": "Agentic chunking for Strategy Tactics deck - LLM identifies card boundaries",
+  "model": "gpt-4o-mini",
+  "max_chunk_tokens": 512,
+  "chunk_overlap": 50,
+  "document_type": "card_deck",
+  "instructions": "This is a Strategy Tactics card deck where each card represents a complete tactic or concept.\n\nEach card has:\n- A category label at the top (e.g., 'Purpose', 'Recipe', 'Identify', 'Connect', 'Evolve', 'Adapt', 'Plays', 'Lead')\n- A title (e.g., 'Default Disaster', 'Better Now', 'Small-Batch Strategy')\n- A description paragraph\n- Numbered steps (usually 1-5)\n- A footer with URL and copyright (e.g., 'pipdecks.com/...')\n\nYour task: Identify the boundaries of each card so that each card becomes a single chunk. Cards should be kept together as complete semantic units, regardless of which category they belong to.\n\nLook for:\n- Category labels followed by titles\n- Numbered step sequences\n- Footer markers (pipdecks.com)\n- Visual/layout breaks between cards"
+}

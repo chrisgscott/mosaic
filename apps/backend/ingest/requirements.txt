@@ -12,7 +12,7 @@ python-dotenv==1.0.0
 docling  # Use latest version
 transformers  # For HuggingFace tokenizers in HybridChunker
 sentencepiece  # Required by some HuggingFace tokenizers
-openai  # For API-based VLM (GPT-4o-mini)
+openai  # For API-based VLM (GPT-4o-mini) and Planner-Executor (GPT-4.1-mini)
 pypdf  # For splitting PDFs into pages for parallel processing
 
 # Text processing

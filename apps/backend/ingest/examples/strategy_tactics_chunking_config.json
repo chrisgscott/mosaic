@@ -1,0 +1,25 @@
+{
+  "strategy": "custom_boundary",
+  "description": "Custom chunking for Strategy Tactics deck - keeps recipe cards together",
+  "boundary_markers": [
+    "Recipe\n",
+    "## "
+  ],
+  "keep_together_patterns": [
+    {
+      "start_marker": "Recipe\n",
+      "end_marker": "pipdecks.com",
+      "description": "Keep recipe cards together (title + description + all steps)"
+    },
+    {
+      "start_marker": "Strategy System\n",
+      "end_marker": "pipdecks.com/strategy-system",
+      "description": "Keep strategy system overview together"
+    }
+  ],
+  "max_chunk_tokens": 512,
+  "respect_headings": true,
+  "custom_rules": {
+    "note": "This configuration ensures that each recipe (like Small-Batch Strategy, Call & Response, The Basics, Eat An Elephant) stays together as a single semantic unit with its description and all its steps."
+  }
+}

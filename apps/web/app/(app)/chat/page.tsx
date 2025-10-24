@@ -31,13 +31,40 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
  */
 export default function ChatPage() {
   const [input, setInput] = useState('');
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Create a new session when component mounts
+  useEffect(() => {
+    const createSession = async () => {
+      try {
+        const response = await fetch('/api/chat/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: 'New Chat' }),
+        });
+        
+        if (response.ok) {
+          const { session } = await response.json();
+          setSessionId(session.id);
+          console.log('[Chat] Created session:', session.id);
+        }
+      } catch (error) {
+        console.error('[Chat] Failed to create session:', error);
+      }
+    };
+
+    createSession();
+  }, []);
 
   // useChat hook handles all chat state and streaming automatically
   const { messages, sendMessage, status, error } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/chat',
+      body: {
+        session_id: sessionId,
+      },
     }),
   });
 

@@ -839,10 +839,10 @@ export async function generateEntityDescription(data: {
 
       const embedding = embeddingResponse.data[0].embedding;
 
-      // Search for relevant chunks
+      // Search for relevant chunks (0.5 threshold for better recall)
       const { data: chunks } = await supabase.rpc("search_chunks", {
         query_embedding: embedding,
-        match_threshold: 0.7,
+        match_threshold: 0.5,
         match_count: 5,
       });
 

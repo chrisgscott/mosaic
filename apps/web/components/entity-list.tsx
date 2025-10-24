@@ -1,6 +1,6 @@
 "use client";
 
-import { Network, Trash2, MoreHorizontal, Loader2, FileText, ArrowUpDown, GitMerge } from "lucide-react";
+import { Network, Trash2, MoreHorizontal, Loader2, FileText, ArrowUpDown, GitMerge, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -17,9 +17,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { deleteEntity, type Entity } from "@/app/(app)/graph/actions";
+import { deleteEntity, bulkUpdateEntityType, type Entity } from "@/app/(app)/graph/actions";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -64,6 +71,8 @@ export function EntityList({
   const [sortColumn, setSortColumn] = useState<SortColumn>("created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [isUpdatingType, setIsUpdatingType] = useState(false);
+  const [selectedType, setSelectedType] = useState<string>("");
 
   // Use external or internal entities
   const entities = onEntitiesChange ? externalEntities : internalEntities;
@@ -245,6 +254,25 @@ export function EntityList({
     router.refresh();
   };
 
+  const handleBulkUpdateType = async () => {
+    if (selectedIds.size === 0 || !selectedType) return;
+
+    setIsUpdatingType(true);
+
+    const result = await bulkUpdateEntityType(Array.from(selectedIds), selectedType);
+
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      toast.success(`Updated ${result.count} entit${result.count! > 1 ? "ies" : "y"} to type "${capitalizeFirst(selectedType)}"`);
+      setSelectedIds(new Set());
+      setSelectedType("");
+      router.refresh();
+    }
+
+    setIsUpdatingType(false);
+  };
+
   const toggleSelection = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -307,7 +335,42 @@ export function EntityList({
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Knowledge Graph</h2>
           {selectedIds.size > 0 && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              {/* Bulk Type Update */}
+              <div className="flex gap-2 items-center">
+                <Select value={selectedType} onValueChange={setSelectedType}>
+                  <SelectTrigger className="w-[180px] h-9">
+                    <SelectValue placeholder="Change type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allEntityTypes.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {capitalizeFirst(type)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBulkUpdateType}
+                  disabled={!selectedType || isUpdatingType}
+                >
+                  {isUpdatingType ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Tag className="mr-2 h-4 w-4" />
+                      Update Type
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {/* Merge Button */}
               {selectedIds.size >= 2 && (
                 <Button
                   variant="outline"
@@ -318,6 +381,8 @@ export function EntityList({
                   Merge {selectedIds.size}
                 </Button>
               )}
+
+              {/* Delete Button */}
               <Button
                 variant="destructive"
                 size="sm"

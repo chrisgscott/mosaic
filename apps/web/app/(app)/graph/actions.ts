@@ -179,6 +179,60 @@ export async function updateEntity(
   return { success: true };
 }
 
+export async function bulkUpdateEntityType(
+  entityIds: string[],
+  newType: string
+) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  if (entityIds.length === 0) {
+    return { error: "No entities provided" };
+  }
+
+  // Verify all entities belong to the user
+  const { data: entities, error: fetchError } = await supabase
+    .from("entities")
+    .select("id, user_id")
+    .in("id", entityIds);
+
+  if (fetchError || !entities) {
+    return { error: "Failed to fetch entities" };
+  }
+
+  // Check ownership
+  const unauthorized = entities.some((entity) => entity.user_id !== user.id);
+  if (unauthorized) {
+    return { error: "Unauthorized: You don't own all selected entities" };
+  }
+
+  // Update all entities
+  const { error: updateError } = await supabase
+    .from("entities")
+    .update({
+      type: newType,
+      updated_at: new Date().toISOString(),
+    })
+    .in("id", entityIds);
+
+  if (updateError) {
+    console.error("Bulk update error:", updateError);
+    return { error: `Failed to update entities: ${updateError.message}` };
+  }
+
+  revalidatePath("/graph");
+
+  return { success: true, count: entityIds.length };
+}
+
 export async function mergeEntities(
   primaryEntityId: string,
   entityIdsToMerge: string[],

@@ -391,8 +391,26 @@ class GraphExtractor:
             True if stored successfully, False otherwise
         """
         try:
+            # Try to get entity IDs from local mapping first
             source_id = entity_name_to_id.get(relationship.source)
             target_id = entity_name_to_id.get(relationship.target)
+            
+            # If not in local mapping, look up in database by canonical name
+            if not source_id:
+                self._rate_limit_db_call()
+                source_canonical = self.normalize_entity_name(relationship.source)
+                result = self.supabase.table("entities").select("id").eq("user_id", user_id).eq("canonical_name", source_canonical).limit(1).execute()
+                if result.data and len(result.data) > 0:
+                    source_id = result.data[0]["id"]
+                    logger.debug(f"Found source entity '{relationship.source}' in database")
+            
+            if not target_id:
+                self._rate_limit_db_call()
+                target_canonical = self.normalize_entity_name(relationship.target)
+                result = self.supabase.table("entities").select("id").eq("user_id", user_id).eq("canonical_name", target_canonical).limit(1).execute()
+                if result.data and len(result.data) > 0:
+                    target_id = result.data[0]["id"]
+                    logger.debug(f"Found target entity '{relationship.target}' in database")
             
             if not source_id or not target_id:
                 logger.warning(f"Missing entity IDs for relationship: {relationship.source} -> {relationship.target}")

@@ -44,8 +44,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Parse request body - AI SDK sends UIMessage[]
-    const { messages }: { messages: UIMessage[] } = await request.json();
+    // Parse request body - AI SDK sends UIMessage[] and optional session_id
+    const { messages, session_id }: { messages: UIMessage[]; session_id?: string } = await request.json();
 
     if (!messages || messages.length === 0) {
       return new Response(
@@ -110,8 +110,39 @@ export async function POST(request: Request) {
       system: systemPrompt,
       messages: convertToModelMessages(messages),
       temperature: 0.3,
-      onFinish: ({ usage }) => {
+      onFinish: async ({ text, usage }) => {
         console.log(`[Chat] Tokens used: ${usage.inputTokens} input, ${usage.outputTokens} output`);
+        
+        // Save messages to database if session_id provided
+        if (session_id) {
+          try {
+            // Save user message
+            await supabase.from("chat_messages").insert({
+              session_id,
+              role: "user",
+              content: query,
+            });
+
+            // Save assistant response
+            await supabase.from("chat_messages").insert({
+              session_id,
+              role: "assistant",
+              content: text,
+              metadata: {
+                tokens: usage,
+                sources: results.map(r => ({
+                  document_name: r.document_name,
+                  chunk_index: r.chunk_index,
+                })),
+              },
+            });
+
+            console.log(`[Chat] Saved messages to session ${session_id}`);
+          } catch (error) {
+            console.error("[Chat] Failed to save messages:", error);
+            // Don't fail the chat if saving fails
+          }
+        }
       },
     });
 

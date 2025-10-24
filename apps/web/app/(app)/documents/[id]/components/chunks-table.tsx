@@ -12,13 +12,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Search, Eye } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Search, Eye, Sparkles, Loader2, Network } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { extractEntitiesFromChunk } from "@/app/(app)/graph/actions";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 
 type Chunk = {
   id: string;
@@ -29,18 +35,93 @@ type Chunk = {
   created_at: string;
 };
 
+type Entity = {
+  id: string;
+  name: string;
+  type: string;
+  description: string | null;
+};
+
 type ChunksTableProps = {
   chunks: Chunk[];
   documentId: string;
 };
 
-export function ChunksTable({ chunks }: ChunksTableProps) {
+// Helper function to get color for entity type
+function getColorForType(type: string): string {
+  const colors: Record<string, string> = {
+    methodology: "#3b82f6",
+    framework: "#8b5cf6",
+    tool: "#10b981",
+    concept: "#f59e0b",
+    organization: "#ef4444",
+    person: "#ec4899",
+    program: "#06b6d4",
+    project: "#84cc16",
+    location: "#f97316",
+  };
+  return colors[type.toLowerCase()] || "#6b7280";
+}
+
+export function ChunksTable({ chunks, documentId }: ChunksTableProps) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedChunk, setSelectedChunk] = useState<Chunk | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [chunkEntities, setChunkEntities] = useState<Entity[]>([]);
 
   const filteredChunks = chunks.filter((chunk) =>
     chunk.content.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleExtractEntities = async () => {
+    if (!selectedChunk) return;
+
+    setIsExtracting(true);
+
+    const result = await extractEntitiesFromChunk({
+      chunkContent: selectedChunk.content,
+      chunkId: selectedChunk.id,
+      documentId,
+    });
+
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      const message = result.skipped
+        ? `Created ${result.count} entit${result.count! > 1 ? "ies" : "y"} (${result.skipped} skipped - already exist)`
+        : `Created ${result.count} entit${result.count! > 1 ? "ies" : "y"} from this chunk`;
+      toast.success(message);
+      // Refresh entities for this chunk
+      if (selectedChunk) {
+        fetchChunkEntities(selectedChunk.id);
+      }
+      router.refresh();
+    }
+
+    setIsExtracting(false);
+  };
+
+  // Fetch entities associated with a chunk
+  const fetchChunkEntities = async (chunkId: string) => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("entities")
+      .select("id, name, type, description")
+      .contains("chunk_ids", [chunkId])
+      .order("name");
+    
+    setChunkEntities(data || []);
+  };
+
+  // Fetch entities when chunk is selected
+  useEffect(() => {
+    if (selectedChunk) {
+      fetchChunkEntities(selectedChunk.id);
+    } else {
+      setChunkEntities([]);
+    }
+  }, [selectedChunk]);
 
   // Keyboard navigation for chunk modal
   useEffect(() => {
@@ -138,6 +219,25 @@ export function ChunksTable({ chunks }: ChunksTableProps) {
               <DialogTitle>Chunk #{selectedChunk?.chunk_index}</DialogTitle>
               <div className="flex items-center gap-2">
                 <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleExtractEntities}
+                  disabled={isExtracting}
+                >
+                  {isExtracting ? (
+                    <>
+                      <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                      Extracting...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-3 w-3" />
+                      Extract Entities
+                    </>
+                  )}
+                </Button>
+                <div className="h-4 w-px bg-border" />
+                <Button
                   variant="outline"
                   size="sm"
                   onClick={() => {
@@ -170,6 +270,36 @@ export function ChunksTable({ chunks }: ChunksTableProps) {
             </div>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Associated Entities */}
+            {chunkEntities.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                  <Network className="h-4 w-4" />
+                  Associated Entities ({chunkEntities.length})
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {chunkEntities.map((entity) => (
+                    <Link
+                      key={entity.id}
+                      href={`/graph?entity=${entity.id}`}
+                      className="transition-opacity hover:opacity-80"
+                    >
+                      <Badge
+                        variant="outline"
+                        className="cursor-pointer"
+                        style={{
+                          borderColor: getColorForType(entity.type),
+                          color: getColorForType(entity.type),
+                        }}
+                      >
+                        {entity.name}
+                      </Badge>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div>
               <div className="text-sm font-medium text-muted-foreground mb-2">
                 Content ({selectedChunk?.token_count} tokens)

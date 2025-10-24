@@ -1,6 +1,6 @@
 "use client";
 
-import { Network, Trash2, MoreHorizontal, Loader2, FileText, ArrowUpDown, GitMerge } from "lucide-react";
+import { Network, Trash2, MoreHorizontal, Loader2, FileText, ArrowUpDown, GitMerge, Tag, Link, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -17,14 +17,23 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { deleteEntity, type Entity } from "@/app/(app)/graph/actions";
+import { deleteEntity, bulkUpdateEntityType, type Entity } from "@/app/(app)/graph/actions";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { MergeEntitiesDialog } from "@/components/merge-entities-dialog";
+import { BulkAddRelationshipsDialog } from "@/components/bulk-add-relationships-dialog";
+import { CreateEntityDialog } from "@/components/create-entity-dialog";
 
 type SortColumn = "created_at" | "name" | "confidence" | "docs" | "type" | "relationships";
 type SortDirection = "asc" | "desc";
@@ -64,6 +73,10 @@ export function EntityList({
   const [sortColumn, setSortColumn] = useState<SortColumn>("created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [showRelationshipsDialog, setShowRelationshipsDialog] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [isUpdatingType, setIsUpdatingType] = useState(false);
+  const [selectedType, setSelectedType] = useState<string>("");
 
   // Use external or internal entities
   const entities = onEntitiesChange ? externalEntities : internalEntities;
@@ -245,6 +258,25 @@ export function EntityList({
     router.refresh();
   };
 
+  const handleBulkUpdateType = async () => {
+    if (selectedIds.size === 0 || !selectedType) return;
+
+    setIsUpdatingType(true);
+
+    const result = await bulkUpdateEntityType(Array.from(selectedIds), selectedType);
+
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      toast.success(`Updated ${result.count} entit${result.count! > 1 ? "ies" : "y"} to type "${capitalizeFirst(selectedType)}"`);
+      setSelectedIds(new Set());
+      setSelectedType("");
+      router.refresh();
+    }
+
+    setIsUpdatingType(false);
+  };
+
   const toggleSelection = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -306,8 +338,71 @@ export function EntityList({
       <div className="p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Knowledge Graph</h2>
-          {selectedIds.size > 0 && (
-            <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {/* Create Entity Button */}
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setShowCreateDialog(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Create Entity
+            </Button>
+          </div>
+        </div>
+
+        {selectedIds.size > 0 && (
+          <div className="mb-4">
+            <div className="flex items-center justify-between p-3 border rounded bg-muted/30">
+              <span className="text-sm text-muted-foreground">
+                {selectedIds.size} entit{selectedIds.size > 1 ? "ies" : "y"} selected
+              </span>
+            <div className="flex gap-2 items-center">
+              {/* Bulk Type Update */}
+              <div className="flex gap-2 items-center">
+                <Select value={selectedType} onValueChange={setSelectedType}>
+                  <SelectTrigger className="w-[180px] h-9">
+                    <SelectValue placeholder="Change type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allEntityTypes.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {capitalizeFirst(type)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBulkUpdateType}
+                  disabled={!selectedType || isUpdatingType}
+                >
+                  {isUpdatingType ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Tag className="mr-2 h-4 w-4" />
+                      Update Type
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {/* Add Relationships Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowRelationshipsDialog(true)}
+              >
+                <Link className="mr-2 h-4 w-4" />
+                Add Relationships
+              </Button>
+
+              {/* Merge Button */}
               {selectedIds.size >= 2 && (
                 <Button
                   variant="outline"
@@ -318,6 +413,8 @@ export function EntityList({
                   Merge {selectedIds.size}
                 </Button>
               )}
+
+              {/* Delete Button */}
               <Button
                 variant="destructive"
                 size="sm"
@@ -337,8 +434,9 @@ export function EntityList({
                 )}
               </Button>
             </div>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
 
         {/* Filters and Search */}
         <div className="flex gap-4 mb-4">
@@ -538,6 +636,29 @@ export function EntityList({
         allEntityTypes={allEntityTypes}
         onMergeComplete={() => {
           setSelectedIds(new Set());
+          router.refresh();
+        }}
+      />
+
+      {/* Bulk Add Relationships Dialog */}
+      <BulkAddRelationshipsDialog
+        open={showRelationshipsDialog}
+        onOpenChange={setShowRelationshipsDialog}
+        sourceEntities={entities.filter((e) => selectedIds.has(e.id))}
+        allEntities={entities}
+        onComplete={() => {
+          setSelectedIds(new Set());
+          router.refresh();
+        }}
+      />
+
+      {/* Create Entity Dialog */}
+      <CreateEntityDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        allEntities={entities}
+        allEntityTypes={allEntityTypes}
+        onComplete={() => {
           router.refresh();
         }}
       />

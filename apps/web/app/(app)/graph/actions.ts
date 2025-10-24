@@ -179,6 +179,60 @@ export async function updateEntity(
   return { success: true };
 }
 
+export async function bulkUpdateEntityType(
+  entityIds: string[],
+  newType: string
+) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  if (entityIds.length === 0) {
+    return { error: "No entities provided" };
+  }
+
+  // Verify all entities belong to the user
+  const { data: entities, error: fetchError } = await supabase
+    .from("entities")
+    .select("id, user_id")
+    .in("id", entityIds);
+
+  if (fetchError || !entities) {
+    return { error: "Failed to fetch entities" };
+  }
+
+  // Check ownership
+  const unauthorized = entities.some((entity) => entity.user_id !== user.id);
+  if (unauthorized) {
+    return { error: "Unauthorized: You don't own all selected entities" };
+  }
+
+  // Update all entities
+  const { error: updateError } = await supabase
+    .from("entities")
+    .update({
+      type: newType,
+      updated_at: new Date().toISOString(),
+    })
+    .in("id", entityIds);
+
+  if (updateError) {
+    console.error("Bulk update error:", updateError);
+    return { error: `Failed to update entities: ${updateError.message}` };
+  }
+
+  revalidatePath("/graph");
+
+  return { success: true, count: entityIds.length };
+}
+
 export async function mergeEntities(
   primaryEntityId: string,
   entityIdsToMerge: string[],
@@ -590,4 +644,555 @@ export async function createRelationship(data: {
   revalidatePath("/graph");
 
   return { success: true, relationship: newRelationship };
+}
+
+export async function bulkCreateRelationships(data: {
+  sourceEntityIds: string[];
+  targetEntityId: string;
+  relationshipType: string;
+  description?: string | null;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  if (data.sourceEntityIds.length === 0) {
+    return { error: "No source entities provided" };
+  }
+
+  // Verify all entities exist and belong to user
+  const allEntityIds = [...data.sourceEntityIds, data.targetEntityId];
+  const { data: entities, error: entitiesError } = await supabase
+    .from("entities")
+    .select("id, user_id")
+    .in("id", allEntityIds)
+    .eq("user_id", user.id);
+
+  if (entitiesError || !entities || entities.length !== allEntityIds.length) {
+    return { error: "One or more entities not found or unauthorized" };
+  }
+
+  // Check for existing relationships to avoid duplicates
+  const { data: existingRels } = await supabase
+    .from("relationships")
+    .select("source_entity_id, target_entity_id")
+    .in("source_entity_id", data.sourceEntityIds)
+    .eq("target_entity_id", data.targetEntityId)
+    .eq("relationship_type", data.relationshipType);
+
+  const existingPairs = new Set(
+    existingRels?.map((r) => `${r.source_entity_id}-${r.target_entity_id}`) || []
+  );
+
+  // Filter out entities that already have this relationship
+  const newSourceIds = data.sourceEntityIds.filter(
+    (sourceId) => !existingPairs.has(`${sourceId}-${data.targetEntityId}`)
+  );
+
+  if (newSourceIds.length === 0) {
+    return { error: "All selected entities already have this relationship" };
+  }
+
+  // Create relationships for all source entities
+  const relationshipsToCreate = newSourceIds.map((sourceId) => ({
+    user_id: user.id,
+    source_entity_id: sourceId,
+    target_entity_id: data.targetEntityId,
+    relationship_type: data.relationshipType,
+    description: data.description || null,
+    document_ids: [],
+    chunk_ids: [],
+    extraction_confidence: null, // Manual relationships have no confidence
+  }));
+
+  const { error: createError } = await supabase
+    .from("relationships")
+    .insert(relationshipsToCreate);
+
+  if (createError) {
+    console.error("Bulk create error:", createError);
+    return { error: `Failed to create relationships: ${createError.message}` };
+  }
+
+  revalidatePath("/graph");
+
+  const skipped = data.sourceEntityIds.length - newSourceIds.length;
+  return {
+    success: true,
+    count: newSourceIds.length,
+    skipped,
+  };
+}
+
+export async function createEntity(data: {
+  name: string;
+  type: string;
+  description?: string | null;
+  chunkIds?: string[];
+  documentIds?: string[];
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  // Check if entity with this name already exists
+  const { data: existing } = await supabase
+    .from("entities")
+    .select("id, name")
+    .eq("user_id", user.id)
+    .ilike("name", data.name)
+    .maybeSingle();
+
+  if (existing) {
+    return { error: `An entity named "${existing.name}" already exists` };
+  }
+
+  // Create the entity
+  const { data: newEntity, error: createError } = await supabase
+    .from("entities")
+    .insert({
+      user_id: user.id,
+      name: data.name,
+      type: data.type,
+      description: data.description || null,
+      canonical_name: data.name,
+      aliases: [],
+      document_ids: data.documentIds || [],
+      chunk_ids: data.chunkIds || [],
+      metadata: data.chunkIds?.length ? { rag_sourced: true } : {},
+      extraction_confidence: null, // Manual entities have no confidence
+    })
+    .select()
+    .single();
+
+  if (createError) {
+    console.error("Create entity error:", createError);
+    return { error: `Failed to create entity: ${createError.message}` };
+  }
+
+  revalidatePath("/graph");
+
+  return { success: true, entity: newEntity };
+}
+
+export async function generateEntityDescription(data: {
+  entityName: string;
+  entityType: string;
+  existingEntities: Array<{ name: string; type: string }>;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  try {
+    // Get AI settings
+    const { data: settings } = await supabase
+      .from("llm_settings")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
+
+    const standardModel = settings?.standard_model || "gpt-4o-mini";
+    const embeddingModel = settings?.embedding_model || "text-embedding-3-small";
+
+    // Import OpenAI
+    const { OpenAI } = await import("openai");
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    // Use RAG to find relevant content about this entity
+    let ragContext = "";
+    let sourceChunkIds: string[] = [];
+    let sourceDocumentIds: string[] = [];
+    
+    try {
+      // Generate embedding for the entity name
+      const embeddingResponse = await openai.embeddings.create({
+        model: embeddingModel,
+        input: `${data.entityName} ${data.entityType}`,
+      });
+
+      const embedding = embeddingResponse.data[0].embedding;
+
+      // Search for relevant chunks
+      const { data: chunks } = await supabase.rpc("search_chunks", {
+        query_embedding: embedding,
+        match_threshold: 0.7,
+        match_count: 5,
+      });
+
+      if (chunks && chunks.length > 0) {
+        ragContext = chunks
+          .map((chunk: { content: string }) => chunk.content)
+          .join("\n\n---\n\n")
+          .slice(0, 2000); // Limit context size
+        
+        // Collect chunk and document IDs
+        sourceChunkIds = chunks.map((chunk: { id: string }) => chunk.id);
+        sourceDocumentIds = Array.from(
+          new Set(chunks.map((chunk: { document_id: string }) => chunk.document_id))
+        );
+      }
+    } catch (ragError) {
+      console.warn("RAG search failed, falling back to entity-only context:", ragError);
+    }
+
+    // Build context about existing entities
+    const entityContext = data.existingEntities
+      .slice(0, 30) // Reduced since we have RAG context now
+      .map((e) => `- ${e.name} (${e.type})`)
+      .join("\n");
+
+    const prompt = ragContext
+      ? `You are helping to build a knowledge graph. Generate a concise, informative description for the following entity based on the provided context from the user's documents.
+
+Entity Name: ${data.entityName}
+Entity Type: ${data.entityType}
+
+Relevant content from documents:
+${ragContext}
+
+Other entities in the knowledge graph:
+${entityContext}
+
+Based on the document content above, generate a 2-3 sentence description that:
+1. Explains what this entity is based on how it's described in the documents
+2. Highlights its key characteristics or purpose as mentioned in the content
+3. Is specific and grounded in the provided context (not generic)
+
+If the entity is not clearly described in the content, provide a general but informative description based on the entity name and type.
+
+Description:`
+      : `You are helping to build a knowledge graph. Generate a concise, informative description for the following entity:
+
+Entity Name: ${data.entityName}
+Entity Type: ${data.entityType}
+
+Context - Other entities in the knowledge graph:
+${entityContext}
+
+Generate a 2-3 sentence description that:
+1. Explains what this entity is
+2. Highlights its key characteristics or purpose
+3. Is specific and informative (not generic)
+
+Description:`;
+
+    const response = await openai.chat.completions.create({
+      model: standardModel,
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert at writing clear, concise entity descriptions for knowledge graphs. Keep descriptions factual and grounded in the provided context.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 200,
+    });
+
+    const description = response.choices[0]?.message?.content?.trim() || "";
+
+    return { 
+      success: true, 
+      description, 
+      usedRag: !!ragContext,
+      chunkIds: sourceChunkIds,
+      documentIds: sourceDocumentIds,
+    };
+  } catch (error) {
+    console.error("Generate description error:", error);
+    return { error: "Failed to generate description" };
+  }
+}
+
+export async function suggestEntityRelationships(data: {
+  entityName: string;
+  entityType: string;
+  entityDescription?: string;
+  existingEntities: Array<{ id: string; name: string; type: string; description?: string | null }>;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  try {
+    // Get AI settings
+    const { data: settings } = await supabase
+      .from("llm_settings")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
+
+    const standardModel = settings?.standard_model || "gpt-4o-mini";
+
+    // Import OpenAI
+    const { OpenAI } = await import("openai");
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    // Build context about existing entities
+    const entityContext = data.existingEntities
+      .slice(0, 100) // Limit to prevent token overflow
+      .map((e) => {
+        const desc = e.description ? ` - ${e.description.slice(0, 100)}` : "";
+        return `- ${e.name} (${e.type})${desc}`;
+      })
+      .join("\n");
+
+    const prompt = `You are analyzing a knowledge graph to suggest relationships for a new entity.
+
+New Entity:
+- Name: ${data.entityName}
+- Type: ${data.entityType}
+${data.entityDescription ? `- Description: ${data.entityDescription}` : ""}
+
+Existing Entities in Knowledge Graph:
+${entityContext}
+
+Analyze the new entity and suggest up to 5 most relevant relationships with existing entities.
+
+For each relationship, provide:
+1. target_entity_name: The name of the existing entity (must match exactly from the list above)
+2. relationship_type: One of [uses, requires, relates_to, part_of, implements, extends, depends_on, collaborates_with, manages, creates, analyzes, evaluates, other]
+3. confidence: A score from 0.0 to 1.0 indicating how confident you are
+4. reasoning: Brief explanation of why this relationship makes sense
+
+Only suggest relationships where confidence >= 0.6. Be conservative - only suggest relationships that are clearly supported.
+
+Respond with a JSON array of relationship suggestions:`;
+
+    const response = await openai.chat.completions.create({
+      model: standardModel,
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert at analyzing knowledge graphs and identifying meaningful relationships between entities. Be precise and conservative in your suggestions.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 1000,
+      response_format: { type: "json_object" },
+    });
+
+    const content = response.choices[0]?.message?.content?.trim() || "{}";
+    const parsed = JSON.parse(content);
+    const suggestions = parsed.relationships || parsed.suggestions || [];
+
+    // Validate and map to entity IDs
+    const validSuggestions = suggestions
+      .filter((s: { target_entity_name?: string; relationship_type?: string; confidence?: number }) => {
+        const entity = data.existingEntities.find(
+          (e) => e.name.toLowerCase() === s.target_entity_name?.toLowerCase()
+        );
+        return entity && s.relationship_type && s.confidence && s.confidence >= 0.6;
+      })
+      .map((s: { target_entity_name: string; relationship_type: string; confidence: number; reasoning?: string }) => {
+        const entity = data.existingEntities.find(
+          (e) => e.name.toLowerCase() === s.target_entity_name.toLowerCase()
+        )!;
+        return {
+          targetEntityId: entity.id,
+          targetEntityName: entity.name,
+          targetEntityType: entity.type,
+          relationshipType: s.relationship_type,
+          confidence: s.confidence,
+          reasoning: s.reasoning || "",
+        };
+      });
+
+    return { success: true, suggestions: validSuggestions };
+  } catch (error) {
+    console.error("Suggest relationships error:", error);
+    return { error: "Failed to suggest relationships" };
+  }
+}
+
+export async function extractEntitiesFromChunk(data: {
+  chunkContent: string;
+  chunkId: string;
+  documentId: string;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  try {
+    // Get AI settings
+    const { data: settings } = await supabase
+      .from("llm_settings")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
+
+    const standardModel = settings?.standard_model || "gpt-4o-mini";
+
+    // Import OpenAI
+    const { OpenAI } = await import("openai");
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    // Use similar prompt to backend graph extraction
+    const prompt = `You are an expert at extracting entities from text for knowledge graph construction.
+
+Analyze the following text chunk and extract ONLY the most significant entities.
+
+**ENTITY EXTRACTION RULES:**
+
+Extract MAXIMUM 3-7 entities. ONLY extract proper nouns or significant domain concepts.
+
+**NEVER extract (FORBIDDEN):**
+- ❌ ANY number, date, or year
+- ❌ ANY dollar amount or price
+- ❌ ANY percentage or statistic
+- ❌ ANY measurement or quantity
+- ❌ ANY technical ID or code
+- ❌ Generic descriptors
+- ❌ Common industry terms
+
+**ONLY extract (ALLOWED):**
+- ✅ Named people
+- ✅ Named organizations/companies
+- ✅ Specific countries/cities/regions
+- ✅ Named minerals/materials/products
+- ✅ Named technologies/systems
+- ✅ Named events/initiatives
+- ✅ Named documents/frameworks/methodologies
+
+For each entity, provide:
+1. name: The entity name
+2. type: One of [person, organization, location, methodology, framework, tool, concept, program, project, other]
+3. description: A brief 1-2 sentence description of what this entity is and why it's significant
+
+Text chunk:
+${data.chunkContent}
+
+Respond with a JSON object containing an array of entities:`;
+
+    const response = await openai.chat.completions.create({
+      model: standardModel,
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert at extracting entities from text for knowledge graphs. Be selective and only extract truly significant entities.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 1000,
+      response_format: { type: "json_object" },
+    });
+
+    const content = response.choices[0]?.message?.content?.trim() || "{}";
+    const parsed = JSON.parse(content);
+    const extractedEntities = parsed.entities || [];
+
+    if (extractedEntities.length === 0) {
+      return { error: "No significant entities found in this chunk" };
+    }
+
+    // Get existing entities to check for duplicates
+    const { data: existingEntities } = await supabase
+      .from("entities")
+      .select("id, name")
+      .eq("user_id", user.id);
+
+    const existingNames = new Set(
+      existingEntities?.map((e) => e.name.toLowerCase()) || []
+    );
+
+    // Filter out entities that already exist and create new ones
+    const newEntities = extractedEntities.filter(
+      (e: { name: string }) => !existingNames.has(e.name.toLowerCase())
+    );
+
+    if (newEntities.length === 0) {
+      return { error: "All extracted entities already exist in your knowledge graph" };
+    }
+
+    // Create the entities
+    const entitiesToCreate = newEntities.map((e: { name: string; type: string; description?: string }) => ({
+      user_id: user.id,
+      name: e.name,
+      type: e.type || "other",
+      description: e.description || null,
+      canonical_name: e.name,
+      aliases: [],
+      document_ids: [data.documentId],
+      chunk_ids: [data.chunkId],
+      metadata: { extracted_from_chunk: true },
+      extraction_confidence: 0.8, // Medium-high confidence for manual chunk extraction
+    }));
+
+    const { data: createdEntities, error: createError } = await supabase
+      .from("entities")
+      .insert(entitiesToCreate)
+      .select();
+
+    if (createError) {
+      console.error("Create entities error:", createError);
+      return { error: `Failed to create entities: ${createError.message}` };
+    }
+
+    revalidatePath("/graph");
+
+    const skipped = extractedEntities.length - newEntities.length;
+    return {
+      success: true,
+      entities: createdEntities,
+      count: createdEntities?.length || 0,
+      skipped,
+    };
+  } catch (error) {
+    console.error("Extract entities from chunk error:", error);
+    return { error: "Failed to extract entities from chunk" };
+  }
 }

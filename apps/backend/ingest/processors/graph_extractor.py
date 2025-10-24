@@ -721,30 +721,36 @@ class GraphExtractor:
                 messages=[
                     {
                         "role": "system",
-                        "content": """Review this list of extracted entities and identify which ones are JUNK that should be deleted.
+                        "content": """Review this list of extracted entities and identify ONLY the most obvious junk that should be deleted.
 
-**JUNK entities (mark for deletion):**
-- Years, dates, time periods (e.g., "2024", "2021", "1959")
-- Dollar amounts, prices (e.g., "$34 billion")
-- Counts, quantities (e.g., "20 companies", "20 States")
-- Generic descriptors (e.g., "American", "advanced", "high")
-- Technical measurements (e.g., "4.1-specific-gravity")
-- Common industry terms (e.g., "production", "industry")
+**BE CONSERVATIVE - When in doubt, KEEP the entity!**
 
-**KEEP entities (legitimate):**
-- Proper names (people, organizations, locations)
-- Specific minerals, materials, chemicals
-- Named technologies, systems, initiatives
-- Named documents, acts, programs
+**ONLY DELETE if entity is clearly:**
+- A standalone number/year (e.g., "2024", "1959") - NOT part of a name
+- A dollar amount (e.g., "$34 billion", "$450 billion")
+- A percentage (e.g., "15%", "0.85")
+- A generic measurement (e.g., "90 tons", "4.1-specific-gravity")
+- A technical code/ID (e.g., "#ffffff", "8112.99.9100")
+- A single generic word (e.g., "advanced", "high", "production")
 
-Return ONLY the names of entities to DELETE, one per line. If an entity should be kept, don't include it."""
+**ALWAYS KEEP (even if they seem generic):**
+- ANY proper name (person, organization, location, country, state, city)
+- ANY mineral, material, chemical, or element name
+- ANY technology, system, or product name
+- ANY document, act, program, or initiative name
+- ANY compound term with multiple words (e.g., "United States", "Silicon carbide")
+- ANY entity that could be part of a relationship
+
+**CRITICAL:** Only return entities you are 100% certain are junk. If unsure, DO NOT include it.
+
+Return ONLY the names of entities to DELETE, one per line. If no entities should be deleted, return "none"."""
                     },
                     {
                         "role": "user",
-                        "content": f"Entity list:\n\n{entity_list}\n\nWhich entities should be DELETED?"
+                        "content": f"Entity list:\n\n{entity_list}\n\nWhich entities are DEFINITELY junk and should be DELETED?"
                     }
                 ],
-                temperature=0.1
+                temperature=0.0
             )
             
             # Parse response to get entity names to delete

@@ -454,6 +454,21 @@ export async function POST(request: NextRequest) {
       const processingTime = Date.now() - startTime;
       onProgress(createProgressEvent('complete', 'completed'));
       
+      // Log search signal for graph learning (complex query path)
+      // Use the first embedding (original query) for the signal
+      try {
+        const originalQueryEmbedding = embeddings[0].data[0].embedding;
+        await logSearchSignal(user.id, {
+          query,
+          queryEmbedding: originalQueryEmbedding,
+          chunkIds: finalResults.map(r => r.chunk_id),
+          rerankScores: finalResults.map(r => r.rerank_score || 0),
+        });
+      } catch (err) {
+        console.error("[Search] Failed to log search signal:", err);
+        // Don't fail the search if logging fails
+      }
+      
       return NextResponse.json({
         results: finalResults,
         query,

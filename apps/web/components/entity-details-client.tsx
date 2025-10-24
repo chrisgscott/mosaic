@@ -8,6 +8,7 @@ import { EntityHeader } from "./entity-details/entity-header";
 import { EntityInfoCard } from "./entity-details/entity-info-card";
 import { EntityEditForm } from "./entity-details/entity-edit-form";
 import { RelationshipsCard } from "./entity-details/relationships-card";
+import { ChunksCard } from "./entity-details/chunks-card";
 
 interface Relationship {
   id: string;
@@ -174,6 +175,11 @@ export function EntityDetailsClient({
             />
           </div>
         </div>
+      )}
+
+      {/* Source Chunks - Full Width */}
+      {!isEditing && (
+        <ChunksCard chunks={chunks} documents={documents} />
       )}
     </div>
   );

@@ -12,13 +12,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Search, Eye } from "lucide-react";
+import { Search, Eye, Sparkles, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { extractEntitiesFromChunk } from "@/app/(app)/graph/actions";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 type Chunk = {
   id: string;
@@ -34,13 +37,39 @@ type ChunksTableProps = {
   documentId: string;
 };
 
-export function ChunksTable({ chunks }: ChunksTableProps) {
+export function ChunksTable({ chunks, documentId }: ChunksTableProps) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedChunk, setSelectedChunk] = useState<Chunk | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
 
   const filteredChunks = chunks.filter((chunk) =>
     chunk.content.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleExtractEntities = async () => {
+    if (!selectedChunk) return;
+
+    setIsExtracting(true);
+
+    const result = await extractEntitiesFromChunk({
+      chunkContent: selectedChunk.content,
+      chunkId: selectedChunk.id,
+      documentId,
+    });
+
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      const message = result.skipped
+        ? `Created ${result.count} entit${result.count! > 1 ? "ies" : "y"} (${result.skipped} skipped - already exist)`
+        : `Created ${result.count} entit${result.count! > 1 ? "ies" : "y"} from this chunk`;
+      toast.success(message);
+      router.refresh();
+    }
+
+    setIsExtracting(false);
+  };
 
   // Keyboard navigation for chunk modal
   useEffect(() => {
@@ -137,6 +166,25 @@ export function ChunksTable({ chunks }: ChunksTableProps) {
             <div className="flex items-center justify-between">
               <DialogTitle>Chunk #{selectedChunk?.chunk_index}</DialogTitle>
               <div className="flex items-center gap-2">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleExtractEntities}
+                  disabled={isExtracting}
+                >
+                  {isExtracting ? (
+                    <>
+                      <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                      Extracting...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-3 w-3" />
+                      Extract Entities
+                    </>
+                  )}
+                </Button>
+                <div className="h-4 w-px bg-border" />
                 <Button
                   variant="outline"
                   size="sm"

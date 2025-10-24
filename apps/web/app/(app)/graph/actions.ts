@@ -978,3 +978,155 @@ Respond with a JSON array of relationship suggestions:`;
     return { error: "Failed to suggest relationships" };
   }
 }
+
+export async function extractEntitiesFromChunk(data: {
+  chunkContent: string;
+  chunkId: string;
+  documentId: string;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  try {
+    // Get AI settings
+    const { data: settings } = await supabase
+      .from("llm_settings")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
+
+    const standardModel = settings?.standard_model || "gpt-4o-mini";
+
+    // Import OpenAI
+    const { OpenAI } = await import("openai");
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    // Use similar prompt to backend graph extraction
+    const prompt = `You are an expert at extracting entities from text for knowledge graph construction.
+
+Analyze the following text chunk and extract ONLY the most significant entities.
+
+**ENTITY EXTRACTION RULES:**
+
+Extract MAXIMUM 3-7 entities. ONLY extract proper nouns or significant domain concepts.
+
+**NEVER extract (FORBIDDEN):**
+- ❌ ANY number, date, or year
+- ❌ ANY dollar amount or price
+- ❌ ANY percentage or statistic
+- ❌ ANY measurement or quantity
+- ❌ ANY technical ID or code
+- ❌ Generic descriptors
+- ❌ Common industry terms
+
+**ONLY extract (ALLOWED):**
+- ✅ Named people
+- ✅ Named organizations/companies
+- ✅ Specific countries/cities/regions
+- ✅ Named minerals/materials/products
+- ✅ Named technologies/systems
+- ✅ Named events/initiatives
+- ✅ Named documents/frameworks/methodologies
+
+For each entity, provide:
+1. name: The entity name
+2. type: One of [person, organization, location, methodology, framework, tool, concept, program, project, other]
+3. description: A brief 1-2 sentence description of what this entity is and why it's significant
+
+Text chunk:
+${data.chunkContent}
+
+Respond with a JSON object containing an array of entities:`;
+
+    const response = await openai.chat.completions.create({
+      model: standardModel,
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert at extracting entities from text for knowledge graphs. Be selective and only extract truly significant entities.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 1000,
+      response_format: { type: "json_object" },
+    });
+
+    const content = response.choices[0]?.message?.content?.trim() || "{}";
+    const parsed = JSON.parse(content);
+    const extractedEntities = parsed.entities || [];
+
+    if (extractedEntities.length === 0) {
+      return { error: "No significant entities found in this chunk" };
+    }
+
+    // Get existing entities to check for duplicates
+    const { data: existingEntities } = await supabase
+      .from("entities")
+      .select("id, name")
+      .eq("user_id", user.id);
+
+    const existingNames = new Set(
+      existingEntities?.map((e) => e.name.toLowerCase()) || []
+    );
+
+    // Filter out entities that already exist and create new ones
+    const newEntities = extractedEntities.filter(
+      (e: { name: string }) => !existingNames.has(e.name.toLowerCase())
+    );
+
+    if (newEntities.length === 0) {
+      return { error: "All extracted entities already exist in your knowledge graph" };
+    }
+
+    // Create the entities
+    const entitiesToCreate = newEntities.map((e: { name: string; type: string; description?: string }) => ({
+      user_id: user.id,
+      name: e.name,
+      type: e.type || "other",
+      description: e.description || null,
+      canonical_name: e.name,
+      aliases: [],
+      document_ids: [data.documentId],
+      chunk_ids: [data.chunkId],
+      metadata: { extracted_from_chunk: true },
+      extraction_confidence: 0.8, // Medium-high confidence for manual chunk extraction
+    }));
+
+    const { data: createdEntities, error: createError } = await supabase
+      .from("entities")
+      .insert(entitiesToCreate)
+      .select();
+
+    if (createError) {
+      console.error("Create entities error:", createError);
+      return { error: `Failed to create entities: ${createError.message}` };
+    }
+
+    revalidatePath("/graph");
+
+    const skipped = extractedEntities.length - newEntities.length;
+    return {
+      success: true,
+      entities: createdEntities,
+      count: createdEntities?.length || 0,
+      skipped,
+    };
+  } catch (error) {
+    console.error("Extract entities from chunk error:", error);
+    return { error: "Failed to extract entities from chunk" };
+  }
+}

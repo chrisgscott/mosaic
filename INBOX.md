@@ -2,6 +2,184 @@
 
 ## 💡 Enhancements & Ideas
 
+### Graph Learning from Search Patterns
+**Priority:** High  
+**Effort:** 2-3 weeks (phased implementation)  
+**Context:** Make the knowledge graph self-improving by automatically discovering new entity relationships based on search behavior and RAG pipeline results.
+
+**Core Concept:**
+Every search reveals implicit connections that aren't explicitly modeled in the graph yet. By analyzing which entities frequently co-occur in search results, we can suggest new relationships and make the graph smarter over time.
+
+**How It Works:**
+1. **Capture Search Signals** - Log which chunks and entities appear together in search results
+2. **Analyze Co-Occurrence** - Find entities that frequently appear together across multiple searches
+3. **Infer Relationships** - Use AI to determine the most likely relationship type between co-occurring entities
+4. **Suggest to User** - Present discovered connections with confidence scores for review
+5. **Learn from Feedback** - Track which suggestions are accepted/rejected to improve future recommendations
+
+**Example Flow:**
+```
+User searches: "design thinking"
+→ Results include chunks mentioning: "User Research", "Prototyping", "Empathy Mapping"
+→ System detects: These entities co-occur frequently (5+ searches)
+→ AI infers: "Design Thinking" --[uses]--> "User Research"
+→ Suggests: "💡 Found connection: Design Thinking → User Research (85% confidence)"
+→ User clicks: [Add to Graph]
+```
+
+**Implementation Phases:**
+
+**Phase 1: Search Signal Capture (Foundation) - 2-3 days**
+- Create `search_signals` table to log search results
+- Store: query, query_embedding, chunk_ids, entity_ids, rerank_scores, timestamp
+- Capture in search API after reranking
+- Track user engagement (which results clicked)
+- Minimal overhead: ~1-2ms per search
+
+**Phase 2: Co-Occurrence Analysis (Weekly Job) - 3-4 days**
+- SQL function to analyze entity co-occurrence patterns
+- Find entity pairs that appear together frequently (configurable threshold)
+- Calculate confidence scores based on frequency and recency
+- Filter out relationships that already exist
+- Generate sample queries showing where entities co-occurred
+
+**Phase 3: Relationship Type Inference (AI-Powered) - 2-3 days**
+- Use AI to infer most likely relationship type between entity pairs
+- Input: entity names, types, descriptions, sample queries where they co-occurred
+- Output: relationship type from standard set (uses, requires, relates_to, etc.)
+- Model: Quick model (gpt-4.1-nano) for cost efficiency
+- Batch processing for multiple suggestions
+
+**Phase 4: Suggestion Review UI - 3-4 days**
+- New page: `/graph/suggestions`
+- Display discovered relationships with:
+  - Entity A → Relationship Type → Entity B
+  - Confidence score (60-100%)
+  - Co-occurrence count
+  - Sample queries showing context
+  - Accept/Reject buttons
+- Sort by confidence, recency, or co-occurrence count
+- Batch accept/reject functionality
+- Track acceptance rate for learning
+
+**Phase 5: Real-Time Inline Suggestions (Advanced) - 3-5 days**
+- Detect potential relationships during search
+- Show inline suggestions in search results:
+  - "💡 Found connection: OODA Loop → Decision Making"
+  - One-click to add to graph
+- Only show high-confidence suggestions (>80%)
+- Dismissible and non-intrusive
+- Queue lower-confidence for batch review
+
+**Phase 6: Autonomous Learning (Future) - 1 week**
+- Auto-create relationships above confidence threshold (e.g., 90%)
+- Flag for user review but add immediately
+- Confidence decay over time if not validated
+- Learn from user corrections
+- Temporal patterns (entities connected during specific time periods)
+
+**Database Schema:**
+```sql
+-- Search signals (raw data)
+CREATE TABLE search_signals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id),
+  query TEXT NOT NULL,
+  query_embedding VECTOR(1536),
+  chunk_ids UUID[] NOT NULL,
+  entity_ids UUID[],
+  rerank_scores FLOAT[],
+  clicked_chunk_ids UUID[],
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Relationship suggestions (derived insights)
+CREATE TABLE relationship_suggestions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id),
+  entity_a_id UUID REFERENCES entities(id),
+  entity_b_id UUID REFERENCES entities(id),
+  suggested_type TEXT NOT NULL,
+  confidence_score FLOAT NOT NULL,
+  co_occurrence_count INT NOT NULL,
+  sample_queries TEXT[],
+  source TEXT DEFAULT 'search_cooccurrence',
+  status TEXT DEFAULT 'pending', -- pending, accepted, rejected
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  reviewed_at TIMESTAMPTZ
+);
+```
+
+**Benefits:**
+- ✅ **Self-Improving Graph** - Gets smarter with every search
+- ✅ **Discover Hidden Connections** - Find relationships you didn't explicitly model
+- ✅ **Reduce Manual Curation** - Auto-suggest instead of manual relationship creation
+- ✅ **Personalized Learning** - Learns from YOUR specific usage patterns
+- ✅ **Better Search Over Time** - Improved graph = better graph-enhanced search
+- ✅ **Temporal Intelligence** - Understand how relationships evolve
+- ✅ **Usage Analytics** - Insights into how users explore knowledge
+
+**Use Cases:**
+1. **Research Discovery** - User searches "machine learning" repeatedly, results often include "neural networks" and "deep learning" → Suggest: "Machine Learning" --[includes]--> "Deep Learning"
+
+2. **Project Connections** - User searches "Q4 planning", results mention "Budget 2024" and "Hiring Plan" → Suggest: "Q4 Planning" --[requires]--> "Budget 2024"
+
+3. **Concept Relationships** - User searches "design thinking", results include "user research" and "prototyping" → Suggest: "Design Thinking" --[uses]--> "User Research"
+
+4. **Cross-Domain Links** - User searches span multiple topics, revealing unexpected connections between domains
+
+**Technical Considerations:**
+- **Privacy**: Search signals are user-scoped, never shared across users
+- **Performance**: Async analysis jobs, no impact on search latency
+- **Storage**: ~100KB per 1000 searches (minimal)
+- **Cost**: AI inference only for accepted suggestions (~$0.001 per suggestion)
+- **Accuracy**: Confidence thresholds prevent low-quality suggestions
+- **Control**: User always has final say, can disable auto-learning
+
+**Metrics to Track:**
+- Suggestion acceptance rate (target: >60%)
+- Average confidence score of accepted suggestions
+- Time saved vs manual relationship creation
+- Graph growth rate (relationships per week)
+- Search quality improvement (measured by user engagement)
+
+**Privacy & User Control:**
+- Toggle auto-learning on/off in settings
+- Set minimum confidence threshold
+- Review all suggestions before acceptance
+- Bulk accept/reject
+- Undo recent additions
+- Data retention: 90 days for search signals, forever for accepted relationships
+
+**Related Features:**
+- Complements entity extraction from chunks
+- Enhances graph-based search
+- Feeds into entity deduplication (similar entities co-occur)
+- Enables temporal analysis of knowledge evolution
+
+**Documentation:**
+Full design document created at `docs/graph-learning.md` with:
+- Complete implementation details
+- SQL functions for co-occurrence analysis
+- AI prompt templates for relationship inference
+- UI mockups and user flows
+- Performance considerations
+- Privacy and security guidelines
+
+**Next Steps:**
+1. Implement Phase 1 (search signal capture) - Just add logging
+2. Let it run for 1-2 weeks to collect data
+3. Analyze patterns manually to validate approach
+4. Build Phase 2-3 (analysis + suggestions)
+5. Launch Phase 4 (UI) for user testing
+6. Iterate based on acceptance rates
+
+**Why This Matters:**
+This transforms the knowledge graph from a static structure into a **living, learning system** that evolves based on actual usage. It's the difference between a manually curated encyclopedia and a self-organizing knowledge base that gets smarter every day.
+
+---
+
+
 ### Migrate to OpenAI Structured Outputs
 **Priority:** Medium  
 **Effort:** 1-2 days  

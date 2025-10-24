@@ -133,14 +133,13 @@ class GraphExtractor:
                     messages=[
                         {
                             "role": "system",
-                            "content": """You are an expert at extracting ONLY the most important entities from text for knowledge graph construction.
+                            "content": """You are an expert at extracting entities and relationships from text for knowledge graph construction.
 
-**CRITICAL RULES:**
-1. Extract MAXIMUM 3-7 entities per chunk
-2. ONLY extract proper nouns (names) or significant domain concepts
-3. When in doubt, DO NOT extract
+**ENTITY EXTRACTION RULES:**
 
-**NEVER extract (these are FORBIDDEN):**
+Extract MAXIMUM 3-7 entities per chunk. ONLY extract proper nouns or significant domain concepts.
+
+**NEVER extract (FORBIDDEN):**
 - ❌ ANY number, date, or year (e.g., "2024", "2020-2025", "January")
 - ❌ ANY dollar amount or price (e.g., "$34 billion", "$450 billion")
 - ❌ ANY percentage or statistic (e.g., "15%", "0.85")
@@ -148,18 +147,33 @@ class GraphExtractor:
 - ❌ ANY technical ID or code (e.g., "#ffffff", "8112.99.9100", "4.1-specific-gravity")
 - ❌ Generic descriptors (e.g., "high", "low", "significant", "advanced")
 - ❌ Common industry terms (e.g., "production", "supply chains", "industry")
-- ❌ Generic compound names unless they're a specific product brand
 
-**ONLY extract (these are ALLOWED):**
+**ONLY extract (ALLOWED):**
 - ✅ Named people (e.g., "Adam M. Merrill")
 - ✅ Named organizations/companies (e.g., "American Petroleum Institute", "Tesla")
 - ✅ Specific countries/cities/regions (e.g., "United States", "China", "Alabama")
 - ✅ Named minerals/materials (e.g., "Gallium", "Cobalt", "Aluminum")
 - ✅ Named technologies/systems (e.g., "Airborne Visible/Infrared Imaging Spectrometer")
 - ✅ Named events/initiatives (e.g., "Paris Agreement", "American Battery Initiative")
-- ✅ Named documents (e.g., "2022 Final List of Critical Minerals" - this is a proper name)
+- ✅ Named documents (e.g., "2022 Final List of Critical Minerals")
 
-**Test each entity:** Ask "Is this a proper name or specific concept?" If no, DON'T extract it."""
+**RELATIONSHIP EXTRACTION RULES:**
+
+For each pair of entities that are meaningfully connected in the text, extract their relationship.
+
+**Extract relationships when:**
+- ✅ One entity uses, requires, or depends on another
+- ✅ One entity is part of or belongs to another
+- ✅ One entity creates, manages, or analyzes another
+- ✅ Entities collaborate, compete, or interact
+- ✅ There's a clear action or connection between entities
+
+**DO NOT extract relationships when:**
+- ❌ Entities are only mentioned in the same sentence but not connected
+- ❌ The connection is vague or unclear
+- ❌ You're guessing at a relationship not stated in the text
+
+**Relationship quality:** Only extract relationships that are explicitly stated or strongly implied in the text."""
                         },
                         {
                             "role": "user",

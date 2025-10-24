@@ -813,14 +813,17 @@ export async function generateEntityDescription(data: {
       .eq("user_id", user.id)
       .single();
 
-    const standardModel = settings?.standard_model || "gpt-4o-mini";
     const embeddingModel = settings?.embedding_model || "text-embedding-3-small";
 
-    // Import OpenAI
+    // Import OpenAI for embeddings (AI SDK doesn't support embeddings yet)
     const { OpenAI } = await import("openai");
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
+    
+    // Import AI SDK for text generation
+    const { generateText } = await import("ai");
+    const { models } = await import("@/lib/ai/gateway");
 
     // Use RAG to find relevant content about this entity
     let ragContext = "";
@@ -900,8 +903,9 @@ Generate a 2-3 sentence description that:
 
 Description:`;
 
-    const response = await openai.chat.completions.create({
-      model: standardModel,
+    // Use AI SDK for text generation
+    const result = await generateText({
+      model: models.standard,
       messages: [
         {
           role: "system",
@@ -913,10 +917,9 @@ Description:`;
         },
       ],
       temperature: 0.7,
-      max_tokens: 200,
     });
 
-    const description = response.choices[0]?.message?.content?.trim() || "";
+    const description = result.text.trim();
 
     return { 
       success: true, 
@@ -949,20 +952,9 @@ export async function suggestEntityRelationships(data: {
   }
 
   try {
-    // Get AI settings
-    const { data: settings } = await supabase
-      .from("llm_settings")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
-
-    const standardModel = settings?.standard_model || "gpt-4o-mini";
-
-    // Import OpenAI
-    const { OpenAI } = await import("openai");
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    // Import AI SDK for text generation
+    const { generateText } = await import("ai");
+    const { models } = await import("@/lib/ai/gateway");
 
     // Build context about existing entities
     const entityContext = data.existingEntities
@@ -995,24 +987,15 @@ Only suggest relationships where confidence >= 0.6. Be conservative - only sugge
 
 Respond with a JSON array of relationship suggestions:`;
 
-    const response = await openai.chat.completions.create({
-      model: standardModel,
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert at analyzing knowledge graphs and identifying meaningful relationships between entities. Be precise and conservative in your suggestions.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
+    // Use AI SDK for text generation with JSON output
+    const result = await generateText({
+      model: models.standard,
+      system: "You are an expert at analyzing knowledge graphs and identifying meaningful relationships between entities. Be precise and conservative in your suggestions. Always respond with valid JSON.",
+      prompt: prompt,
       temperature: 0.3,
-      max_tokens: 1000,
-      response_format: { type: "json_object" },
     });
 
-    const content = response.choices[0]?.message?.content?.trim() || "{}";
+    const content = result.text.trim();
     const parsed = JSON.parse(content);
     const suggestions = parsed.relationships || parsed.suggestions || [];
 
@@ -1062,20 +1045,9 @@ export async function extractEntitiesFromChunk(data: {
   }
 
   try {
-    // Get AI settings
-    const { data: settings } = await supabase
-      .from("llm_settings")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
-
-    const standardModel = settings?.standard_model || "gpt-4o-mini";
-
-    // Import OpenAI
-    const { OpenAI } = await import("openai");
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    // Import AI SDK for text generation
+    const { generateText } = await import("ai");
+    const { models } = await import("@/lib/ai/gateway");
 
     // Use similar prompt to backend graph extraction
     const prompt = `You are an expert at extracting entities from text for knowledge graph construction.
@@ -1114,24 +1086,15 @@ ${data.chunkContent}
 
 Respond with a JSON object containing an array of entities:`;
 
-    const response = await openai.chat.completions.create({
-      model: standardModel,
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert at extracting entities from text for knowledge graphs. Be selective and only extract truly significant entities.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
+    // Use AI SDK for text generation with JSON output
+    const result = await generateText({
+      model: models.standard,
+      system: "You are an expert at extracting entities from text for knowledge graphs. Be selective and only extract truly significant entities. Always respond with valid JSON.",
+      prompt: prompt,
       temperature: 0.3,
-      max_tokens: 1000,
-      response_format: { type: "json_object" },
     });
 
-    const content = response.choices[0]?.message?.content?.trim() || "{}";
+    const content = result.text.trim();
     const parsed = JSON.parse(content);
     const extractedEntities = parsed.entities || [];
 

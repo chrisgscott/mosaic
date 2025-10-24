@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { models } from "@/lib/ai/gateway";
-import { generateText } from "ai";
 import { createClient } from "@/lib/supabase/server";
-import { getPrompt } from "@/lib/ai/prompts";
 import OpenAI from "openai";
+import { generateText } from "ai";
+import { models } from "@/lib/ai/gateway";
+import { getPrompt } from "@/lib/ai/prompts";
 
+// OpenAI SDK still needed for embeddings (AI SDK doesn't support embeddings yet)
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-
 
 export async function POST(request: NextRequest) {
   try {

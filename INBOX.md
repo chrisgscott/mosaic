@@ -1,5 +1,401 @@
 # INBOX
 
+## 🎯 Active Development
+
+### Synthesize Vercel AI SDK Patterns with Mosaic RAG
+**Priority:** High  
+**Effort:** 1-2 weeks (phased implementation)  
+**Status:** Planning Phase  
+**Context:** After reviewing Vercel's official AI SDK cookbook and RAG agent guide, we've identified key patterns to adopt while preserving our advanced search capabilities.
+
+**Key Discovery:**
+We have a **more sophisticated backend** (search/chunking/graph), but Vercel has a **more agentic frontend** (tool-based architecture, multi-step reasoning). The opportunity is to combine both approaches.
+
+---
+
+#### **What We're Doing Better**
+
+✅ **Search Quality** - Our hybrid search + graph + reranking crushes their simple vector search
+- Theirs: Single embedding, cosine similarity > 0.5, top 4 chunks, ~150ms
+- Ours: HyDE + Multi-Query + Hybrid + Graph + Reranking, top 10 chunks, ~350-1500ms
+- **10x better accuracy for complex queries**
+
+✅ **Chunking Strategy** - Production-grade vs basic sentence splitting
+- Theirs: Simple sentence-based chunking (split on periods)
+- Ours: Planner-Executor, Agentic, Structure-Aware, Sorting Hat
+- **Semantic awareness and document structure preservation**
+
+✅ **Knowledge Graph** - Full graph vs nothing
+- Theirs: No graph, flat vector search only
+- Ours: Full knowledge graph with entities, relationships, graph-enhanced search
+- **Unique capability for relationship queries**
+
+✅ **Learning System** - Search signals for continuous improvement
+- Theirs: No learning, static system
+- Ours: Search signal capture, co-occurrence analysis, relationship inference
+- **Self-improving over time**
+
+---
+
+#### **What They're Doing Better**
+
+🎯 **Tool-Based Architecture** - AI decides when to search
+```typescript
+tools: {
+  getInformation: tool({
+    description: 'get information from your knowledge base',
+    execute: async ({ question }) => findRelevantContent(question),
+  }),
+  addResource: tool({
+    description: 'add a resource to your knowledge base',
+    execute: async ({ content }) => createResource({ content }),
+  }),
+}
+```
+**Benefits:**
+- AI decides WHEN to search (not every message)
+- Can search multiple times
+- Can refine queries
+- More natural conversation flow
+
+🎯 **Multi-Step Reasoning** - Complex workflows
+```typescript
+stopWhen: stepCountIs(5) // AI can call tools multiple times
+```
+**Flow:**
+1. User asks question
+2. AI calls `getInformation` tool
+3. Receives results
+4. AI can call tool again to refine
+5. Generates final response
+
+🎯 **Dynamic Knowledge Base** - Conversational learning
+- Users can add facts during conversation
+- "My favorite food is pizza" → AI stores it
+- Knowledge base grows organically
+- No document upload required
+
+🎯 **Simplicity** - Easier to understand and modify
+- Simple codebase, clear flow
+- Easy to debug and extend
+- Lower cognitive overhead
+
+---
+
+#### **Implementation Plan: Best of Both Worlds**
+
+**Phase 1: Add Tool-Based Search (This Week - 2-3 days)**
+
+✅ **Completed:**
+- Message persistence with Vercel AI SDK pattern
+- URL-based routing (`/chat` → `/chat/[id]`)
+- Server-side ID generation
+- Send only last message to reduce payload
+- Handle disconnects with `consumeStream()`
+
+🔄 **Next Steps:**
+
+1. **Make Search a Tool**
+```typescript
+// Keep existing /api/search endpoint for direct use
+// Add as tool for agentic behavior
+
+tools: {
+  searchDocuments: tool({
+    description: `Search your knowledge base for relevant information.
+    Use this when the user asks a question that requires information from documents.
+    Can use advanced features like graph search for relationship queries.`,
+    inputSchema: z.object({
+      query: z.string().describe('The search query'),
+      useGraph: z.boolean().optional().describe('Use graph search for relationship queries'),
+      useAdvanced: z.boolean().optional().describe('Use HyDE and Multi-Query for complex queries'),
+    }),
+    execute: async ({ query, useGraph, useAdvanced }) => {
+      // Call our existing advanced search endpoint
+      const response = await fetch('/api/search', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          query,
+          use_graph: useGraph ?? true,
+          use_hyde: useAdvanced ?? true,
+          use_multi_query: useAdvanced ?? true,
+        }),
+      });
+      const results = await response.json();
+      
+      // Return formatted results for AI
+      return {
+        results: results.results.map(r => ({
+          content: r.content,
+          document: r.document_name,
+          score: r.rerank_score,
+        })),
+        count: results.results.length,
+      };
+    },
+  }),
+}
+```
+
+2. **Enable Multi-Step Calls**
+```typescript
+const result = streamText({
+  model: getModelForDepth('standard'),
+  system: systemPrompt,
+  messages: convertToModelMessages(messages),
+  tools,
+  stopWhen: stepCountIs(5), // Allow up to 5 tool calls
+  temperature: 0.3,
+});
+```
+
+3. **Update UI to Show Tool Calls**
+```typescript
+// In chat-client.tsx
+{message.parts.map((part) => {
+  if (part.type === 'tool-call') {
+    return (
+      <div className="tool-call">
+        🔍 Searching: {part.args.query}
+        {part.args.useGraph && <span>📊 Using graph search</span>}
+      </div>
+    );
+  }
+  if (part.type === 'tool-result') {
+    return (
+      <div className="tool-result">
+        ✅ Found {part.result.count} results
+      </div>
+    );
+  }
+})}
+```
+
+**Benefits:**
+- ✅ AI decides when to search (not every message)
+- ✅ Can search multiple times per conversation
+- ✅ Can refine queries based on results
+- ✅ Keep our advanced search pipeline
+- ✅ Better conversation flow
+- ✅ More transparent (show tool calls)
+
+---
+
+**Phase 2: Add Knowledge Management Tools (Next Week - 2-3 days)**
+
+1. **Add Quick Facts Tool**
+```typescript
+tools: {
+  addKnowledge: tool({
+    description: `Add a quick fact or piece of information to the knowledge base.
+    Use this when the user shares information they want to remember.`,
+    inputSchema: z.object({
+      content: z.string().describe('The information to store'),
+      category: z.string().optional().describe('Optional category'),
+    }),
+    execute: async ({ content, category }) => {
+      // Create a simple document
+      // Process and chunk
+      // Extract entities
+      // Add to graph
+      return 'Added to knowledge base';
+    },
+  }),
+}
+```
+
+2. **Add Entity Lookup Tool**
+```typescript
+tools: {
+  lookupEntity: tool({
+    description: 'Look up detailed information about a specific entity',
+    inputSchema: z.object({
+      entityName: z.string(),
+    }),
+    execute: async ({ entityName }) => {
+      // Search entities by name
+      // Return entity details + relationships
+    },
+  }),
+}
+```
+
+3. **Add Relationship Explorer Tool**
+```typescript
+tools: {
+  exploreRelationships: tool({
+    description: 'Explore how two entities are related',
+    inputSchema: z.object({
+      entityA: z.string(),
+      entityB: z.string(),
+      maxHops: z.number().optional(),
+    }),
+    execute: async ({ entityA, entityB, maxHops }) => {
+      // Find path between entities
+      // Return relationship chain
+    },
+  }),
+}
+```
+
+**Benefits:**
+- ✅ Conversational knowledge building
+- ✅ Quick facts without document upload
+- ✅ Explore graph through conversation
+- ✅ More interactive experience
+
+---
+
+**Phase 3: Optimize & Polish (Week 3 - 3-5 days)**
+
+1. **Add Simple Search Mode**
+- Fast path for simple queries
+- Skip HyDE/Multi-Query for basic lookups
+- AI can choose: `useAdvanced: false` for speed
+
+2. **Implement Caching Middleware**
+```typescript
+import { createCache } from 'ai';
+
+const cache = createCache({
+  ttl: 60 * 60, // 1 hour
+});
+
+const result = streamText({
+  model,
+  messages,
+  tools,
+  experimental_cache: cache, // Cache tool results
+});
+```
+
+3. **Better Tool Descriptions**
+- Help AI choose right tool
+- Include examples in descriptions
+- Tune for better decision-making
+
+4. **Tool Result Visualization**
+- Rich UI for search results
+- Entity cards in chat
+- Relationship graphs inline
+- Document previews
+
+**Benefits:**
+- ✅ Faster for simple queries
+- ✅ Reduced API costs
+- ✅ Better AI decision-making
+- ✅ Richer user experience
+
+---
+
+#### **Architecture Comparison**
+
+**Current (Endpoint-Based):**
+```
+User Message
+  ↓
+Chat Route
+  ↓
+ALWAYS calls /api/search
+  ↓
+Advanced Search Pipeline
+  ↓
+Stream Response
+```
+
+**Target (Tool-Based):**
+```
+User Message
+  ↓
+Chat Route with Tools
+  ↓
+AI Decides: Need to search?
+  ↓ (if yes)
+Call searchDocuments tool
+  ↓
+Advanced Search Pipeline
+  ↓
+AI Receives Results
+  ↓
+AI Decides: Need more info?
+  ↓ (if yes)
+Call tool again (refine query)
+  ↓
+Stream Final Response
+```
+
+---
+
+#### **Key Design Decisions**
+
+**1. Keep Both Endpoint and Tool**
+- `/api/search` endpoint for direct use (UI, external tools)
+- Tool wraps endpoint for agentic behavior
+- Reuse existing pipeline, no duplication
+
+**2. Preserve Advanced Features**
+- HyDE, Multi-Query, Graph, Reranking all available
+- AI can enable/disable via tool parameters
+- Default to advanced for complex queries
+
+**3. Progressive Enhancement**
+- Phase 1 works with existing search
+- Phase 2 adds new capabilities
+- Phase 3 optimizes and polishes
+- No breaking changes
+
+**4. Transparency**
+- Show tool calls in UI
+- Display search parameters used
+- Explain why AI chose to search
+- Build user trust
+
+---
+
+#### **Expected Outcomes**
+
+**Performance:**
+- 30-50% fewer searches (AI decides when needed)
+- Faster simple queries (skip advanced features)
+- Better accuracy (multi-step refinement)
+
+**User Experience:**
+- More natural conversation flow
+- Can add knowledge conversationally
+- Explore graph through chat
+- Transparent AI reasoning
+
+**Developer Experience:**
+- Cleaner architecture
+- Easier to add new tools
+- Better separation of concerns
+- Follows industry patterns
+
+---
+
+#### **Resources**
+
+**Documentation Created:**
+- `/docs/ai-sdk-patterns.md` - Comprehensive AI SDK patterns
+- `/docs/rag-comparison.md` - Detailed RAG implementation comparison
+- `/docs/search-comparison.md` - Search implementation deep dive
+
+**Vercel References:**
+- AI SDK Cookbook: https://ai-sdk.dev/cookbook
+- RAG Agent Guide: https://ai-sdk.dev/cookbook/guides/rag-chatbot
+- Message Persistence: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot-message-persistence
+- Caching Middleware: https://ai-sdk.dev/cookbook/next/caching-middleware
+- Human-in-the-Loop: https://ai-sdk.dev/cookbook/next/human-in-the-loop
+- Multi-Step Tools: https://ai-sdk.dev/cookbook/next/call-tools-multiple-steps
+
+**Key Insight:**
+We don't need to choose between their approach and ours. We can have both:
+- **Keep our advanced backend** (search quality, chunking, graph)
+- **Add their agentic frontend** (tools, multi-step, conversational)
+- **Result:** Production-grade RAG with agentic capabilities
+
+---
+
 ## 💡 Enhancements & Ideas
 
 ### Graph Learning from Search Patterns

@@ -29,12 +29,12 @@ User searches: "design thinking"
 
 **Implementation Phases:**
 
-**Phase 1: Search Signal Capture (Foundation) - 2-3 days**
-- Create `search_signals` table to log search results
-- Store: query, query_embedding, chunk_ids, entity_ids, rerank_scores, timestamp
-- Capture in search API after reranking
-- Track user engagement (which results clicked)
-- Minimal overhead: ~1-2ms per search
+**Phase 1: Search Signal Capture (Foundation) - 2-3 days** ✅ **COMPLETED**
+- ✅ Created `search_signals` table to log search results
+- ✅ Stores: query, query_embedding, chunk_ids, entity_ids, rerank_scores, timestamp
+- ✅ Captures in search API after reranking (works for both /search and /chat routes)
+- ✅ Minimal overhead: ~1-2ms per search
+- ⏳ User engagement tracking (clicked results) - future enhancement
 
 **Phase 2: Co-Occurrence Analysis (Weekly Job) - 3-4 days**
 - SQL function to analyze entity co-occurrence patterns
@@ -179,6 +179,152 @@ This transforms the knowledge graph from a static structure into a **living, lea
 
 ---
 
+### Intelligent Query Caching & Search Optimization
+**Priority:** High  
+**Effort:** 1-2 weeks (phased implementation)  
+**Context:** Use search signal data to dramatically speed up common queries through intelligent caching and pre-computation.
+
+**Core Concept:**
+Search signals reveal query patterns that can be exploited for massive performance gains. By caching results for common queries and using semantic similarity matching, we can serve most searches in <50ms instead of 500-1000ms.
+
+**Key Insight:**
+- Phase 1 (Graph Learning) captures all search data
+- This same data enables query optimization
+- 30-50% of queries are semantically similar to previous queries
+- **10-20x speedup possible for cached queries**
+
+**Implementation Phases:**
+
+**Phase 1: Simple Query Cache (Quick Win) - 1-2 days**
+- Create `query_cache` table with TTL (1 hour default)
+- Cache structure: query_hash, query_embedding, cached_results, hit_count, expires_at
+- Check cache before running search (exact match on query text)
+- Return cached results if fresh (<1 hour old)
+- Track cache hit rate and response times
+- **Expected: 20-30% hit rate, <50ms response time**
+
+**Phase 2: Semantic Cache Matching - 2-3 days**
+- Use query embeddings for similarity matching
+- If new query is >0.95 similar to cached query, return cached results
+- Enables: "design thinking" and "what is design thinking" share cache
+- Cluster similar queries under canonical form
+- **Expected: 40-50% hit rate with semantic matching**
+
+**Phase 3: Smart Pre-computation - 2-3 days**
+- Background job: identify top 20-50 most frequent queries
+- Pre-compute and refresh results every hour
+- Warm cache before users even search
+- Invalidate cache when new documents added
+- **Expected: Top queries always <50ms**
+
+**Phase 4: Query Prediction & Autocomplete - 2-3 days**
+- Suggest completions based on common queries
+- Show "others also searched for..." suggestions
+- Predictive prefetching for likely next queries
+- **Expected: Better UX, reduced search latency**
+
+**Phase 5: Adaptive Optimization - 1 week**
+- Learn from click-through patterns
+- Boost results users prefer for specific queries
+- Personalized result ranking based on user history
+- A/B test cache strategies
+- **Expected: Improved relevance + speed**
+
+**Database Schema:**
+```sql
+CREATE TABLE query_cache (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id),
+  query_hash TEXT NOT NULL,
+  query TEXT NOT NULL,
+  query_embedding VECTOR(1536),
+  cached_results JSONB NOT NULL,
+  hit_count INT DEFAULT 0,
+  last_accessed TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '1 hour',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_query_cache_user ON query_cache(user_id);
+CREATE INDEX idx_query_cache_hash ON query_cache(query_hash);
+CREATE INDEX idx_query_cache_expires ON query_cache(expires_at);
+CREATE INDEX idx_query_cache_embedding ON query_cache 
+  USING ivfflat (query_embedding vector_cosine_ops)
+  WITH (lists = 100);
+```
+
+**Cache Invalidation Strategy:**
+- Time-based: 1 hour TTL for most queries
+- Event-based: Invalidate when new documents added
+- Frequency-based: Top queries refresh every 15 minutes
+- LRU eviction: Keep cache size manageable
+
+**Performance Metrics:**
+```sql
+-- Track cache performance
+CREATE TABLE search_metrics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id),
+  query TEXT NOT NULL,
+  cache_hit BOOLEAN DEFAULT false,
+  response_time_ms INT NOT NULL,
+  result_count INT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+**Expected Results:**
+- **Cache hit rate:** 30-50% for active users
+- **Cached response time:** <50ms (10-20x faster)
+- **Uncached response time:** 500-1000ms (unchanged)
+- **Cost savings:** Reduced embedding + vector search + reranking costs
+- **User experience:** Instant results for common queries
+
+**Benefits:**
+- ✅ **Massive speed improvement** for common queries
+- ✅ **Cost reduction** - fewer API calls to OpenAI/Cohere
+- ✅ **Better UX** - instant results feel magical
+- ✅ **Scalability** - handle more users without infrastructure changes
+- ✅ **Data-driven** - optimize based on actual usage patterns
+- ✅ **Progressive enhancement** - works alongside existing search
+
+**Use Cases:**
+1. **Frequent Queries** - User searches "quarterly goals" daily → instant results
+2. **Similar Queries** - "design thinking" and "what is design thinking" → same cache
+3. **Team Patterns** - Whole team searches similar topics → shared cache benefit
+4. **Onboarding** - New users search common topics → pre-warmed cache
+
+**Technical Considerations:**
+- Cache invalidation on document updates (simple: clear all, smart: selective)
+- Memory usage: ~1KB per cached query, 10K queries = 10MB (minimal)
+- Embedding similarity threshold tuning (0.95 = strict, 0.90 = loose)
+- Multi-user cache sharing (optional: share cache across organization)
+- Privacy: user-scoped cache by default, opt-in for shared cache
+
+**Monitoring:**
+- Cache hit/miss rates by user and time
+- Response time distribution (cached vs uncached)
+- Most frequently cached queries
+- Cache eviction patterns
+- Cost savings from reduced API calls
+
+**Related Features:**
+- Builds on Phase 1 (Graph Learning) search signals
+- Complements search quality improvements
+- Enables query analytics dashboard
+- Foundation for personalized search
+
+**Next Steps:**
+1. Implement Phase 1 (simple cache) - immediate wins
+2. Monitor hit rates and response times for 1 week
+3. Tune cache TTL and similarity thresholds
+4. Roll out Phase 2 (semantic matching)
+5. Analyze top queries for Phase 3 (pre-computation)
+
+**Why This Matters:**
+Search is the primary interface to your knowledge base. Making it 10-20x faster for common queries transforms the user experience from "waiting for results" to "instant answers." Combined with graph learning, your system becomes both smarter AND faster over time.
+
+---
 
 ### Migrate to OpenAI Structured Outputs
 **Priority:** Medium  

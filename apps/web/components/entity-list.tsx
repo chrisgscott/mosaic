@@ -1,6 +1,6 @@
 "use client";
 
-import { Network, Trash2, MoreHorizontal, Loader2, FileText, ArrowUpDown, GitMerge, Tag } from "lucide-react";
+import { Network, Trash2, MoreHorizontal, Loader2, FileText, ArrowUpDown, GitMerge, Tag, Link } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -32,6 +32,7 @@ import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { MergeEntitiesDialog } from "@/components/merge-entities-dialog";
+import { BulkAddRelationshipsDialog } from "@/components/bulk-add-relationships-dialog";
 
 type SortColumn = "created_at" | "name" | "confidence" | "docs" | "type" | "relationships";
 type SortDirection = "asc" | "desc";
@@ -71,6 +72,7 @@ export function EntityList({
   const [sortColumn, setSortColumn] = useState<SortColumn>("created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [showRelationshipsDialog, setShowRelationshipsDialog] = useState(false);
   const [isUpdatingType, setIsUpdatingType] = useState(false);
   const [selectedType, setSelectedType] = useState<string>("");
 
@@ -370,6 +372,16 @@ export function EntityList({
                 </Button>
               </div>
 
+              {/* Add Relationships Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowRelationshipsDialog(true)}
+              >
+                <Link className="mr-2 h-4 w-4" />
+                Add Relationships
+              </Button>
+
               {/* Merge Button */}
               {selectedIds.size >= 2 && (
                 <Button
@@ -602,6 +614,18 @@ export function EntityList({
         entities={entities.filter((e) => selectedIds.has(e.id))}
         allEntityTypes={allEntityTypes}
         onMergeComplete={() => {
+          setSelectedIds(new Set());
+          router.refresh();
+        }}
+      />
+
+      {/* Bulk Add Relationships Dialog */}
+      <BulkAddRelationshipsDialog
+        open={showRelationshipsDialog}
+        onOpenChange={setShowRelationshipsDialog}
+        sourceEntities={entities.filter((e) => selectedIds.has(e.id))}
+        allEntities={entities}
+        onComplete={() => {
           setSelectedIds(new Set());
           router.refresh();
         }}

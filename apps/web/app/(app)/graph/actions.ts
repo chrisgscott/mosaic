@@ -645,3 +645,88 @@ export async function createRelationship(data: {
 
   return { success: true, relationship: newRelationship };
 }
+
+export async function bulkCreateRelationships(data: {
+  sourceEntityIds: string[];
+  targetEntityId: string;
+  relationshipType: string;
+  description?: string | null;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: "Unauthorized" };
+  }
+
+  if (data.sourceEntityIds.length === 0) {
+    return { error: "No source entities provided" };
+  }
+
+  // Verify all entities exist and belong to user
+  const allEntityIds = [...data.sourceEntityIds, data.targetEntityId];
+  const { data: entities, error: entitiesError } = await supabase
+    .from("entities")
+    .select("id, user_id")
+    .in("id", allEntityIds)
+    .eq("user_id", user.id);
+
+  if (entitiesError || !entities || entities.length !== allEntityIds.length) {
+    return { error: "One or more entities not found or unauthorized" };
+  }
+
+  // Check for existing relationships to avoid duplicates
+  const { data: existingRels } = await supabase
+    .from("relationships")
+    .select("source_entity_id, target_entity_id")
+    .in("source_entity_id", data.sourceEntityIds)
+    .eq("target_entity_id", data.targetEntityId)
+    .eq("relationship_type", data.relationshipType);
+
+  const existingPairs = new Set(
+    existingRels?.map((r) => `${r.source_entity_id}-${r.target_entity_id}`) || []
+  );
+
+  // Filter out entities that already have this relationship
+  const newSourceIds = data.sourceEntityIds.filter(
+    (sourceId) => !existingPairs.has(`${sourceId}-${data.targetEntityId}`)
+  );
+
+  if (newSourceIds.length === 0) {
+    return { error: "All selected entities already have this relationship" };
+  }
+
+  // Create relationships for all source entities
+  const relationshipsToCreate = newSourceIds.map((sourceId) => ({
+    user_id: user.id,
+    source_entity_id: sourceId,
+    target_entity_id: data.targetEntityId,
+    relationship_type: data.relationshipType,
+    description: data.description || null,
+    document_ids: [],
+    chunk_ids: [],
+    extraction_confidence: null, // Manual relationships have no confidence
+  }));
+
+  const { error: createError } = await supabase
+    .from("relationships")
+    .insert(relationshipsToCreate);
+
+  if (createError) {
+    console.error("Bulk create error:", createError);
+    return { error: `Failed to create relationships: ${createError.message}` };
+  }
+
+  revalidatePath("/graph");
+
+  const skipped = data.sourceEntityIds.length - newSourceIds.length;
+  return {
+    success: true,
+    count: newSourceIds.length,
+    skipped,
+  };
+}

@@ -812,6 +812,7 @@ export async function generateEntityDescription(data: {
       .single();
 
     const standardModel = settings?.standard_model || "gpt-4o-mini";
+    const embeddingModel = settings?.embedding_model || "text-embedding-3-small";
 
     // Import OpenAI
     const { OpenAI } = await import("openai");
@@ -819,13 +820,61 @@ export async function generateEntityDescription(data: {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
+    // Use RAG to find relevant content about this entity
+    let ragContext = "";
+    try {
+      // Generate embedding for the entity name
+      const embeddingResponse = await openai.embeddings.create({
+        model: embeddingModel,
+        input: `${data.entityName} ${data.entityType}`,
+      });
+
+      const embedding = embeddingResponse.data[0].embedding;
+
+      // Search for relevant chunks
+      const { data: chunks } = await supabase.rpc("search_chunks", {
+        query_embedding: embedding,
+        match_threshold: 0.7,
+        match_count: 5,
+      });
+
+      if (chunks && chunks.length > 0) {
+        ragContext = chunks
+          .map((chunk: { content: string }) => chunk.content)
+          .join("\n\n---\n\n")
+          .slice(0, 2000); // Limit context size
+      }
+    } catch (ragError) {
+      console.warn("RAG search failed, falling back to entity-only context:", ragError);
+    }
+
     // Build context about existing entities
     const entityContext = data.existingEntities
-      .slice(0, 50) // Limit to prevent token overflow
+      .slice(0, 30) // Reduced since we have RAG context now
       .map((e) => `- ${e.name} (${e.type})`)
       .join("\n");
 
-    const prompt = `You are helping to build a knowledge graph. Generate a concise, informative description for the following entity:
+    const prompt = ragContext
+      ? `You are helping to build a knowledge graph. Generate a concise, informative description for the following entity based on the provided context from the user's documents.
+
+Entity Name: ${data.entityName}
+Entity Type: ${data.entityType}
+
+Relevant content from documents:
+${ragContext}
+
+Other entities in the knowledge graph:
+${entityContext}
+
+Based on the document content above, generate a 2-3 sentence description that:
+1. Explains what this entity is based on how it's described in the documents
+2. Highlights its key characteristics or purpose as mentioned in the content
+3. Is specific and grounded in the provided context (not generic)
+
+If the entity is not clearly described in the content, provide a general but informative description based on the entity name and type.
+
+Description:`
+      : `You are helping to build a knowledge graph. Generate a concise, informative description for the following entity:
 
 Entity Name: ${data.entityName}
 Entity Type: ${data.entityType}
@@ -845,7 +894,7 @@ Description:`;
       messages: [
         {
           role: "system",
-          content: "You are an expert at writing clear, concise entity descriptions for knowledge graphs. Keep descriptions factual and informative.",
+          content: "You are an expert at writing clear, concise entity descriptions for knowledge graphs. Keep descriptions factual and grounded in the provided context.",
         },
         {
           role: "user",
@@ -858,7 +907,7 @@ Description:`;
 
     const description = response.choices[0]?.message?.content?.trim() || "";
 
-    return { success: true, description };
+    return { success: true, description, usedRag: !!ragContext };
   } catch (error) {
     console.error("Generate description error:", error);
     return { error: "Failed to generate description" };

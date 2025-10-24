@@ -999,7 +999,15 @@ Respond with a JSON array of relationship suggestions:`;
       temperature: 0.3,
     });
 
-    const content = result.text.trim();
+    let content = result.text.trim();
+    
+    // Remove markdown code fences if present
+    if (content.startsWith('```json')) {
+      content = content.replace(/^```json\s*\n/, '').replace(/\n```\s*$/, '');
+    } else if (content.startsWith('```')) {
+      content = content.replace(/^```\s*\n/, '').replace(/\n```\s*$/, '');
+    }
+    
     const parsed = JSON.parse(content);
     const suggestions = parsed.relationships || parsed.suggestions || [];
 
@@ -1098,7 +1106,15 @@ Respond with a JSON object containing an array of entities:`;
       temperature: 0.3,
     });
 
-    const content = result.text.trim();
+    let content = result.text.trim();
+    
+    // Remove markdown code fences if present
+    if (content.startsWith('```json')) {
+      content = content.replace(/^```json\s*\n/, '').replace(/\n```\s*$/, '');
+    } else if (content.startsWith('```')) {
+      content = content.replace(/^```\s*\n/, '').replace(/\n```\s*$/, '');
+    }
+    
     const parsed = JSON.parse(content);
     const extractedEntities = parsed.entities || [];
 

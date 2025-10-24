@@ -857,6 +857,10 @@ export async function generateEntityDescription(data: {
         sourceDocumentIds = Array.from(
           new Set(chunks.map((chunk: { document_id: string }) => chunk.document_id))
         );
+        
+        console.log(`[Entity Description] Found ${chunks.length} relevant chunks for "${data.entityName}"`);
+      } else {
+        console.log(`[Entity Description] No relevant chunks found for "${data.entityName}" - using AI general knowledge`);
       }
     } catch (ragError) {
       console.warn("RAG search failed, falling back to entity-only context:", ragError);

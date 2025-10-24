@@ -106,9 +106,9 @@ export function CreateEntityDialog({
       setSourceChunkIds(result.chunkIds || []);
       setSourceDocumentIds(result.documentIds || []);
       const ragMessage = result.usedRag 
-        ? `Description generated from ${result.chunkIds?.length || 0} relevant chunks!`
-        : "Description generated!";
-      toast.success(ragMessage);
+        ? `✅ Description generated from ${result.chunkIds?.length || 0} relevant chunks in your documents!`
+        : "⚠️ Description generated using AI general knowledge (no relevant content found in your documents)";
+      toast.success(ragMessage, { duration: 5000 });
     }
 
     setIsGeneratingDescription(false);

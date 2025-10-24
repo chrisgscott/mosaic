@@ -735,6 +735,8 @@ export async function createEntity(data: {
   name: string;
   type: string;
   description?: string | null;
+  chunkIds?: string[];
+  documentIds?: string[];
 }) {
   const supabase = await createClient();
 
@@ -769,9 +771,9 @@ export async function createEntity(data: {
       description: data.description || null,
       canonical_name: data.name,
       aliases: [],
-      document_ids: [],
-      chunk_ids: [],
-      metadata: {},
+      document_ids: data.documentIds || [],
+      chunk_ids: data.chunkIds || [],
+      metadata: data.chunkIds?.length ? { rag_sourced: true } : {},
       extraction_confidence: null, // Manual entities have no confidence
     })
     .select()
@@ -822,6 +824,9 @@ export async function generateEntityDescription(data: {
 
     // Use RAG to find relevant content about this entity
     let ragContext = "";
+    let sourceChunkIds: string[] = [];
+    let sourceDocumentIds: string[] = [];
+    
     try {
       // Generate embedding for the entity name
       const embeddingResponse = await openai.embeddings.create({
@@ -843,6 +848,12 @@ export async function generateEntityDescription(data: {
           .map((chunk: { content: string }) => chunk.content)
           .join("\n\n---\n\n")
           .slice(0, 2000); // Limit context size
+        
+        // Collect chunk and document IDs
+        sourceChunkIds = chunks.map((chunk: { id: string }) => chunk.id);
+        sourceDocumentIds = Array.from(
+          new Set(chunks.map((chunk: { document_id: string }) => chunk.document_id))
+        );
       }
     } catch (ragError) {
       console.warn("RAG search failed, falling back to entity-only context:", ragError);
@@ -907,7 +918,13 @@ Description:`;
 
     const description = response.choices[0]?.message?.content?.trim() || "";
 
-    return { success: true, description, usedRag: !!ragContext };
+    return { 
+      success: true, 
+      description, 
+      usedRag: !!ragContext,
+      chunkIds: sourceChunkIds,
+      documentIds: sourceDocumentIds,
+    };
   } catch (error) {
     console.error("Generate description error:", error);
     return { error: "Failed to generate description" };

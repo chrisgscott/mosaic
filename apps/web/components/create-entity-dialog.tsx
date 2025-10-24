@@ -78,6 +78,8 @@ export function CreateEntityDialog({
   const [name, setName] = useState("");
   const [type, setType] = useState("");
   const [description, setDescription] = useState("");
+  const [sourceChunkIds, setSourceChunkIds] = useState<string[]>([]);
+  const [sourceDocumentIds, setSourceDocumentIds] = useState<string[]>([]);
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
   const [isGeneratingRelationships, setIsGeneratingRelationships] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -101,7 +103,12 @@ export function CreateEntityDialog({
       toast.error(result.error);
     } else {
       setDescription(result.description || "");
-      toast.success("Description generated!");
+      setSourceChunkIds(result.chunkIds || []);
+      setSourceDocumentIds(result.documentIds || []);
+      const ragMessage = result.usedRag 
+        ? `Description generated from ${result.chunkIds?.length || 0} relevant chunks!`
+        : "Description generated!";
+      toast.success(ragMessage);
     }
 
     setIsGeneratingDescription(false);
@@ -161,6 +168,8 @@ export function CreateEntityDialog({
       name,
       type,
       description: description || null,
+      chunkIds: sourceChunkIds,
+      documentIds: sourceDocumentIds,
     });
 
     if (result.error) {
@@ -210,6 +219,8 @@ export function CreateEntityDialog({
     setName("");
     setType("");
     setDescription("");
+    setSourceChunkIds([]);
+    setSourceDocumentIds([]);
     setRelationshipSuggestions([]);
     setIsCreating(false);
   };

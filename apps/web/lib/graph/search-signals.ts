@@ -32,8 +32,11 @@ export async function logSearchSignal(
   try {
     const supabase = await createClient();
 
-    // Fire-and-forget: Don't await, don't block search response
-    supabase
+    console.log(`[Search Signals] Attempting to log signal for user ${userId}, query: "${data.query.substring(0, 50)}..."`);
+    console.log(`[Search Signals] Chunk IDs: ${data.chunkIds.length}, Entity IDs: ${data.entityIds?.length || 0}`);
+
+    // Insert the search signal
+    const { error } = await supabase
       .from("search_signals")
       .insert({
         user_id: userId,
@@ -42,17 +45,18 @@ export async function logSearchSignal(
         chunk_ids: data.chunkIds,
         entity_ids: data.entityIds || [],
         rerank_scores: data.rerankScores || [],
-      })
-      .then(({ error }) => {
-        if (error) {
-          console.warn("[Search Signals] Failed to log search signal:", error);
-        } else {
-          console.log(`[Search Signals] Logged signal for query: "${data.query.substring(0, 50)}..."`);
-        }
       });
+
+    if (error) {
+      console.error("[Search Signals] Failed to log search signal:", error);
+      throw error;
+    } else {
+      console.log(`[Search Signals] ✅ Successfully logged signal for query: "${data.query.substring(0, 50)}..."`);
+    }
   } catch (error) {
-    // Silent fail - don't break search if logging fails
-    console.warn("[Search Signals] Error logging search signal:", error);
+    // Log error but don't break search
+    console.error("[Search Signals] Error logging search signal:", error);
+    throw error; // Re-throw so the catch in route.ts can log it
   }
 }
 

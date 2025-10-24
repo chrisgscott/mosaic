@@ -514,16 +514,20 @@ export async function POST(request: NextRequest) {
 
       const processingTime = Date.now() - startTime;
 
-      // Log search signal for graph learning (fire-and-forget, async)
-      logSearchSignal(user.id, {
-        query,
-        queryEmbedding: queryEmbedding,
-        chunkIds: finalResults.map(r => r.chunk_id),
-        rerankScores: finalResults.map(r => r.rerank_score || 0),
-        // Entity IDs will be extracted asynchronously in the background
-      }).catch((err: Error) => {
-        console.warn("[Search] Failed to log search signal:", err);
-      });
+      // Log search signal for graph learning
+      // Note: We await this to ensure it completes in serverless environment
+      try {
+        await logSearchSignal(user.id, {
+          query,
+          queryEmbedding: queryEmbedding,
+          chunkIds: finalResults.map(r => r.chunk_id),
+          rerankScores: finalResults.map(r => r.rerank_score || 0),
+          // Entity IDs will be extracted asynchronously in the background
+        });
+      } catch (err) {
+        console.error("[Search] Failed to log search signal:", err);
+        // Don't fail the search if logging fails
+      }
 
       return NextResponse.json({
         results: finalResults,

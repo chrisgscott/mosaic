@@ -1,30 +1,23 @@
-import { NextRequest } from 'next/server';
-import { streamText, convertToModelMessages } from 'ai';
 import { createClient } from '@/lib/supabase/server';
+import { streamText, convertToModelMessages, createIdGenerator, type UIMessage } from 'ai';
 import { getModelForDepth } from '@/lib/ai/gateway';
 import { getPrompt } from '@/lib/ai/prompts';
 import { POST as searchAPI } from "@/app/api/search/route";
 import type { SearchResult } from "@/app/api/search/route";
 
 /**
- * RAG Chat API - Vercel AI SDK Implementation
+ * RAG Chat API - Following Vercel AI SDK Pattern
  * 
- * Uses official Vercel AI SDK patterns:
- * - streamText() for streaming responses
- * - convertToModelMessages() for message conversion
- * - toUIMessageStreamResponse() for proper streaming format
+ * Documentation: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot-message-persistence
  * 
  * Flow:
- * 1. Receive UIMessage[] from useChat hook
- * 2. Extract latest query and run full search pipeline
- * 3. Build RAG context from search results
- * 4. Stream response using AI Gateway
- * 5. Return UIMessageStream with sources
- * 
- * Documentation: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot
+ * 1. Receive last message + chatId from client
+ * 2. Load previous messages from database
+ * 3. Run search with latest query
+ * 4. Stream response with RAG context
+ * 5. Save all messages (including new response) to database
  */
 
-// Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
 
 export async function POST(request: Request) {
@@ -44,33 +37,54 @@ export async function POST(request: Request) {
       );
     }
 
-    // Parse request body - AI SDK sends UIMessage[] and optional session_id
-    const { messages, session_id }: { messages: UIMessage[]; session_id?: string } = await request.json();
+    // Parse request body - client sends only last message + chatId
+    const { message, chatId }: { message: UIMessage; chatId: string } = await request.json();
 
-    if (!messages || messages.length === 0) {
+    if (!message || !chatId) {
       return new Response(
-        JSON.stringify({ error: "Messages array is required" }),
+        JSON.stringify({ error: "Message and chatId are required" }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    // Extract the latest user message for search
-    const lastMessage = messages[messages.length - 1];
-    const query = lastMessage.parts
+    // Load previous messages from database
+    const { data: dbMessages, error: messagesError } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('session_id', chatId)
+      .order('created_at', { ascending: true });
+
+    if (messagesError) {
+      throw new Error('Failed to load messages');
+    }
+
+    // Convert database messages to UIMessage format
+    const previousMessages: UIMessage[] = (dbMessages || []).map((msg) => ({
+      id: msg.id,
+      role: msg.role as 'user' | 'assistant' | 'system',
+      parts: [{ type: 'text' as const, text: msg.content }],
+      createdAt: new Date(msg.created_at),
+    }));
+
+    // Append new message to previous messages
+    const messages = [...previousMessages, message];
+
+    // Extract query from latest message for search
+    const query = message.parts
       .filter(part => part.type === 'text')
       .map(part => part.text)
-      .join(' ');
+      .join('');
 
     if (!query) {
       return new Response(
-        JSON.stringify({ error: "No text content in message" }),
+        JSON.stringify({ error: "Message must contain text" }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
     console.log(`[Chat] Processing query: "${query}"`);
 
-    // Step 1: Run full search pipeline (HyDE, Multi-Query, Reranking, Graph Search)
+    // Run full search pipeline
     const searchRequest = new Request(request.url, {
       method: 'POST',
       headers: request.headers,
@@ -83,7 +97,7 @@ export async function POST(request: Request) {
     });
 
     const searchResponse = await searchAPI(searchRequest as unknown as Request);
-    
+
     if (!searchResponse.ok) {
       const error = await searchResponse.json();
       throw new Error(`Search failed: ${error.message}`);
@@ -91,10 +105,10 @@ export async function POST(request: Request) {
 
     const searchData = await searchResponse.json();
     const results: SearchResult[] = searchData.results || [];
-    
+
     console.log(`[Chat] Found ${results.length} relevant chunks`);
 
-    // Step 2: Build RAG context from search results
+    // Build RAG context from search results
     const context = results
       .map((result, idx) => {
         return `[${idx + 1}] ${result.content}\n(Source: ${result.document_name}, Chunk ${result.chunk_index})`;
@@ -104,52 +118,58 @@ export async function POST(request: Request) {
     // Get chat prompt from settings with context substitution
     const systemPrompt = await getPrompt('chat', { context });
 
-    // Step 3: Stream response using AI SDK
+    // Stream response using AI SDK
     const result = streamText({
       model: getModelForDepth('standard'),
       system: systemPrompt,
       messages: convertToModelMessages(messages),
       temperature: 0.3,
-      onFinish: async ({ text, usage }) => {
-        console.log(`[Chat] Tokens used: ${usage.inputTokens} input, ${usage.outputTokens} output`);
-        
-        // Save messages to database if session_id provided
-        if (session_id) {
-          try {
-            // Save user message
-            await supabase.from("chat_messages").insert({
-              session_id,
-              role: "user",
-              content: query,
-            });
+    });
 
-            // Save assistant response
-            await supabase.from("chat_messages").insert({
-              session_id,
-              role: "assistant",
-              content: text,
-              metadata: {
-                tokens: usage,
-                sources: results.map(r => ({
-                  document_name: r.document_name,
-                  chunk_index: r.chunk_index,
-                })),
-              },
-            });
+    // Consume stream to ensure completion even if client disconnects
+    result.consumeStream();
 
-            console.log(`[Chat] Saved messages to session ${session_id}`);
-          } catch (error) {
-            console.error("[Chat] Failed to save messages:", error);
-            // Don't fail the chat if saving fails
-          }
+    return result.toUIMessageStreamResponse({
+      originalMessages: messages,
+      // Generate server-side IDs for persistence
+      generateMessageId: createIdGenerator({
+        prefix: 'msg',
+        size: 16,
+      }),
+      onFinish: async ({ messages: allMessages }) => {
+        // Save all messages to database
+        try {
+          // Delete existing messages for this session
+          await supabase
+            .from('chat_messages')
+            .delete()
+            .eq('session_id', chatId);
+
+          // Insert all messages (including new response)
+          const messagesToSave = allMessages.map((msg) => ({
+            session_id: chatId,
+            role: msg.role,
+            content: msg.parts
+              .filter(p => p.type === 'text')
+              .map(p => p.text)
+              .join(''),
+            metadata: msg.role === 'assistant' ? {
+              sources: results.map(r => ({
+                document_name: r.document_name,
+                chunk_index: r.chunk_index,
+              })),
+            } : {},
+          }));
+
+          await supabase.from('chat_messages').insert(messagesToSave);
+
+          console.log(`[Chat] Saved ${messagesToSave.length} messages to session ${chatId}`);
+        } catch (error) {
+          console.error('[Chat] Failed to save messages:', error);
+          // Don't fail the chat if saving fails
         }
       },
     });
-
-    // Step 4: Return UIMessageStream response
-    // TODO: Add sources metadata using streaming data (future enhancement)
-    // See: https://ai-sdk.dev/docs/ai-sdk-ui/streaming-data
-    return result.toUIMessageStreamResponse();
   } catch (error) {
     console.error("[Chat] Unexpected error:", error);
     return new Response(
@@ -160,16 +180,4 @@ export async function POST(request: Request) {
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
-}
-
-// Optional: GET endpoint for testing
-export async function GET() {
-  return new Response(
-    JSON.stringify({
-      message: "RAG Chat API",
-      usage: "POST /api/chat with { query: string, depth?: 'quick' | 'standard' | 'detailed' }",
-      status: "ready",
-    }),
-    { headers: { 'Content-Type': 'application/json' } }
-  );
 }

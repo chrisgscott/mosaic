@@ -217,3 +217,150 @@ Instead of pre-processing all CSVs, process on-demand:
 
 ---
 
+## 🏛️ Architecture Decisions
+
+### 1. Three-Tier Architecture: Multi-Tenant Foundation vs Separate Instances
+
+**Context:** Mosaic will serve as the foundation for multiple client-facing projects. Need to decide on architecture that supports:
+- Separate billing per project
+- Easy project transfers/sales
+- IP protection (keep core platform)
+- Independent client customization
+
+**The Three Tiers:**
+1. **Tier 1: RAG Backend** - Python ingest, chunking, graph, embeddings
+2. **Tier 2: Admin Platform** - Mosaic web app (document mgmt, entity editing, settings)
+3. **Tier 3: Client Apps** - Separate repos, lightweight UI + API proxy
+
+**Option A: Multi-Tenant Mosaic (Recommended)**
+```
+Mosaic Admin Platform (Single Instance)
+  ├── Org 1: Newsletter Project
+  ├── Org 2: Research Project  
+  └── Org 3: Client Project
+       ↓
+Client Apps (Separate Repos)
+  ├── Newsletter App → Calls Mosaic API
+  ├── Research App → Calls Mosaic API
+  └── Client App → Calls Mosaic API
+```
+
+**Pros:**
+- ✅ Single admin platform to maintain
+- ✅ All improvements benefit all projects
+- ✅ Shared infrastructure (cost efficient)
+- ✅ Easy to add new projects
+- ✅ Client apps are lightweight
+- ✅ Can still sell projects (transfer repo + API key)
+
+**Cons:**
+- ❌ Requires multi-tenancy implementation (1-2 weeks)
+- ❌ All projects share same infrastructure
+- ❌ Break one, potentially affect others
+
+**Implementation Required:**
+- Organizations table with API keys
+- RLS policies for data isolation
+- API key authentication middleware
+- Cost tracking per organization
+- Public API routes (/api/public/search, /api/public/chat)
+- Client app template
+
+**Option B: Separate Instances**
+```
+Project 1: Full Mosaic Instance
+Project 2: Full Mosaic Instance
+Project 3: Full Mosaic Instance
+```
+
+**Pros:**
+- ✅ Complete independence
+- ✅ Easy to sell (transfer everything)
+- ✅ No shared infrastructure risk
+
+**Cons:**
+- ❌ Duplicate admin platforms
+- ❌ Updates must be applied to each
+- ❌ Higher infrastructure costs
+- ❌ More maintenance overhead
+
+**Option C: NPM Package Approach**
+```
+@mosaic/rag-foundation (npm package)
+  ↓
+Project 1 (imports package)
+Project 2 (imports package)
+Project 3 (imports package)
+```
+
+**Pros:**
+- ✅ True separation
+- ✅ Versioned releases
+- ✅ Projects update on their schedule
+
+**Cons:**
+- ❌ More overhead (publishing, versioning)
+- ❌ Can get out of sync
+- ❌ Need to manually update each project
+
+---
+
+**Key Questions to Answer:**
+
+1. **Timing:** Should we implement multi-tenancy now or wait until we have a second project?
+   - **Wait:** Simpler, no premature optimization
+   - **Now:** Easier to build in from start than retrofit
+
+2. **Risk Tolerance:** Comfortable with shared infrastructure?
+   - **Yes:** Multi-tenant is efficient
+   - **No:** Separate instances or NPM package
+
+3. **Maintenance Preference:** One platform vs multiple?
+   - **One:** Multi-tenant
+   - **Multiple:** Separate instances
+
+4. **Selling Strategy:** How will projects be sold?
+   - **With ongoing support:** Multi-tenant (keep API access)
+   - **Complete handoff:** Separate instances or NPM package
+
+5. **Integration with Phase 14:** How does this interact with Vercel AI SDK integration?
+   - **Multi-tenant:** Public API routes work with tools
+   - **Separate:** Each instance has own tools
+
+---
+
+**Recommended Decision Process:**
+
+1. **Immediate (This Week):**
+   - Start with Phase 14 (Vercel AI SDK integration)
+   - Build first client app as single-tenant
+   - Validate the three-tier concept
+
+2. **Short-term (Next 2-4 Weeks):**
+   - If second project appears, implement multi-tenancy
+   - If no second project, continue single-tenant
+
+3. **Decision Triggers:**
+   - **Implement multi-tenancy when:**
+     - Second project is confirmed
+     - Client wants to use Mosaic
+     - Need to demo to multiple audiences
+   - **Stay single-tenant if:**
+     - Only one project for next 3+ months
+     - Uncertain about architecture
+     - Want to keep it simple
+
+---
+
+**Priority:** High - Decision needed before building second project
+
+**Estimated Effort (if multi-tenant):**
+- Phase 1: Multi-tenancy implementation (1 week)
+- Phase 2: Public API routes (2-3 days)
+- Phase 3: Client app template (3-5 days)
+- Total: 2-3 weeks
+
+**Reference:** Full details in INBOX (now moved here)
+
+---
+

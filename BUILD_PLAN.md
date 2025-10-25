@@ -2926,4 +2926,242 @@ Enhance graph quality, document organization, and intelligent automation feature
 
 ---
 
-**Next Phase**: Phase 6 - Hybrid Search Enhancements or Phase 9 - Living Entities
+## Phase 14: Vercel AI SDK Integration - Agentic RAG 🔄 READY TO START
+
+**Goal:** Integrate Vercel AI SDK patterns to make Mosaic more agentic with tool-based architecture and multi-step reasoning.
+
+**Status:** Planning Complete, Ready for Implementation  
+**Priority:** High  
+**Estimated Effort:** 1-2 weeks (phased implementation)  
+**Dependencies:** Message persistence already implemented ✅
+
+**Context:**
+After reviewing Vercel's AI SDK cookbook, we identified key patterns to adopt while preserving our advanced search capabilities. We have superior backend (search/chunking/graph) but they have superior frontend (tools/multi-step/agentic). Opportunity to combine both approaches.
+
+### Phase 14.1: Tool-Based Search (2-3 days) 🎯 NEXT
+
+**Goal:** Make search a tool the AI can call, enabling agentic behavior
+
+**Tasks:**
+- [ ] Create `searchDocuments` tool that wraps existing `/api/search` endpoint
+- [ ] Add tool input schema with `query`, `useGraph`, `useAdvanced` parameters
+- [ ] Enable multi-step calls with `stopWhen: stepCountIs(5)`
+- [ ] Update UI to show tool calls ("🔍 Searching: query")
+- [ ] Update UI to show tool results ("✅ Found N results")
+- [ ] Keep existing `/api/search` endpoint for direct use
+
+**Implementation:**
+```typescript
+// apps/web/app/api/chat/route.ts
+tools: {
+  searchDocuments: tool({
+    description: 'Search your knowledge base for relevant information',
+    inputSchema: z.object({
+      query: z.string(),
+      useGraph: z.boolean().optional(),
+      useAdvanced: z.boolean().optional(),
+    }),
+    execute: async ({ query, useGraph, useAdvanced }) => {
+      const response = await fetch('/api/search', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          query,
+          use_graph: useGraph ?? true,
+          use_hyde: useAdvanced ?? true,
+        }),
+      });
+      return await response.json();
+    },
+  }),
+}
+
+const result = streamText({
+  model: getModelForDepth('standard'),
+  messages: convertToModelMessages(messages),
+  tools,
+  stopWhen: stepCountIs(5), // Allow up to 5 tool calls
+});
+```
+
+**Benefits:**
+- AI decides when to search (not every message)
+- Can search multiple times per conversation
+- Can refine queries based on results
+- Keep our advanced search pipeline
+- Better conversation flow
+
+**Success Criteria:**
+- ✅ AI can call search tool
+- ✅ Multi-step reasoning works
+- ✅ UI shows tool calls
+- ✅ Existing search endpoint still works
+
+---
+
+### Phase 14.2: Knowledge Management Tools (2-3 days)
+
+**Goal:** Add tools for conversational knowledge building
+
+**Tasks:**
+- [ ] Create `addKnowledge` tool for quick facts
+- [ ] Create `lookupEntity` tool for entity details
+- [ ] Create `exploreRelationships` tool for graph traversal
+- [ ] Implement tool execution logic
+- [ ] Update UI to show knowledge additions
+
+**Implementation:**
+```typescript
+tools: {
+  addKnowledge: tool({
+    description: 'Add a quick fact to the knowledge base',
+    inputSchema: z.object({
+      content: z.string(),
+      category: z.string().optional(),
+    }),
+    execute: async ({ content, category }) => {
+      // Create simple document, process, chunk, extract entities
+      return 'Added to knowledge base';
+    },
+  }),
+  
+  lookupEntity: tool({
+    description: 'Look up detailed information about an entity',
+    inputSchema: z.object({
+      entityName: z.string(),
+    }),
+    execute: async ({ entityName }) => {
+      // Search entities, return details + relationships
+    },
+  }),
+  
+  exploreRelationships: tool({
+    description: 'Explore how two entities are related',
+    inputSchema: z.object({
+      entityA: z.string(),
+      entityB: z.string(),
+      maxHops: z.number().optional(),
+    }),
+    execute: async ({ entityA, entityB, maxHops }) => {
+      // Find path between entities
+    },
+  }),
+}
+```
+
+**Benefits:**
+- Conversational knowledge building
+- Quick facts without document upload
+- Explore graph through conversation
+- More interactive experience
+
+**Success Criteria:**
+- ✅ Can add facts via conversation
+- ✅ Can lookup entities
+- ✅ Can explore relationships
+- ✅ All tools work with multi-step reasoning
+
+---
+
+### Phase 14.3: Optimization & Polish (3-5 days)
+
+**Goal:** Optimize performance and improve UX
+
+**Tasks:**
+- [ ] Add simple search mode (skip HyDE/Multi-Query for speed)
+- [ ] Implement caching middleware (`createCache` from AI SDK)
+- [ ] Improve tool descriptions for better AI decision-making
+- [ ] Add rich UI for tool results (entity cards, graphs)
+- [ ] Add tool result visualization
+- [ ] Performance monitoring and metrics
+
+**Implementation:**
+```typescript
+import { createCache } from 'ai';
+
+const cache = createCache({
+  ttl: 60 * 60, // 1 hour
+});
+
+const result = streamText({
+  model,
+  messages,
+  tools,
+  experimental_cache: cache, // Cache tool results
+});
+```
+
+**Benefits:**
+- Faster for simple queries
+- Reduced API costs
+- Better AI decision-making
+- Richer user experience
+
+**Success Criteria:**
+- ✅ Simple mode is faster
+- ✅ Caching reduces costs
+- ✅ Tool descriptions are clear
+- ✅ UI is polished
+
+---
+
+### Architecture Comparison
+
+**Before (Endpoint-Based):**
+```
+User Message → Chat Route → ALWAYS calls /api/search → Stream Response
+```
+
+**After (Tool-Based):**
+```
+User Message
+  → Chat Route with Tools
+  → AI Decides: Need to search?
+  → (if yes) Call searchDocuments tool
+  → AI Receives Results
+  → AI Decides: Need more info?
+  → (if yes) Call tool again
+  → Stream Final Response
+```
+
+### Expected Outcomes
+
+**Performance:**
+- 30-50% fewer searches (AI decides when needed)
+- Faster simple queries (skip advanced features)
+- Better accuracy (multi-step refinement)
+
+**User Experience:**
+- More natural conversation flow
+- Can add knowledge conversationally
+- Explore graph through chat
+- Transparent AI reasoning
+
+**Developer Experience:**
+- Cleaner architecture
+- Easier to add new tools
+- Better separation of concerns
+- Follows industry patterns
+
+### Resources
+
+**Documentation Created:**
+- `/docs/ai-sdk-patterns.md` - Comprehensive AI SDK patterns
+- `/docs/rag-comparison.md` - Detailed RAG implementation comparison
+- `/docs/search-comparison.md` - Search implementation deep dive
+
+**Vercel References:**
+- AI SDK Cookbook: https://ai-sdk.dev/cookbook
+- RAG Agent Guide: https://ai-sdk.dev/cookbook/guides/rag-chatbot
+- Message Persistence: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot-message-persistence
+- Caching Middleware: https://ai-sdk.dev/cookbook/next/caching-middleware
+- Multi-Step Tools: https://ai-sdk.dev/cookbook/next/call-tools-multiple-steps
+
+**Key Insight:**
+We don't need to choose between their approach and ours. We can have both:
+- Keep our advanced backend (search quality, chunking, graph)
+- Add their agentic frontend (tools, multi-step, conversational)
+- Result: Production-grade RAG with agentic capabilities
+
+---
+
+**Next Phase**: Phase 6 - Hybrid Search Enhancements or Phase 9 - Living Entities or Phase 14 - Vercel AI SDK Integration

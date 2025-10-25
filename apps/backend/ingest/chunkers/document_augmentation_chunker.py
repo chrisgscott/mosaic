@@ -70,13 +70,16 @@ class DocumentAugmentationChunker:
         base_chunks = self.base_chunker.chunk_document(doc, document_id)
         logger.info(f"Base chunker produced {len(base_chunks)} chunks")
         
-        # 2. Generate questions for each chunk
+        # 2. Generate questions for each chunk and cache them
         augmented_chunks = []
+        questions_cache = {}  # Cache questions to avoid regenerating
         questions_generated = 0
         
+        # First pass: Generate questions and add ORIGINAL chunks
         for chunk in base_chunks:
-            # Generate questions for this chunk
+            # Generate and cache questions for this chunk
             questions = self._generate_questions(chunk['content'])
+            questions_cache[chunk['id']] = questions
             questions_generated += len(questions)
             
             # Store original chunk with augmentation metadata
@@ -89,6 +92,15 @@ class DocumentAugmentationChunker:
             # Store question count in metadata instead of top-level
             original_chunk['metadata']['augmented_question_count'] = len(questions)
             augmented_chunks.append(original_chunk)
+        
+        # Second pass: Add AUGMENTED_QUESTION chunks with unique sequential indexes
+        # Start indexing after the last ORIGINAL chunk to avoid unique constraint violation
+        question_index_offset = len(base_chunks)
+        current_question_index = question_index_offset
+        
+        for chunk in base_chunks:
+            # Retrieve cached questions
+            questions = questions_cache[chunk['id']]
             
             # Store each question as a separate searchable chunk
             # IMPORTANT: Must have same keys as ORIGINAL chunks for batch insert
@@ -96,7 +108,7 @@ class DocumentAugmentationChunker:
                 question_chunk = {
                     'id': str(uuid.uuid4()),
                     'document_id': document_id,
-                    'chunk_index': chunk['chunk_index'],  # Same index as parent
+                    'chunk_index': current_question_index,  # Unique sequential index
                     'content': question,
                     'token_count': len(self.tokenizer.encode(question)),  # Accurate token count
                     'chunk_type': 'AUGMENTED_QUESTION',
@@ -104,10 +116,12 @@ class DocumentAugmentationChunker:
                     'metadata': {
                         **chunk.get('metadata', {}),
                         'is_augmented': True,
+                        'parent_chunk_index': chunk['chunk_index'],  # Store parent's index for reference
                         'parent_content_preview': chunk['content'][:200] + '...' if len(chunk['content']) > 200 else chunk['content']
                     }
                 }
                 augmented_chunks.append(question_chunk)
+                current_question_index += 1
         
         logger.info(f"Document augmentation complete: {len(base_chunks)} original chunks, {questions_generated} questions generated")
         logger.info(f"Total chunks (original + questions): {len(augmented_chunks)}")

@@ -2,6 +2,446 @@
 
 ## 🎯 Active Development
 
+### Three-Tier Architecture: Mosaic as Multi-Tenant Foundation
+**Priority:** High  
+**Effort:** 2-3 weeks  
+**Status:** Planning Phase  
+**Context:** Architectural decision for how Mosaic serves as the foundation for multiple client-facing projects while maintaining clean separation, independent billing, and easy project transfers.
+
+**Key Insight:**
+Mosaic should be a **three-tier system** where the admin platform (what we're building now) serves as the foundation for multiple lightweight client-facing apps.
+
+---
+
+#### **The Three Tiers**
+
+**Tier 1: RAG Backend (Foundation)**
+- Python ingest pipeline (`apps/backend/ingest/`)
+- Chunking strategies (Planner-Executor, Agentic, Structure-Aware)
+- Embedding generation and storage
+- Knowledge graph extraction and management
+- Core RAG logic (HyDE, Multi-Query, Reranking, Graph Search)
+- Database (Supabase with multi-tenant support)
+
+**Tier 2: Admin/Management Frontend (Current Mosaic Web App)**
+- Document upload and processing management
+- Entity and relationship editing
+- Knowledge graph visualization
+- System settings and configuration
+- Search testing and debugging tools
+- Analytics dashboard
+- Cost tracking per organization
+- **Admin-only access** (you and your team)
+
+**Tier 3: Client-Facing Apps (Separate Repos)**
+- Newsletter RAG app
+- Research assistant app
+- Customer support bot
+- Any other specialized applications
+- **Public/customer access** (paying users)
+- Lightweight (just UI + API proxy)
+- Calls Mosaic API with tenant-scoped API key
+
+---
+
+#### **Architecture Diagram**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  TIER 1: RAG Foundation (Backend)                       │
+│  - Python ingest pipeline                               │
+│  - Chunking, embeddings, graph extraction              │
+│  - Database (Supabase)                                  │
+│  - Core RAG logic                                       │
+└─────────────────────────────────────────────────────────┘
+                         ↑
+                         │ (Internal API)
+                         ↓
+┌─────────────────────────────────────────────────────────┐
+│  TIER 2: Admin Platform (Mosaic - Single Instance)      │
+│  - Document management                                  │
+│  - Entity/relationship editing                          │
+│  - Graph visualization                                  │
+│  - System settings                                      │
+│  - Multi-tenant (one org per project)                  │
+│  - Exposes public API for client apps                  │
+└─────────────────────────────────────────────────────────┘
+                         ↑
+                         │ (Public API with API Keys)
+                         ↓
+┌─────────────────────────────────────────────────────────┐
+│  TIER 3: Client-Facing Apps (Separate Repos)            │
+│                                                          │
+│  Newsletter App    Research App    Support Bot          │
+│  (Repo 1)          (Repo 2)        (Repo 3)            │
+│                                                          │
+│  Each has:                                              │
+│  - Custom UI/UX                                         │
+│  - API proxy to Mosaic                                  │
+│  - Tenant-specific API key                              │
+│  - Independent deployment                               │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### **Why This Architecture?**
+
+**Business Requirements:**
+1. ✅ **Separate Billing** - Each client app has own infrastructure costs
+2. ✅ **Easy to Sell** - Transfer client app repo + API key, clean handoff
+3. ✅ **IP Protection** - Core Mosaic platform stays yours
+4. ✅ **Flexibility** - Each client app can be customized independently
+5. ✅ **Scalability** - Add new projects without duplicating admin platform
+
+**Technical Benefits:**
+1. ✅ **Single Admin Platform** - All improvements benefit all projects
+2. ✅ **Shared Infrastructure** - One database, one backend to maintain
+3. ✅ **Lightweight Client Apps** - Just UI + API proxy (easy to build)
+4. ✅ **Multi-Tenant** - Org-scoped data with RLS policies
+5. ✅ **API-First** - Clean separation between admin and client apps
+
+---
+
+#### **Implementation Plan**
+
+**Phase 1: Add Multi-Tenancy to Mosaic (1 week)**
+
+1. **Database Schema Updates:**
+```sql
+-- Organizations table
+CREATE TABLE organizations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  api_key TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  settings JSONB DEFAULT '{}'
+);
+
+-- Add org_id to existing tables
+ALTER TABLE documents ADD COLUMN org_id UUID REFERENCES organizations(id);
+ALTER TABLE entities ADD COLUMN org_id UUID REFERENCES organizations(id);
+ALTER TABLE relationships ADD COLUMN org_id UUID REFERENCES organizations(id);
+ALTER TABLE chunks ADD COLUMN org_id UUID REFERENCES organizations(id);
+ALTER TABLE chat_sessions ADD COLUMN org_id UUID REFERENCES organizations(id);
+
+-- RLS policies for multi-tenancy
+CREATE POLICY "org_isolation_documents"
+  ON documents FOR ALL
+  USING (org_id = current_setting('app.current_org_id')::uuid);
+
+-- Repeat for all tables
+```
+
+2. **API Key Authentication:**
+```typescript
+// middleware.ts
+export async function middleware(req: NextRequest) {
+  const apiKey = req.headers.get('x-api-key');
+  
+  if (apiKey) {
+    // External API request - validate key and set org context
+    const org = await getOrgByApiKey(apiKey);
+    if (!org) return new Response('Invalid API key', { status: 401 });
+    req.headers.set('x-org-id', org.id);
+  } else {
+    // Admin request - use session
+    const session = await getSession();
+    if (!session) return NextResponse.redirect('/login');
+    req.headers.set('x-org-id', session.user.org_id);
+  }
+}
+```
+
+3. **Cost Tracking Per Organization:**
+```typescript
+// Track all API costs by organization
+await logCost({
+  org_id: orgId,
+  service: 'openai',
+  operation: 'embedding',
+  cost: 0.0001,
+  tokens: 1000,
+  timestamp: new Date(),
+});
+```
+
+---
+
+**Phase 2: Create Public API Routes (2-3 days)**
+
+```typescript
+// apps/web/app/api/public/search/route.ts
+export async function POST(req: Request) {
+  const orgId = req.headers.get('x-org-id'); // Set by middleware
+  const { query } = await req.json();
+  
+  // Run search scoped to organization
+  const results = await hybridSearch({
+    query,
+    orgId, // Only searches this org's documents
+    match_threshold: 0.5,
+    match_count: 10,
+  });
+  
+  return Response.json(results);
+}
+
+// apps/web/app/api/public/chat/route.ts
+export async function POST(req: Request) {
+  const orgId = req.headers.get('x-org-id');
+  const { messages } = await req.json();
+  
+  // Chat with org-scoped data
+  const result = await streamText({
+    model: getModelForDepth('standard'),
+    messages: convertToModelMessages(messages),
+    tools: {
+      searchDocuments: tool({
+        execute: async ({ query }) => {
+          return await hybridSearch({ query, orgId });
+        },
+      }),
+    },
+  });
+  
+  return result.toUIMessageStreamResponse();
+}
+```
+
+---
+
+**Phase 3: Create First Client App Template (3-5 days)**
+
+**Structure:**
+```
+newsletter-app/                    # Separate repo
+├── app/
+│   ├── page.tsx                   # Landing page
+│   ├── chat/
+│   │   └── page.tsx               # Chat interface
+│   └── api/
+│       └── chat/
+│           └── route.ts           # Proxies to Mosaic
+├── components/
+│   ├── chat-interface.tsx         # Custom UI
+│   └── newsletter-specific/       # Project-specific components
+├── .env
+│   ├── MOSAIC_API_URL=https://mosaic.yourdomain.com
+│   └── MOSAIC_API_KEY=newsletter_project_key
+└── package.json
+```
+
+**API Proxy Pattern:**
+```typescript
+// newsletter-app/app/api/chat/route.ts
+export async function POST(req: Request) {
+  const { messages } = await req.json();
+  
+  // Forward to Mosaic admin platform
+  const response = await fetch(
+    `${process.env.MOSAIC_API_URL}/api/public/chat`,
+    {
+      method: 'POST',
+      headers: {
+        'x-api-key': process.env.MOSAIC_API_KEY!,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messages }),
+    }
+  );
+  
+  // Stream response back to client
+  return new Response(response.body, {
+    headers: response.headers,
+  });
+}
+```
+
+---
+
+#### **Selling a Project**
+
+**What You Transfer:**
+1. ✅ Client app GitHub repo (transfer ownership)
+2. ✅ API key (transfer to buyer or issue new one)
+3. ✅ Domain name (transfer DNS)
+4. ✅ Vercel/hosting project (transfer account)
+5. ✅ Documentation (included in repo)
+
+**What You Keep:**
+1. ✅ Mosaic admin platform (you maintain)
+2. ✅ Core RAG foundation (your IP)
+3. ✅ Other client projects (unaffected)
+4. ✅ Improvements to foundation (benefit all projects)
+
+**Buyer Options:**
+
+**Option A: Continue Using Your Mosaic (Recommended)**
+- Buyer keeps using your Mosaic API
+- You bill them monthly for usage (API calls, storage)
+- Ongoing relationship and support
+- Easy for buyer (no infrastructure to manage)
+
+**Option B: Self-Host Mosaic**
+- Export their organization's data
+- Provide Mosaic codebase (or they clone from GitHub)
+- They deploy their own instance
+- Clean break, full independence
+- More work for buyer but complete ownership
+
+---
+
+#### **Cost Tracking & Billing**
+
+**Per Organization Tracking:**
+```sql
+CREATE TABLE org_costs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id UUID REFERENCES organizations(id),
+  service TEXT NOT NULL,              -- 'openai', 'cohere', 'supabase'
+  operation TEXT NOT NULL,            -- 'embedding', 'reranking', 'chat'
+  cost DECIMAL(10, 6) NOT NULL,
+  tokens INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Monthly cost summary
+CREATE VIEW org_monthly_costs AS
+SELECT 
+  org_id,
+  DATE_TRUNC('month', created_at) as month,
+  service,
+  SUM(cost) as total_cost,
+  SUM(tokens) as total_tokens
+FROM org_costs
+GROUP BY org_id, month, service;
+```
+
+**Billing Dashboard:**
+- Admin can see costs per organization
+- Generate invoices automatically
+- Track usage trends
+- Set spending limits/alerts
+
+---
+
+#### **Client App Independence**
+
+**Each client app has:**
+- ✅ Own GitHub repo (separate codebase)
+- ✅ Own Vercel project (separate deployment)
+- ✅ Own domain (separate DNS)
+- ✅ Own API key (tenant-scoped access)
+- ✅ Custom UI/UX (project-specific branding)
+- ✅ Independent scaling (based on their traffic)
+
+**But shares:**
+- ✅ Mosaic RAG foundation (via API)
+- ✅ Core search/chunking/graph capabilities
+- ✅ Improvements to foundation (automatic)
+- ✅ Infrastructure costs (billed per usage)
+
+---
+
+#### **Comparison with Alternatives**
+
+| Aspect | Multi-Tenant Mosaic | Separate Instances | Monorepo |
+|--------|---------------------|-------------------|----------|
+| **Separate Billing** | ✅ Easy (API key tracking) | ✅ Easy (separate accounts) | ❌ Complex |
+| **Sell Projects** | ✅ Transfer repo + API key | ✅ Transfer everything | ❌ Hard to extract |
+| **Maintenance** | ✅ Single platform | ❌ Multiple platforms | ✅ Single codebase |
+| **Improvements** | ✅ Benefit all projects | ❌ Must update each | ✅ Instant |
+| **Flexibility** | ✅ Custom client apps | ✅ Complete independence | ⚠️ Shared constraints |
+| **Infrastructure Cost** | ✅ Shared (efficient) | ❌ Duplicated | ✅ Shared |
+| **IP Protection** | ✅ Foundation separate | ⚠️ Everything included | ❌ Everything together |
+
+---
+
+#### **Migration Path**
+
+**Current State:**
+- Mosaic is single-tenant
+- No organization concept
+- No public API
+
+**Target State:**
+- Mosaic is multi-tenant admin platform
+- Multiple organizations with API keys
+- Public API for client apps
+- Separate client app repos
+
+**Migration Steps:**
+1. Add organizations table and RLS policies
+2. Migrate existing data to default organization
+3. Add API key authentication
+4. Create public API routes
+5. Build first client app as template
+6. Test end-to-end flow
+7. Document for future projects
+
+---
+
+#### **Next Steps**
+
+**Immediate (This Week):**
+1. Review and validate architecture
+2. Design organizations schema
+3. Plan RLS policy implementation
+
+**Short-term (Next 2 Weeks):**
+1. Implement multi-tenancy in Mosaic
+2. Create public API routes
+3. Build client app template
+
+**Medium-term (Next Month):**
+1. Migrate first project to new architecture
+2. Test billing and cost tracking
+3. Document handoff process
+
+---
+
+#### **Success Criteria**
+
+**Phase 1 Complete When:**
+- ✅ Organizations table exists with RLS
+- ✅ API key authentication works
+- ✅ Cost tracking per org implemented
+- ✅ Admin can manage multiple orgs
+
+**Phase 2 Complete When:**
+- ✅ Public API routes functional
+- ✅ API key scoping works correctly
+- ✅ Search/chat work via API
+- ✅ Rate limiting in place
+
+**Phase 3 Complete When:**
+- ✅ Client app template created
+- ✅ Can deploy and run independently
+- ✅ Calls Mosaic API successfully
+- ✅ End-to-end flow tested
+
+---
+
+#### **Resources**
+
+**Documentation to Create:**
+- Multi-tenancy implementation guide
+- Public API documentation
+- Client app template README
+- Project handoff checklist
+- Billing and cost tracking guide
+
+**Related Features:**
+- Complements Vercel AI SDK integration
+- Enables multiple client projects
+- Foundation for future growth
+- Supports business model (selling projects)
+
+---
+
+## 🎯 Active Development
+
 ### Synthesize Vercel AI SDK Patterns with Mosaic RAG
 **Priority:** High  
 **Effort:** 1-2 weeks (phased implementation)  

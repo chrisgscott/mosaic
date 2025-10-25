@@ -121,6 +121,68 @@ async function generateHyDE(query: string): Promise<string> {
   }
 }
 
+// Process augmented question results - replace with parent chunks
+async function processAugmentedResults(supabase: SupabaseClient, results: SearchResult[]): Promise<SearchResult[]> {
+  // Find all AUGMENTED_QUESTION results
+  const augmentedResults = results.filter(r => r.chunk_type === 'AUGMENTED_QUESTION');
+  
+  if (augmentedResults.length === 0) {
+    return results; // No augmented questions, return as-is
+  }
+  
+  console.log(`[Augmentation] Found ${augmentedResults.length} augmented question matches, fetching parent chunks`);
+  
+  // Get parent chunk IDs
+  const parentChunkIds = augmentedResults
+    .map(r => r.parent_chunk_id)
+    .filter((id): id is string => id !== null && id !== undefined);
+  
+  if (parentChunkIds.length === 0) {
+    return results;
+  }
+  
+  // Fetch parent chunks
+  const { data: parentChunks, error } = await supabase
+    .from('chunks')
+    .select('*')
+    .in('id', parentChunkIds);
+  
+  if (error) {
+    console.error("[Augmentation] Error fetching parent chunks:", error);
+    return results; // Fallback to original results
+  }
+  
+  // Create a map of parent chunks by ID
+  const parentChunkMap = new Map(parentChunks?.map(chunk => [chunk.id, chunk]) || []);
+  
+  // Replace augmented questions with their parent chunks
+  const processedResults = results.map(result => {
+    if (result.chunk_type === 'AUGMENTED_QUESTION' && result.parent_chunk_id) {
+      const parentChunk = parentChunkMap.get(result.parent_chunk_id);
+      if (parentChunk) {
+        console.log(`[Augmentation] Replaced question "${result.content.substring(0, 50)}..." with parent chunk`);
+        // Return parent chunk but preserve the rerank score from the question match
+        return {
+          ...parentChunk,
+          rerank_score: result.rerank_score,
+          rrf_score: result.rrf_score,
+          matched_via_question: true, // Flag to indicate this was matched via a question
+        };
+      }
+    }
+    return result;
+  });
+  
+  // Remove duplicates (same parent chunk matched by multiple questions)
+  const uniqueResults = Array.from(
+    new Map(processedResults.map(r => [r.chunk_id || r.id, r])).values()
+  );
+  
+  console.log(`[Augmentation] Processed ${results.length} results → ${uniqueResults.length} unique chunks`);
+  
+  return uniqueResults;
+}
+
 // Rerank results using Cohere Rerank API
 async function rerankResults(query: string, results: SearchResult[]): Promise<SearchResult[]> {
   if (!process.env.COHERE_API_KEY) {
@@ -193,6 +255,10 @@ export interface SearchResult {
   rerank_score?: number;
   document_name: string;
   document_file_type: string;
+  chunk_type?: string;  // 'ORIGINAL' or 'AUGMENTED_QUESTION'
+  parent_chunk_id?: string;  // For AUGMENTED_QUESTION chunks
+  matched_via_question?: boolean;  // Flag when result was matched via augmented question
+  id?: string;  // Chunk ID (alternative to chunk_id)
 }
 
 export interface SearchResponse {
@@ -451,6 +517,11 @@ export async function POST(request: NextRequest) {
         });
       }
       
+      // Process augmented question results - replace with parent chunks
+      if (finalResults.length > 0) {
+        finalResults = await processAugmentedResults(supabase, finalResults);
+      }
+      
       const processingTime = Date.now() - startTime;
       onProgress(createProgressEvent('complete', 'completed'));
       
@@ -525,6 +596,11 @@ export async function POST(request: NextRequest) {
           console.log(`  ${i + 1}. Rerank: ${result.rerank_score?.toFixed(3)} | RRF: ${result.rrf_score?.toFixed(4)} | Doc: ${result.document_name}`);
           console.log(`     Preview: ${result.content.substring(0, 80)}...`);
         });
+      }
+
+      // Process augmented question results - replace with parent chunks
+      if (finalResults.length > 0) {
+        finalResults = await processAugmentedResults(supabase, finalResults);
       }
 
       const processingTime = Date.now() - startTime;

@@ -16,6 +16,7 @@ from supabase import create_client, Client
 
 from processors.docling_processor import DoclingProcessor
 from chunkers.structure_aware_chunker import StructureAwareChunker
+from chunkers.document_augmentation_chunker import DocumentAugmentationChunker
 from processors.embeddings_generator import EmbeddingsGenerator
 from processors.graph_extractor import GraphExtractor
 from settings_service import SettingsService
@@ -55,6 +56,8 @@ DOCLING_MAX_WORKERS = settings_service.get_int('processing.pdfWorkers', 10, 'DOC
 ENABLE_GRAPH_EXTRACTION = settings_service.get_bool('search.useGraphSearch', True, 'ENABLE_GRAPH_EXTRACTION')
 CHUNK_SUMMARY_NEIGHBORS = settings_service.get_int('processing.summaryNeighbors', 2, 'CHUNK_SUMMARY_NEIGHBORS')
 CHUNK_MAX_TOKENS = settings_service.get_int('processing.chunkMaxTokens', 256, 'CHUNK_MAX_TOKENS')
+ENABLE_DOCUMENT_AUGMENTATION = settings_service.get_bool('processing.enableDocumentAugmentation', True, 'ENABLE_DOCUMENT_AUGMENTATION')
+QUESTIONS_PER_CHUNK = settings_service.get_int('processing.questionsPerChunk', 5, 'QUESTIONS_PER_CHUNK')
 
 # Get model settings for logging
 VLM_MODEL = settings_service.get_string('llm.vlmModel', 'gpt-4o')
@@ -76,6 +79,8 @@ logger.info(f"  • Summary Workers: {CHUNK_SUMMARY_NEIGHBORS}")
 logger.info(f"  • Summary Model: {SUMMARY_MODEL}")
 logger.info(f"  • Graph Model: {GRAPH_MODEL}")
 logger.info(f"  • Graph Extraction: {ENABLE_GRAPH_EXTRACTION}")
+logger.info(f"  • Document Augmentation: {ENABLE_DOCUMENT_AUGMENTATION}")
+logger.info(f"  • Questions Per Chunk: {QUESTIONS_PER_CHUNK}")
 logger.info("LLM:")
 logger.info(f"  • Embedding Model: {EMBEDDING_MODEL}")
 logger.info(f"  • Temperature: {TEMPERATURE}")
@@ -88,7 +93,21 @@ processor = DoclingProcessor(
     settings_service=settings_service,
     supabase_client=supabase  # Pass supabase for checkpointing
 )
-chunker = StructureAwareChunker(target_size=1000, min_size=300, max_size=2000)
+
+# Initialize base chunker
+base_chunker = StructureAwareChunker(target_size=1000, min_size=300, max_size=2000)
+
+# Wrap with document augmentation if enabled
+if ENABLE_DOCUMENT_AUGMENTATION:
+    chunker = DocumentAugmentationChunker(
+        base_chunker=base_chunker,
+        questions_per_chunk=QUESTIONS_PER_CHUNK,
+        model="gpt-4o-mini"
+    )
+    logger.info(f"Document augmentation enabled ({QUESTIONS_PER_CHUNK} questions per chunk)")
+else:
+    chunker = base_chunker
+    logger.info("Document augmentation disabled, using base chunker only")
 
 
 class DocumentWorker:
@@ -98,8 +117,16 @@ class DocumentWorker:
         # Store settings service reference
         self.settings_service = settings_service
         
-        # Initialize chunker
-        self.chunker = StructureAwareChunker(target_size=1000, min_size=300, max_size=2000)
+        # Initialize chunker (same pattern as global chunker)
+        base_chunker = StructureAwareChunker(target_size=1000, min_size=300, max_size=2000)
+        if ENABLE_DOCUMENT_AUGMENTATION:
+            self.chunker = DocumentAugmentationChunker(
+                base_chunker=base_chunker,
+                questions_per_chunk=QUESTIONS_PER_CHUNK,
+                model="gpt-4o-mini"
+            )
+        else:
+            self.chunker = base_chunker
         
         # Initialize embeddings generator
         self.embeddings_generator = EmbeddingsGenerator(supabase, settings_service=settings_service)

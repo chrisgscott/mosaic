@@ -25,6 +25,7 @@ Example:
 from typing import List, Dict, Any
 import logging
 import uuid
+import tiktoken
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ class DocumentAugmentationChunker:
         self.questions_per_chunk = questions_per_chunk
         self.model = model
         self.client = OpenAI()
+        self.tokenizer = tiktoken.get_encoding("cl100k_base")  # For token counting
         logger.info(f"DocumentAugmentationChunker initialized (questions_per_chunk={questions_per_chunk}, model={model})")
     
     def chunk_document(self, doc, document_id: str) -> List[Dict[str, Any]]:
@@ -77,21 +79,26 @@ class DocumentAugmentationChunker:
             questions = self._generate_questions(chunk['content'])
             questions_generated += len(questions)
             
-            # Store original chunk with metadata about questions
+            # Store original chunk with augmentation metadata
+            # IMPORTANT: Must have same keys as AUGMENTED_QUESTION chunks for batch insert
             original_chunk = {
                 **chunk,
                 'chunk_type': 'ORIGINAL',
-                'augmented_question_count': len(questions)
+                'parent_chunk_id': None,  # ORIGINAL chunks have no parent
             }
+            # Store question count in metadata instead of top-level
+            original_chunk['metadata']['augmented_question_count'] = len(questions)
             augmented_chunks.append(original_chunk)
             
             # Store each question as a separate searchable chunk
+            # IMPORTANT: Must have same keys as ORIGINAL chunks for batch insert
             for question in questions:
                 question_chunk = {
                     'id': str(uuid.uuid4()),
                     'document_id': document_id,
                     'chunk_index': chunk['chunk_index'],  # Same index as parent
                     'content': question,
+                    'token_count': len(self.tokenizer.encode(question)),  # Accurate token count
                     'chunk_type': 'AUGMENTED_QUESTION',
                     'parent_chunk_id': chunk['id'],  # Link back to original
                     'metadata': {

@@ -13,7 +13,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import dagre from "dagre";
-import { Entity } from "@/app/(app)/graph/actions";
+import { Entity } from "@/app/(app)/admin/graph/actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Maximize2, Network, GitBranch } from "lucide-react";

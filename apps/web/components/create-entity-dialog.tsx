@@ -27,7 +27,7 @@ import {
   suggestEntityRelationships,
   createRelationship,
   type Entity,
-} from "@/app/(app)/graph/actions";
+} from "@/app/(app)/admin/graph/actions";
 import { toast } from "sonner";
 
 // Helper function to get color for entity type

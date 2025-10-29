@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { deleteEntity, bulkUpdateEntityType, type Entity } from "@/app/(app)/graph/actions";
+import { deleteEntity, bulkUpdateEntityType, type Entity } from "@/app/(app)/admin/graph/actions";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";

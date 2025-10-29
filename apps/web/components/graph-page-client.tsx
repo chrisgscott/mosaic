@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { EntityList } from "./entity-list";
 import { Button } from "./ui/button";
 import { Sparkles, Network } from "lucide-react";
-import type { Entity } from "@/app/(app)/graph/actions";
+import type { Entity } from "@/app/(app)/admin/graph/actions";
 
 export function GraphPageClient({
   initialEntities,

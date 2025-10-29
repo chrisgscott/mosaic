@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/command";
 import { Check, ChevronsUpDown, Save, X, ArrowLeftRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Entity } from "@/app/(app)/graph/actions";
+import type { Entity } from "@/app/(app)/admin/graph/actions";
 import { AIDescriptionButton } from "@/components/ui/ai-description-button";
 
 // Convert snake_case to plain language

@@ -27,7 +27,7 @@ import {
   deleteRelationship,
   updateRelationship,
   type Relationship,
-} from "@/app/(app)/graph/actions";
+} from "@/app/(app)/admin/graph/actions";
 
 export function RelationshipsPageClient({
   initialRelationships,

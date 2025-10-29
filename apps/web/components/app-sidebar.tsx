@@ -4,7 +4,7 @@ import { Sparkles } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import { NavMain } from "@/components/nav-main"
-import { NavProjects } from "@/components/nav-projects"
+import { NavAdmin } from "@/components/nav-admin"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
 import {
@@ -25,37 +25,40 @@ const data = {
       icon: "LayoutDashboard",
       isActive: true,
     },
+  ],
+  navSecondary: [],
+  admin: [
     {
       title: "Documents",
-      url: "/documents",
+      url: "/admin/documents",
       icon: "FileText",
     },
     {
       title: "Search",
-      url: "/search",
+      url: "/admin/search",
       icon: "Search",
     },
     {
       title: "Chat",
-      url: "/chat",
+      url: "/admin/chat",
       icon: "MessageSquare",
     },
     {
       title: "Knowledge Graph",
-      url: "/graph",
+      url: "/admin/graph",
       icon: "Network",
       items: [
         {
           title: "View Graph",
-          url: "/graph",
+          url: "/admin/graph",
         },
         {
           title: "Visualize",
-          url: "/graph/visualize",
+          url: "/admin/graph/visualize",
         },
         {
           title: "Clean Up Duplicates",
-          url: "/graph/cleanup",
+          url: "/admin/graph/cleanup",
         },
       ],
     },
@@ -66,21 +69,13 @@ const data = {
       items: [
         {
           title: "General",
-          url: "/settings/general",
+          url: "/admin/settings/general",
         },
         {
           title: "Prompts",
-          url: "/settings/prompts",
+          url: "/admin/settings/prompts",
         },
       ],
-    },
-  ],
-  navSecondary: [],
-  projects: [
-    {
-      name: "Quick Upload",
-      url: "/documents",
-      icon: "Upload",
     },
   ],
 }
@@ -92,7 +87,7 @@ export async function AppSidebar({ ...props }: React.ComponentProps<typeof Sideb
   // Get profile from profiles table
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, email, avatar_url")
+    .select("full_name, email, avatar_url, is_admin")
     .eq("id", userData.user?.id)
     .single()
   
@@ -101,6 +96,8 @@ export async function AppSidebar({ ...props }: React.ComponentProps<typeof Sideb
     email: profile?.email || userData.user?.email || "user@example.com",
     avatar: profile?.avatar_url || "",
   }
+  
+  const isAdmin = profile?.is_admin === true
 
   return (
     <Sidebar variant="inset" {...props}>
@@ -123,8 +120,8 @@ export async function AppSidebar({ ...props }: React.ComponentProps<typeof Sideb
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
         <NavSecondary items={data.navSecondary} className="mt-auto" />
+        {isAdmin && <NavAdmin items={data.admin} />}
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={user} />

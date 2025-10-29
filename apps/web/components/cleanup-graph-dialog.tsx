@@ -23,8 +23,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Sparkles, Check, X, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import { type Entity } from "@/app/(app)/graph/actions";
-import { mergeEntities } from "@/app/(app)/graph/actions";
+import { type Entity } from "@/app/(app)/admin/graph/actions";
+import { mergeEntities } from "@/app/(app)/admin/graph/actions";
 
 interface DuplicateGroup {
   entities: Entity[];

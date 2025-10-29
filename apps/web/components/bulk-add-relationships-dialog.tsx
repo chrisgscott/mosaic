@@ -34,7 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { bulkCreateRelationships, type Entity } from "@/app/(app)/graph/actions";
+import { bulkCreateRelationships, type Entity } from "@/app/(app)/admin/graph/actions";
 import { toast } from "sonner";
 
 // Relationship types from backend

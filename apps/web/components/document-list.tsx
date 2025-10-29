@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { deleteDocument, toggleDocumentPublic } from "@/app/(app)/documents/actions";
+import { deleteDocument, toggleDocumentPublic } from "@/app/(app)/admin/documents/actions";
 import { useIsAdmin } from "@/lib/hooks/use-is-admin";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";

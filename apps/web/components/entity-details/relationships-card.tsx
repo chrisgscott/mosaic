@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { RelationshipSentence } from "./relationship-sentence";
 import { RelationshipEditForm } from "./relationship-edit-form";
-import type { Entity } from "@/app/(app)/graph/actions";
+import type { Entity } from "@/app/(app)/admin/graph/actions";
 import { toast } from "sonner";
-import { updateRelationship, deleteRelationship, getEntities, createRelationship } from "@/app/(app)/graph/actions";
+import { updateRelationship, deleteRelationship, getEntities, createRelationship } from "@/app/(app)/admin/graph/actions";
 
 interface Relationship {
   id: string;

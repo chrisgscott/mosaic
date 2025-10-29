@@ -15,7 +15,7 @@ import "reactflow/dist/style.css";
 import dagre from "dagre";
 import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide } from "d3-force";
 import dynamic from "next/dynamic";
-import { Entity } from "@/app/(app)/graph/actions";
+import { Entity } from "@/app/(app)/admin/graph/actions";
 
 // Dynamically import ForceGraph2D to avoid SSR issues
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });

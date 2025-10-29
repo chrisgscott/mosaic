@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { deleteEntity, updateEntity, type Entity } from "@/app/(app)/graph/actions";
+import { deleteEntity, updateEntity, type Entity } from "@/app/(app)/admin/graph/actions";
 import { EntityHeader } from "./entity-details/entity-header";
 import { EntityInfoCard } from "./entity-details/entity-info-card";
 import { EntityEditForm } from "./entity-details/entity-edit-form";

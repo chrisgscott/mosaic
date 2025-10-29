@@ -24,7 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, GitMerge, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import { mergeEntities, type Entity } from "@/app/(app)/graph/actions";
+import { mergeEntities, type Entity } from "@/app/(app)/admin/graph/actions";
 
 export function MergeEntitiesDialog({
   open,

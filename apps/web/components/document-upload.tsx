@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { createDocumentRecord } from "@/app/(app)/documents/actions";
+import { createDocumentRecord } from "@/app/(app)/admin/documents/actions";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";

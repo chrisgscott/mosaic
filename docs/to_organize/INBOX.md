@@ -1,23 +1,24 @@
 # INBOX
 
-**Last Cleaned:** October 30, 2025
+**Last Cleaned:** October 24, 2025
 
 This file contains new ideas and enhancements that haven't yet been prioritized for BUILD_PLAN or TO_PROCESS.
 
 ---
 
-## ✅ Recently Moved Items (Oct 30, 2025)
+## ✅ Recently Moved Items
 
 ### Moved to BUILD_PLAN:
-- **Phase 15: Inline Citations with Deep-Linking** - Perplexity-style citations with Docling support
-- **Phase 16: shadcn AI Components UI Modernization** - Professional AI interface overhaul
+- **Phase 14: Vercel AI SDK Integration** - Ready for implementation with clear 3-phase plan
 
 ### Moved to TO_PROCESS:
-- **Multi-Hop Graph Traversal Analysis** - Decision on whether to implement true multi-hop
+- **Three-Tier Architecture Decision** - Requires architectural decisions before implementation
 
 ---
 
 ## 💡 Enhancements & Ideas
+
+### Three-Tier Architecture: Mosaic as Multi-Tenant Foundation (MOVED)
 **Priority:** High  
 **Effort:** 2-3 weeks  
 **Status:** Planning Phase  
@@ -852,189 +853,6 @@ We don't need to choose between their approach and ours. We can have both:
 ---
 
 ## 💡 Enhancements & Ideas
-
-### Inline Citations with Deep-Linking (MOVED TO BUILD_PLAN)
-**Priority:** High  
-**Effort:** 1 week (phased implementation)  
-**Context:** Implement Perplexity-style inline citations with hover previews and deep-linking to specific chunks in Docling documents.
-
----
-
-#### **Core Concept**
-Replace our current "sources at the end" approach with inline citations that appear directly where claims are made. Each citation shows a badge `[1]` that on hover reveals source details, quotes, and provides direct navigation to the exact chunk in the document.
-
----
-
-#### **Key Components**
-
-**1. shadcn Inline Citation Component**
-- Hover cards with source previews
-- Carousel for multiple sources per citation  
-- Mobile-friendly (click support)
-- Keyboard navigation
-- Based on Vercel AI Elements (Apache 2.0)
-
-**2. Docling Deep-Link Support**
-- Store JSON pointers (`#/texts/5`) in chunk metadata
-- Preserve page numbers and bounding boxes
-- Enable direct navigation to specific elements
-- HTML export with element IDs
-
-**3. Enhanced Citation Links**
-- Current: `/admin/documents/{documentId}`
-- New: `/admin/documents/{documentId}#chunk-{chunkId}`
-- Auto-scroll and highlight target chunk
-- Show chunk in document context
-
----
-
-#### **Implementation Plan**
-
-**Phase 1: Store Docling Metadata (1-2 days)**
-```python
-# Update chunkers to preserve Docling identifiers
-for chunk in docling_chunks:
-    db_chunk = {
-        "content": chunk.text,
-        "metadata": {
-            "docling_pointer": chunk.origin,  # #/texts/5
-            "page_number": chunk.page_no,
-            "bbox": chunk.bbox,
-            "element_type": chunk.obj_type
-        }
-    }
-```
-
-**Phase 2: Add shadcn Components (1 day)**
-```bash
-npx shadcn@latest add @shadcn/hover-card @shadcn/badge @shadcn/carousel
-```
-
-**Phase 3: Create Inline Citation Component (2 days)**
-- Custom component based on Vercel AI Elements
-- Supports hover previews with quotes
-- Carousel for multiple sources
-- Deep-link URLs to chunks
-
-**Phase 4: Update Chat Response (2 days)**
-- Parse citations in AI responses
-- Render inline badges instead of end sources
-- Structured citation data in backend
-- Mobile touch support
-
-**Phase 5: Document Viewer Enhancement (1 day)**
-- Accept chunk ID in URL/hash
-- Scroll to and highlight chunk
-- Show chunk in full context
-
----
-
-#### **Technical Details**
-
-**Citation Data Structure:**
-```typescript
-interface CitationSource {
-  number: string;           // [1], [2], etc.
-  title: string;            // Document name
-  url: string;              // Deep link to chunk
-  description?: string;     // Chunk preview
-  quote?: string;           // Relevant excerpt
-  chunkId: string;          // UUID for navigation
-  documentId: string;       // Document UUID
-}
-```
-
-**Backend Schema Update:**
-```typescript
-// Return structured citations from chat API
-const response = {
-  content: "AI response with [1] citations",
-  citations: [
-    {
-      number: "1",
-      title: "Strategy Tactics Deck",
-      url: `/admin/documents/${docId}#chunk-${chunkId}`,
-      description: "Chunk about design thinking...",
-      quote: "Design thinking is a human-centered approach...",
-      chunkId: "uuid-here",
-      documentId: "doc-uuid"
-    }
-  ]
-};
-```
-
-**Frontend Rendering:**
-```tsx
-// Parse and render inline citations
-content.split(/(\[\d+\])/).map((part, idx) => {
-  const citation = part.match(/\[(\d+)\]/);
-  if (citation) {
-    return (
-      <InlineCitation sources={getCitation(citation[1])}>
-        <span className="citation-badge">{part}</span>
-      </InlineCitation>
-    );
-  }
-  return part;
-});
-```
-
----
-
-#### **Benefits**
-
-1. **Trust & Verification**: Users can immediately verify claims
-2. **Professional UX**: Academic-style citations like research papers  
-3. **Better Navigation**: Direct links to exact source location
-4. **Context Preservation**: Stay in flow while verifying
-5. **Mobile Optimized**: Touch-friendly citation cards
-6. **Rich Previews**: See quotes before navigating
-
----
-
-#### **Docling Compatibility**
-
-✅ **Fully Supported:**
-- JSON pointers for each element
-- HTML export with IDs
-- Page numbers and layout info
-- Hierarchical structure preservation
-- Bounding box coordinates
-
-✅ **No Breaking Changes:**
-- Existing chunks remain functional
-- Gradual metadata population
-- Backward compatible citation links
-
----
-
-#### **Example User Flow**
-
-```
-User asks: "What is design thinking?"
-
-AI responds: "Design thinking is a human-centered approach [1] that 
-emphasizes empathy [2] and iterative prototyping [3]."
-
-User hovers over [1]:
-┌─────────────────────────┐
-│ Strategy Tactics Deck   │ ← Document title
-│ "Design thinking is..." │ ← Quote preview  
-│ View Source →           │ ← Deep link to chunk
-│ [◄] [1/3] [►]          │ ← Carousel navigation
-└─────────────────────────┘
-
-User clicks "View Source":
-→ Opens document at exact chunk
-→ Chunk highlighted in yellow
-→ Shows surrounding context
-```
-
----
-
-### shadcn AI Components UI Modernization (MOVED TO BUILD_PLAN)
-
----
 
 ### Graph Learning from Search Patterns
 **Priority:** High  

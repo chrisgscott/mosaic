@@ -1,6 +1,6 @@
 # Goal
 
-Develop Mosaic’s **multifloor traversal framework** for R2R — a topic-agnostic, extensible system that supports multi-hop reasoning, temporal tracking, and layered representation. This serves as the foundation for all domain-specific projects built on Mosaic.
+Develop Mosaic’s **multifloor traversal framework** — a topic-agnostic, extensible system that supports multi-hop reasoning, temporal tracking, and layered representation. This serves as the foundation for all domain-specific projects built on Mosaic.
 
 # Multifloor Model Overview
 

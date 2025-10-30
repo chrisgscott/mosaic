@@ -1,3 +1,4 @@
+OBSOLETE: Superseded by direct OpenAI settings-based approach. Retained for historical reference.
 # Hardcoded Model References Cleanup - Complete ✅
 
 ## 🎯 Objective

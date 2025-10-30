@@ -500,7 +500,7 @@ export function DocumentList({
                 </TableCell>
                 <TableCell>
                   <button
-                    onClick={() => router.push(`/documents/${doc.id}`)}
+                    onClick={() => router.push(`/admin/documents/${doc.id}`)}
                     className="flex items-center gap-2 hover:underline text-left w-full"
                   >
                     {(() => {

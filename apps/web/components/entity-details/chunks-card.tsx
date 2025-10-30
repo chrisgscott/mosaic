@@ -73,7 +73,7 @@ export function ChunksCard({ chunks, documents }: ChunksCardProps) {
               <div className="flex items-center gap-2 text-sm font-medium">
                 <FileText className="h-4 w-4 text-muted-foreground" />
                 <Link
-                  href={`/documents/${documentId}`}
+                  href={`/admin/documents/${documentId}`}
                   className="hover:underline text-primary"
                 >
                   {documentName}
@@ -95,7 +95,7 @@ export function ChunksCard({ chunks, documents }: ChunksCardProps) {
                         Chunk {chunk.chunk_index + 1}
                       </Badge>
                       <Link
-                        href={`/documents/${chunk.document_id}#chunk-${chunk.id}`}
+                        href={`/admin/documents/${chunk.document_id}#chunk-${chunk.id}`}
                         className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
                       >
                         View in document

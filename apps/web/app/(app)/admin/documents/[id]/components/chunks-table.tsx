@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { extractEntitiesFromChunk } from "@/app/(app)/graph/actions";
+import { extractEntitiesFromChunk } from "@/app/(app)/admin/graph/actions";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";

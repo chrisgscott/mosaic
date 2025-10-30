@@ -141,7 +141,7 @@ export function SemanticSearch() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <Link
-                      href={`/documents/${result.document_id}`}
+                      href={`/admin/documents/${result.document_id}`}
                       className="hover:underline"
                     >
                       <CardTitle className="text-lg flex items-center gap-2">
@@ -166,7 +166,7 @@ export function SemanticSearch() {
                   {highlightText(result.content)}
                 </p>
                 <Link
-                  href={`/documents/${result.document_id}#chunk-${result.chunk_index}`}
+                  href={`/admin/documents/${result.document_id}#chunk-${result.chunk_index}`}
                   className="inline-flex items-center gap-1 text-sm text-primary hover:underline mt-3"
                 >
                   View in document →

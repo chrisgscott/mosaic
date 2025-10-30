@@ -6,7 +6,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { gateway } from './gateway';
+import { openai } from '@ai-sdk/openai';
 
 /**
  * Model settings stored in database
@@ -98,14 +98,14 @@ export async function getModelSettings(): Promise<ModelSettings> {
 export async function getConfiguredModels() {
   const settings = await getModelSettings();
   
-  // Settings now store provider/model format, so we can pass through directly
+  // Settings now store model names directly (no provider prefix)
   return {
-    quick: gateway(settings.quickModel),
-    standard: gateway(settings.standardModel),
-    detailed: gateway(settings.detailedModel),
-    deepResearch: gateway(settings.deepResearchModel),
-    summary: gateway(settings.summaryModel),
-    vlm: gateway(settings.vlmModel),
+    quick: openai(settings.quickModel),
+    standard: openai(settings.standardModel),
+    detailed: openai(settings.detailedModel),
+    deepResearch: openai(settings.deepResearchModel),
+    summary: openai(settings.summaryModel),
+    vlm: openai(settings.vlmModel),
   };
 }
 

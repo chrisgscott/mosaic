@@ -1,37 +1,26 @@
-import { createGateway } from '@ai-sdk/gateway';
+import { openai } from '@ai-sdk/openai';
 
 /**
- * Vercel AI Gateway Configuration
+ * OpenAI Direct Configuration
  * 
- * Official Vercel AI Gateway provides:
- * - Unified API across 20+ providers (OpenAI, Anthropic, Google, xAI, etc.)
- * - Automatic failover and retry logic
- * - Centralized usage tracking and cost monitoring
- * - Provider-level routing and load balancing
- * - OIDC authentication for Vercel deployments
- * 
- * Documentation: https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway
- * Dashboard: https://vercel.com/ai-gateway
+ * Uses OpenAI SDK directly without AI Gateway for simplicity.
+ * All models use standard OpenAI model names (no provider prefix).
  */
 
-// Initialize Vercel AI Gateway
-// Uses AI_GATEWAY_API_KEY from environment or OIDC for Vercel deployments
-export const gateway = createGateway({
-  apiKey: process.env.AI_GATEWAY_API_KEY,
-});
-
 /**
- * Model configurations for different use cases
+ * Model Registry
  * 
- * Format: 'provider/model-name'
- * Available providers: openai, anthropic, google, xai, groq, deepseek, etc.
+ * Centralized model definitions with semantic names.
+ * All models use direct OpenAI SDK.
  * 
- * Philosophy:
- * - quick: Fast, cheap operations (HyDE, multi-query, simple tasks)
- * - standard: Default chat responses, entity extraction
- * - detailed: High-quality analysis, complex reasoning
- * - deepResearch: Advanced reasoning with o1/o4 models
- * - vlm: Vision tasks requiring multimodal models
+ * Model Selection Guide:
+ * - quick: Fast, cheap operations (HyDE, multi-query generation)
+ * - standard: Default for most tasks (chat, entity extraction)
+ * - detailed: High-quality analysis (complex reasoning)
+ * - deepResearch: Advanced reasoning with extended thinking
+ * - summary: Document/chunk summarization
+ * - vlm: Vision-language model for image understanding
+ * - embedding: Text embeddings for semantic search
  */
 /**
  * Default models (used as fallback if settings unavailable)
@@ -39,14 +28,15 @@ export const gateway = createGateway({
  */
 export const models = {
   // Core models for different quality/speed tradeoffs
-  quick: gateway('openai/gpt-4.1-nano'),              // Ultra-fast: HyDE, multi-query
-  standard: gateway('openai/gpt-4o-mini'),            // Default: chat, entities, graph
-  detailed: gateway('openai/gpt-4o'),                 // High quality: complex analysis
-  deepResearch: gateway('openai/o4-mini-deep-research'), // Advanced reasoning
+  quick: openai('gpt-4.1-nano'),              // Ultra-fast: HyDE, multi-query
+  standard: openai('gpt-4o-mini'),            // Default: chat, entities, graph
+  detailed: openai('gpt-4.1'),                // High quality: complex analysis
+  deepResearch: openai('o4-mini-deep-research'), // Advanced reasoning
   
   // Specialized models
-  summary: gateway('openai/gpt-4o-mini'),             // Chunk summaries
-  vlm: gateway('openai/gpt-4o'),                      // Vision/multimodal
+  summary: openai('gpt-4.1-mini'),            // Chunk/document summarization
+  vlm: openai('gpt-4o-mini'),                 // Vision-language model
+  embedding: openai('text-embedding-3-small'), // Semantic embeddings
 } as const;
 
 export type ResponseDepth = keyof typeof models;
@@ -68,24 +58,3 @@ export function estimateCost(inputTokens: number, outputTokens: number): number 
   return inputCost + outputCost;
 }
 
-/**
- * Provider routing options for advanced use cases
- * 
- * Example usage:
- * ```ts
- * import type { GatewayProviderOptions } from '@ai-sdk/gateway';
- * 
- * const result = await generateText({
- *   model: gateway('anthropic/claude-sonnet-4'),
- *   prompt: 'Hello',
- *   providerOptions: {
- *     gateway: {
- *       order: ['vertex', 'anthropic'], // Try Vertex AI first
- *       only: ['vertex', 'anthropic'],  // Only use these providers
- *       user: 'user-123',                // Track usage per user
- *       tags: ['chat', 'v2'],            // Tag for analytics
- *     }
- *   }
- * });
- * ```
- */

@@ -30,7 +30,7 @@ export function Sources({ sources, className }: SourcesProps) {
         {sources.map((source, idx) => (
           <Link
             key={source.chunkId}
-            href={`/documents/${source.documentId}`}
+            href={`/admin/documents/${source.documentId}`}
             className="flex items-start gap-2 p-2 rounded-md hover:bg-muted transition-colors group"
           >
             <span className="text-xs font-mono text-muted-foreground mt-0.5">

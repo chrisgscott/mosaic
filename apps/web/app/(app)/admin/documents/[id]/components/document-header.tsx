@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { deleteDocument, toggleDocumentPublic } from "@/app/(app)/documents/actions";
+import { deleteDocument, toggleDocumentPublic } from "@/app/(app)/admin/documents/actions";
 import { useIsAdmin } from "@/lib/hooks/use-is-admin";
 import { useState } from "react";
 

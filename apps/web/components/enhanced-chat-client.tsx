@@ -118,7 +118,7 @@ export function EnhancedChatClient({
       ...msg,
       reasoning: (msg as EnhancedChatMessage).reasoning,
       // Extract sources from message data (set by backend)
-      sources: (msg as any).data?.sources || (msg as EnhancedChatMessage).sources,
+      sources: (msg as { data?: { sources?: Citation[] } }).data?.sources || (msg as EnhancedChatMessage).sources,
       isStreaming: status === 'streaming' && msg === messages[messages.length - 1],
     }));
     

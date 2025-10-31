@@ -6,7 +6,7 @@
  */
 
 export type ModelInfo = {
-  value: string; // provider/model format (e.g., 'openai/gpt-4o-mini')
+  value: string; // model name without provider prefix (e.g., 'gpt-4o-mini')
   label: string; // Display name
   cost: number; // Cost per 100 pages in USD
   costDisplay: string; // Formatted cost for display
@@ -22,8 +22,8 @@ export type ModelCategory = 'quick' | 'summary' | 'standard' | 'detailed' | 'dee
  */
 export const ALL_MODELS: Record<string, ModelInfo> = {
   // Ultra-fast, cheapest models
-  'openai/gpt-5-nano': {
-    value: 'openai/gpt-5-nano',
+  'gpt-5-nano': {
+    value: 'gpt-5-nano',
     label: 'GPT-5 Nano',
     cost: 0.02,
     costDisplay: '$0.02',
@@ -31,8 +31,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
     bestFor: 'High-volume classification, auto-complete, chat filters, bulk tagging',
     speed: 3,
   },
-  'openai/gpt-4.1-nano': {
-    value: 'openai/gpt-4.1-nano',
+  'gpt-4.1-nano': {
+    value: 'gpt-4.1-nano',
     label: 'GPT-4.1 Nano',
     cost: 0.02,
     costDisplay: '$0.02',
@@ -42,8 +42,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
   },
   
   // Fast, cheap models
-  'openai/gpt-4o-mini': {
-    value: 'openai/gpt-4o-mini',
+  'gpt-4o-mini': {
+    value: 'gpt-4o-mini',
     label: 'GPT-4o Mini',
     cost: 0.03,
     costDisplay: '$0.03',
@@ -51,8 +51,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
     bestFor: 'Customer service chatbots, FAQ responses, product descriptions, quick summaries',
     speed: 3,
   },
-  'openai/gpt-4.1-mini': {
-    value: 'openai/gpt-4.1-mini',
+  'gpt-4.1-mini': {
+    value: 'gpt-4.1-mini',
     label: 'GPT-4.1 Mini',
     cost: 0.08,
     costDisplay: '$0.08',
@@ -60,8 +60,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
     bestFor: 'Code comments, PR reviews, technical documentation, API responses',
     speed: 2,
   },
-  'openai/gpt-5-mini': {
-    value: 'openai/gpt-5-mini',
+  'gpt-5-mini': {
+    value: 'gpt-5-mini',
     label: 'GPT-5 Mini',
     cost: 0.10,
     costDisplay: '$0.10',
@@ -71,8 +71,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
   },
   
   // Multimodal fast models
-  'google/gemini-2.5-flash': {
-    value: 'google/gemini-2.5-flash',
+  'gemini-2.5-flash': {
+    value: 'gemini-2.5-flash',
     label: 'Gemini 2.5 Flash',
     cost: 0.13,
     costDisplay: '$0.13',
@@ -82,8 +82,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
   },
   
   // Reasoning models (budget)
-  'openai/o4-mini': {
-    value: 'openai/o4-mini',
+  'o4-mini': {
+    value: 'o4-mini',
     label: 'O4 Mini',
     cost: 0.23,
     costDisplay: '$0.23',
@@ -91,8 +91,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
     bestFor: 'Quick reasoning tasks, math help, step-by-step tutorials, logical problems',
     speed: 1,
   },
-  'openai/o3-mini': {
-    value: 'openai/o3-mini',
+  'o3-mini': {
+    value: 'o3-mini',
     label: 'O3 Mini',
     cost: 0.23,
     costDisplay: '$0.23',
@@ -102,8 +102,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
   },
   
   // Production quality
-  'anthropic/claude-haiku-4.5': {
-    value: 'anthropic/claude-haiku-4.5',
+  'claude-haiku-4.5': {
+    value: 'claude-haiku-4.5',
     label: 'Claude Haiku 4.5',
     cost: 0.25,
     costDisplay: '$0.25',
@@ -113,8 +113,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
   },
   
   // Full-featured models
-  'openai/gpt-4.1': {
-    value: 'openai/gpt-4.1',
+  'gpt-4.1': {
+    value: 'gpt-4.1',
     label: 'GPT-4.1',
     cost: 0.41,
     costDisplay: '$0.41',
@@ -122,8 +122,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
     bestFor: 'Full-stack coding, complex SQL queries, technical analysis, 1M token context',
     speed: 2,
   },
-  'openai/gpt-4o': {
-    value: 'openai/gpt-4o',
+  'gpt-4o': {
+    value: 'gpt-4o',
     label: 'GPT-4o',
     cost: 0.41,
     costDisplay: '$0.41',
@@ -131,8 +131,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
     bestFor: 'Multimodal analysis, vision tasks, balanced quality and speed',
     speed: 2,
   },
-  'openai/o3': {
-    value: 'openai/o3',
+  'o3': {
+    value: 'o3',
     label: 'O3',
     cost: 0.41,
     costDisplay: '$0.41',
@@ -140,8 +140,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
     bestFor: 'STEM problem solving, code debugging, mathematical proofs, scientific analysis',
     speed: 1,
   },
-  'openai/o4-mini-deep-research': {
-    value: 'openai/o4-mini-deep-research',
+  'o4-mini-deep-research': {
+    value: 'o4-mini-deep-research',
     label: 'O4 Mini Deep Research',
     cost: 0.41,
     costDisplay: '$0.41',
@@ -151,8 +151,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
   },
   
   // Premium models
-  'openai/gpt-5': {
-    value: 'openai/gpt-5',
+  'gpt-5': {
+    value: 'gpt-5',
     label: 'GPT-5',
     cost: 0.51,
     costDisplay: '$0.51',
@@ -160,8 +160,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
     bestFor: 'Production coding, creative writing, complex instructions, agentic workflows',
     speed: 2,
   },
-  'google/gemini-2.5-pro': {
-    value: 'google/gemini-2.5-pro',
+  'gemini-2.5-pro': {
+    value: 'gemini-2.5-pro',
     label: 'Gemini 2.5 Pro',
     cost: 0.51,
     costDisplay: '$0.51',
@@ -169,8 +169,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
     bestFor: 'Long-context analysis (1M tokens), enterprise applications, Google Search grounding',
     speed: 2,
   },
-  'anthropic/claude-sonnet': {
-    value: 'anthropic/claude-sonnet',
+  'claude-sonnet': {
+    value: 'claude-sonnet',
     label: 'Claude Sonnet',
     cost: 0.77,
     costDisplay: '$0.77',
@@ -178,8 +178,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
     bestFor: 'Software architecture, complex coding, nuanced writing, detailed analysis',
     speed: 2,
   },
-  'anthropic/claude-sonnet-1m': {
-    value: 'anthropic/claude-sonnet-1m',
+  'claude-sonnet-1m': {
+    value: 'claude-sonnet-1m',
     label: 'Claude Sonnet (1M Window)',
     cost: 0.77,
     costDisplay: '$0.77',
@@ -189,8 +189,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
   },
   
   // Advanced reasoning
-  'openai/o3-deep-research': {
-    value: 'openai/o3-deep-research',
+  'o3-deep-research': {
+    value: 'o3-deep-research',
     label: 'O3 Deep Research',
     cost: 2.05,
     costDisplay: '$2.05',
@@ -200,8 +200,8 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
   },
   
   // Mission-critical
-  'openai/gpt-5-pro': {
-    value: 'openai/gpt-5-pro',
+  'gpt-5-pro': {
+    value: 'gpt-5-pro',
     label: 'GPT-5 Pro',
     cost: 6.08,
     costDisplay: '$6.08',
@@ -217,56 +217,56 @@ export const ALL_MODELS: Record<string, ModelInfo> = {
 export const MODELS_BY_CATEGORY: Record<ModelCategory, string[]> = {
   // Ultra-fast generation (HyDE, multi-query expansion)
   quick: [
-    'openai/gpt-5-nano',
-    'openai/gpt-4.1-nano',
-    'openai/gpt-4o-mini',
+    'gpt-5-nano',
+    'gpt-4.1-nano',
+    'gpt-4o-mini',
   ],
   
   // Chunk summaries (needs good comprehension)
   summary: [
-    'openai/gpt-4o-mini',
-    'openai/gpt-4.1-mini',
-    'openai/gpt-5-mini',
-    'anthropic/claude-haiku-4.5',
+    'gpt-4o-mini',
+    'gpt-4.1-mini',
+    'gpt-5-mini',
+    'claude-haiku-4.5',
   ],
   
   // Chat, entity extraction, graph search
   standard: [
-    'openai/gpt-4o-mini',
-    'openai/gpt-4.1-mini',
-    'openai/gpt-5-mini',
-    'google/gemini-2.5-flash',
-    'anthropic/claude-haiku-4.5',
-    'openai/gpt-4.1',
+    'gpt-4o-mini',
+    'gpt-4.1-mini',
+    'gpt-5-mini',
+    'gemini-2.5-flash',
+    'claude-haiku-4.5',
+    'gpt-4.1',
   ],
   
   // Complex analysis, detailed responses
   detailed: [
-    'openai/gpt-4.1',
-    'openai/gpt-4o',
-    'openai/gpt-5',
-    'google/gemini-2.5-pro',
-    'anthropic/claude-sonnet',
+    'gpt-4.1',
+    'gpt-4o',
+    'gpt-5',
+    'gemini-2.5-pro',
+    'claude-sonnet',
   ],
   
   // Advanced reasoning
   deepResearch: [
-    'openai/o4-mini',
-    'openai/o3-mini',
-    'openai/o3',
-    'openai/o4-mini-deep-research',
-    'openai/o3-deep-research',
-    'openai/gpt-5-pro',
+    'o4-mini',
+    'o3-mini',
+    'o3',
+    'o4-mini-deep-research',
+    'o3-deep-research',
+    'gpt-5-pro',
   ],
   
   // Vision/multimodal
   vlm: [
-    'openai/gpt-4o-mini',
-    'openai/gpt-4o',
-    'openai/gpt-5',
-    'google/gemini-2.5-flash',
-    'google/gemini-2.5-pro',
-    'anthropic/claude-sonnet',
+    'gpt-4o-mini',
+    'gpt-4o',
+    'gpt-5',
+    'gemini-2.5-flash',
+    'gemini-2.5-pro',
+    'claude-sonnet',
   ],
 };
 

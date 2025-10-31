@@ -150,7 +150,7 @@ export const InlineCitationCarouselHeader = ({
 }: InlineCitationCarouselHeaderProps) => (
   <div
     className={cn(
-      'flex items-center justify-between gap-2 rounded-t-md bg-secondary p-2',
+      'flex items-center justify-between gap-2 rounded-t-md bg-secondary px-4 py-2',
       className
     )}
     {...props}

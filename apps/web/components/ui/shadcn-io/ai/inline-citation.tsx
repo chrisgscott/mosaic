@@ -129,9 +129,12 @@ export const InlineCitationCarousel = ({
 
 export type InlineCitationCarouselContentProps = ComponentProps<'div'>;
 
-export const InlineCitationCarouselContent = (
-  props: InlineCitationCarouselContentProps
-) => <CarouselContent {...props} />;
+export const InlineCitationCarouselContent = ({
+  className,
+  ...props
+}: InlineCitationCarouselContentProps) => (
+  <CarouselContent className={cn('', className)} {...props} />
+);
 
 export type InlineCitationCarouselItemProps = ComponentProps<'div'>;
 
@@ -139,7 +142,7 @@ export const InlineCitationCarouselItem = ({
   className,
   ...props
 }: InlineCitationCarouselItemProps) => (
-  <CarouselItem className={cn('w-full space-y-2 p-4', className)} {...props} />
+  <CarouselItem className={cn('w-full space-y-2 px-4 py-4', className)} {...props} />
 );
 
 export type InlineCitationCarouselHeaderProps = ComponentProps<'div'>;

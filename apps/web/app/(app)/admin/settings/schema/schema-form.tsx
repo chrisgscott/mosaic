@@ -8,8 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Edit2, Save, X } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
+import { Loader2, Plus, Trash2, Edit2, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 type EntityType = {
@@ -118,11 +117,91 @@ export function SchemaForm({ settings }: { settings: SchemaSettings }) {
     setRelationshipTypes(updated);
   };
 
-  const deleteEntityType = (index: number) => {
+  const deleteEntityType = async (index: number) => {
+    const typeToDelete = entityTypes[index];
+    
+    // Check if this type is in use
+    const response = await fetch(`/api/schema/check-usage?type=${typeToDelete.name}&category=entity`);
+    const { count } = await response.json();
+    
+    if (count > 0) {
+      // Show migration dialog
+      const otherTypes = entityTypes.filter((_, i) => i !== index);
+      const newType = window.prompt(
+        `This entity type is used by ${count} entities.\n\nEnter the name of the type to migrate them to:\n\n${otherTypes.map(t => t.name).join(', ')}`,
+        otherTypes[0]?.name || ''
+      );
+      
+      if (!newType) return; // User cancelled
+      
+      if (!otherTypes.find(t => t.name === newType)) {
+        toast.error('Invalid type name. Migration cancelled.');
+        return;
+      }
+      
+      // Migrate entities
+      const migrateResponse = await fetch('/api/schema/migrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category: 'entity',
+          fromType: typeToDelete.name,
+          toType: newType,
+        }),
+      });
+      
+      if (!migrateResponse.ok) {
+        toast.error('Failed to migrate entities');
+        return;
+      }
+      
+      toast.success(`Migrated ${count} entities from "${typeToDelete.name}" to "${newType}"`);
+    }
+    
     setEntityTypes(entityTypes.filter((_, i) => i !== index));
   };
 
-  const deleteRelationshipType = (index: number) => {
+  const deleteRelationshipType = async (index: number) => {
+    const typeToDelete = relationshipTypes[index];
+    
+    // Check if this type is in use
+    const response = await fetch(`/api/schema/check-usage?type=${typeToDelete.name}&category=relationship`);
+    const { count } = await response.json();
+    
+    if (count > 0) {
+      // Show migration dialog
+      const otherTypes = relationshipTypes.filter((_, i) => i !== index);
+      const newType = window.prompt(
+        `This relationship type is used by ${count} relationships.\n\nEnter the name of the type to migrate them to:\n\n${otherTypes.map(t => t.name).join(', ')}`,
+        otherTypes[0]?.name || ''
+      );
+      
+      if (!newType) return; // User cancelled
+      
+      if (!otherTypes.find(t => t.name === newType)) {
+        toast.error('Invalid type name. Migration cancelled.');
+        return;
+      }
+      
+      // Migrate relationships
+      const migrateResponse = await fetch('/api/schema/migrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category: 'relationship',
+          fromType: typeToDelete.name,
+          toType: newType,
+        }),
+      });
+      
+      if (!migrateResponse.ok) {
+        toast.error('Failed to migrate relationships');
+        return;
+      }
+      
+      toast.success(`Migrated ${count} relationships from "${typeToDelete.name}" to "${newType}"`);
+    }
+    
     setRelationshipTypes(relationshipTypes.filter((_, i) => i !== index));
   };
 

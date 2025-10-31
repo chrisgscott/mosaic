@@ -6,52 +6,39 @@ This document contains items from INBOX that need additional decisions or resear
 
 ## 🧹 Infrastructure Cleanup & Optimization
 
-### 1. Reduce Render Persistent Disk Size
+### 1. Render Infrastructure Cleanup ✅ COMPLETED
 
-**Current State:** Using persistent disk for `/tmp` storage on Render ingestion worker.
+**mosaic-ingest Worker:**
+- **Status:** SUSPENDED (no cost)
+- **Reason:** Using local worker successfully
+- **Savings:** $32.50/month ($25 worker + $2.50 disk)
+- **Action:** Keep suspended as backup
 
-**Opportunity:** With Docling, we create significantly fewer temp files than with Unstructured.
+**mosaic-api Service:**
+- **Status:** ACTIVE but unused
+- **Reason:** No source code exists, web app uses Next.js API routes
+- **Savings:** $7/month if deleted
+- **Action:** DELETE service
 
-**Action Items:**
-1. Monitor actual `/tmp` usage during document processing
-2. Test with various document sizes (small, medium, large PDFs)
-3. Calculate maximum concurrent `/tmp` usage
-4. Reduce disk size to minimum needed + buffer
-5. Potential savings: $0.25/GB/month
+**Total Potential Savings:** $39.50/month
 
-**Priority:** Medium - Cost optimization opportunity once Docling is proven stable.
+---
 
-**Decision Needed:** Allocate time to monitor and test disk usage patterns.
+### 2. Lazy Processing Pattern (DEFERRED)
+
+**Decision:** Keep eager processing for now
+- Current approach works well
+- Better user experience (instant search)
+- Reasonable costs for personal/small team usage
+- Simpler architecture
+
+**Revisit:** When/if embedding costs become significant
 
 ---
 
 ## 🤖 Advanced RAG Patterns (Evaluation Needed)
 
-### 1. Lazy Processing Pattern
-
-**Concept:** Move expensive operations from ingestion → retrieval to only process what's actually used.
-
-**What to Move to Retrieval:**
-- Embeddings generation - Only embed chunks that get retrieved
-- Entity extraction - Only extract entities from accessed chunks
-- Summarization - Generate summaries on-demand
-
-**Benefits:**
-- Faster ingestion
-- Cost savings (only process what's used)
-- Better ROI
-- Scales better
-
-**Trade-offs:**
-- First retrieval is slower (cold start)
-- Need caching strategy
-- More complex retrieval logic
-
-**Decision Needed:** Evaluate if lazy processing fits Mosaic's use case. Consider hybrid approach (eager for popular docs, lazy for others).
-
----
-
-### 3. Structured Data & Spreadsheet Intelligence
+### 1. Structured Data & Spreadsheet Intelligence
 
 **Current State:**
 - ✅ CSV/XLSX files are processed by Docling

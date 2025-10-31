@@ -7,10 +7,10 @@ variables if database is unavailable.
 """
 
 import os
-import time
 import logging
-from typing import Any, Optional, Dict
-from supabase import Client
+from typing import Optional, Any, Union, List, Dict
+import json
+from supabase import create_client, Client
 
 logger = logging.getLogger(__name__)
 

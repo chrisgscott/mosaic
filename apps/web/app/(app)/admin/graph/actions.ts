@@ -198,10 +198,10 @@ export async function bulkUpdateEntityType(
     return { error: "No entities provided" };
   }
 
-  // Verify all entities belong to the user
+  // Verify all entities belong to the user and get their canonical names
   const { data: entities, error: fetchError } = await supabase
     .from("entities")
-    .select("id, user_id")
+    .select("id, user_id, canonical_name, type")
     .in("id", entityIds);
 
   if (fetchError || !entities) {
@@ -212,6 +212,23 @@ export async function bulkUpdateEntityType(
   const unauthorized = entities.some((entity) => entity.user_id !== user.id);
   if (unauthorized) {
     return { error: "Unauthorized: You don't own all selected entities" };
+  }
+
+  // Check for potential conflicts with existing entities
+  const canonicalNames = entities.map(e => e.canonical_name);
+  const { data: conflicts } = await supabase
+    .from("entities")
+    .select("canonical_name, name, type")
+    .eq("user_id", user.id)
+    .eq("type", newType)
+    .in("canonical_name", canonicalNames)
+    .not("id", "in", `(${entityIds.join(",")})`);
+
+  if (conflicts && conflicts.length > 0) {
+    const conflictNames = conflicts.map(c => `"${c.name}"`).join(", ");
+    return { 
+      error: `Cannot update: ${conflicts.length} entity(ies) would conflict with existing entities of type "${newType}": ${conflictNames}. Consider merging these entities instead.` 
+    };
   }
 
   // Update all entities

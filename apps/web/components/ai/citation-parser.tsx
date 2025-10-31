@@ -111,9 +111,19 @@ function parseCitations(text: string, citations: Citation[], baseKey: number): R
                         description={citation.description}
                       />
                       {citation.quote && (
-                        <InlineCitationQuote>
-                          {citation.quote}
-                        </InlineCitationQuote>
+                        <>
+                          <InlineCitationQuote>
+                            {citation.quote}
+                          </InlineCitationQuote>
+                          <a
+                            href={citation.url}
+                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-2"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            View full context →
+                          </a>
+                        </>
                       )}
                     </InlineCitationCarouselItem>
                   </InlineCitationCarouselContent>

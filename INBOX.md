@@ -983,6 +983,211 @@ We don't need to choose between their approach and ours. We can have both:
 
 ## 💡 Enhancements & Ideas
 
+### Real-Time Progress Indicators for Chat
+**Priority:** Medium  
+**Effort:** 1-2 weeks  
+**Status:** Needs Research  
+**Context:** Show users what's happening during backend processing (searching, ranking, etc.) instead of just a generic "thinking" indicator.
+
+---
+
+#### **Current Problem**
+When users send a chat message, there's a 2-10 second delay while the backend:
+1. Analyzes the question
+2. Generates query variations (Multi-Query)
+3. Searches documents (4+ parallel searches)
+4. Ranks results (reranking)
+5. Generates response
+
+Users see nothing during this time except a generic loading state. They don't know if it's working or stuck.
+
+---
+
+#### **Desired Experience**
+Show real-time progress steps like:
+```
+✓ Analyzing your question
+⟳ Finding the best ways to search
+○ Preparing search queries
+○ Searching through your documents
+○ Ranking by relevance
+○ Generating response
+```
+
+Similar to what we see in server logs:
+```
+[Progress] Analyzing your question (completed)
+[Progress] Finding the best ways to search (in-progress)
+[Multi-Query] Generated 3 variations in 1038ms
+[Progress] Searching through your documents (completed)
+[Progress] Ranking by relevance (in-progress)
+```
+
+---
+
+#### **Technical Challenges**
+
+**Challenge 1: AI SDK Message Management**
+- The Vercel AI SDK's `useChat` hook automatically manages messages
+- When `sendMessage()` is called, it immediately adds the user message to the array
+- This triggers React re-renders that interfere with custom "thinking" messages
+- Temporary messages get removed before they can be displayed
+
+**Challenge 2: Backend Progress Events**
+- Backend logs progress to console, not to client
+- No streaming of progress events from `/api/search` to `/api/chat` to client
+- Would need Server-Sent Events (SSE) or similar streaming mechanism
+
+**Challenge 3: Architecture Mismatch**
+- Chat API calls Search API and waits for complete response
+- Search API doesn't stream progress, returns final results
+- Would need to refactor both APIs to support streaming progress
+
+---
+
+#### **Potential Solutions**
+
+**Option 1: AI SDK Experimental Features**
+The AI SDK may support streaming custom data alongside responses:
+```typescript
+// Backend
+const result = streamText({
+  model,
+  messages,
+  experimental_telemetry: {
+    // Could potentially stream progress here
+  },
+  onChunk: (chunk) => {
+    // Send custom progress events?
+  }
+});
+```
+
+**Needs Research:**
+- Does AI SDK support streaming custom metadata?
+- Can we send progress events alongside message streaming?
+- What's the recommended pattern for this use case?
+
+**Option 2: Server-Sent Events (SSE)**
+Implement separate SSE endpoint for progress:
+```typescript
+// Client subscribes to progress stream
+const eventSource = new EventSource(`/api/progress/${sessionId}`);
+eventSource.onmessage = (event) => {
+  const progress = JSON.parse(event.data);
+  updateProgressUI(progress);
+};
+
+// Backend publishes progress events
+publishProgress(sessionId, {
+  step: 'searching',
+  status: 'in-progress',
+  message: 'Searching through your documents'
+});
+```
+
+**Challenges:**
+- Need session coordination between chat and progress streams
+- More complex architecture
+- Additional infrastructure (Redis/memory store for pub/sub)
+
+**Option 3: Simulated Progress (Current Attempt - Failed)**
+Show fake progress steps that advance on timers:
+```typescript
+// Show steps that advance every 800ms
+const steps = [
+  'Analyzing your question',
+  'Finding search strategies',
+  'Searching documents',
+  'Ranking results',
+];
+```
+
+**Why It Failed:**
+- AI SDK's automatic message management conflicts with custom messages
+- Thinking messages get removed immediately when real messages arrive
+- Creates infinite re-render loops
+- Not showing real backend progress anyway
+
+---
+
+#### **Recommended Approach**
+
+**Phase 1: Simple Loading State (Quick Win - 1 day)**
+Show a single loading indicator when `status === 'streaming'`:
+```typescript
+{status === 'streaming' && (
+  <div className="flex items-center gap-2">
+    <Loader size={14} />
+    <span>Searching your documents...</span>
+  </div>
+)}
+```
+
+**Benefits:**
+- Works with AI SDK out of the box
+- No complex state management
+- Better than nothing
+- What most AI UIs do (ChatGPT, Claude, etc.)
+
+**Phase 2: Research AI SDK Capabilities (1-2 days)**
+- Review AI SDK documentation for streaming custom data
+- Check experimental features and telemetry
+- Look at AI SDK cookbook examples
+- Ask in AI SDK Discord/GitHub discussions
+
+**Phase 3: Implement Real Progress (1-2 weeks)**
+Once we understand AI SDK capabilities:
+- Modify backend to stream progress events
+- Update frontend to display real-time progress
+- Show actual backend steps, not simulated
+- Provide transparency into what's happening
+
+---
+
+#### **Questions to Answer**
+
+1. **Does the AI SDK support streaming custom metadata alongside messages?**
+   - Need to check experimental features
+   - Review telemetry options
+   - Look for examples in cookbook
+
+2. **What's the recommended pattern for progress indicators in AI SDK?**
+   - Is there a built-in way to do this?
+   - Do we need SSE or can we use the existing stream?
+   - Are there examples from Vercel or community?
+
+3. **Should we wait for tool-based architecture first?**
+   - Tool calls naturally show progress (AI searching, AI analyzing, etc.)
+   - Might solve the problem differently
+   - Could be simpler than custom progress events
+
+---
+
+#### **Related Work**
+
+- **Tool-Based Architecture (Phase 6.1)** - Tool calls show AI reasoning steps
+- **Enhanced Chat UI** - Already has professional interface, just needs progress
+- **Search Pipeline** - Already logs progress, just needs to stream it
+
+---
+
+#### **Success Criteria**
+
+**Minimum (Phase 1):**
+- ✅ Show loading state when processing
+- ✅ Better than blank screen
+- ✅ Works reliably without bugs
+
+**Ideal (Phase 3):**
+- ✅ Real-time progress from backend
+- ✅ Shows actual steps being performed
+- ✅ Updates as backend progresses
+- ✅ Transparent and informative
+- ✅ No performance impact
+
+---
+
 ### Inline Citations with Deep-Linking (MOVED TO BUILD_PLAN)
 **Priority:** High  
 **Effort:** 1 week (phased implementation)  

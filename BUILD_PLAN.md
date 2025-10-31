@@ -125,7 +125,41 @@ Mosaic is a comprehensive RAG platform combining semantic search with graph-base
 - User trust improvements
 - Answer quality indicators
 
-#### 6.4 Vercel AI SDK Tool-Based Architecture
+#### 6.4 Entity Deduplication During Extraction
+**Status:** Ready to start  
+**Priority:** Medium  
+**Estimated:** 2-5 days (phased)
+
+**Current State:** Entities are extracted without checking for existing duplicates, leading to graph pollution.
+
+**Implementation Phases:**
+- **Phase 1:** Simple exact matching (1-2 days)
+- **Phase 2:** Fuzzy matching with confidence scores (2-3 days)  
+- **Phase 3:** LLM-powered contextual resolution (future)
+
+**Benefits:**
+- Cleaner knowledge graph
+- Better relationship accumulation
+- Improved search quality
+- Prevention vs cure approach
+
+**Implementation Approach:**
+```python
+def extract_entities_with_dedup(text, existing_entities):
+    potential = llm_extract_entities(text)
+    resolved = []
+    
+    for entity in potential:
+        match = find_exact_match(entity.name, existing_entities)
+        if match:
+            resolved.append(match)  # Use existing
+        else:
+            resolved.append(create_entity(entity))  # Create new
+    
+    return resolved
+```
+
+#### 6.5 Vercel AI SDK Tool-Based Architecture
 **Status:** Phase 1 complete, Phase 2 ready to start  
 **Priority:** High  
 **Estimated:** 2-3 days for Phase 2
@@ -427,9 +461,10 @@ def process_csv(file_path, document_id):
 
 #### Short Term (Weeks 1-4): Core RAG Enhancement
 1. **Week 1-2:** Grounding Controls & Context Management
-2. **Week 3:** Vercel AI SDK Tool-Based Architecture (Phase 2)
-3. **Week 4:** Conversation Features
-4. **Week 5:** DEG-RAG Planning & Setup
+2. **Week 3:** Entity Deduplication During Extraction (Phase 1)
+3. **Week 4:** Vercel AI SDK Tool-Based Architecture (Phase 2)
+4. **Week 5:** Conversation Features
+5. **Week 6:** DEG-RAG Planning & Setup
 
 #### Medium Term (Weeks 5-8): Knowledge Graph & Living Entities
 1. **Week 5-6:** DEG-RAG Implementation

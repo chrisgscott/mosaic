@@ -264,16 +264,22 @@ Project 3 (imports package)
 
 ## 🎯 Feature Enhancement Decisions
 
-### 1. ✅ ALREADY IN BUILD_PLAN: Entity Deduplication During Extraction
+### 1. ✅ MOVED TO BUILD_PLAN: Entity Deduplication During Extraction
 
-**Status:** Already covered in Phase 7.1 DEG-RAG Implementation  
-**Reference:** See "Entity resolution across documents" in BUILD_PLAN.md
+**Status:** Moved to Phase 6.4 in BUILD_PLAN  
+**Priority:** Medium  
+**Implementation:** 
+- Phase 1: Simple exact matching (1-2 days)
+- Phase 2: Fuzzy matching with confidence scores (2-3 days)
+- Complements DEG-RAG (prevention vs cleanup)
+
+**Reference:** See Phase 6.4 in BUILD_PLAN.md
 
 ---
 
 ### 2. ✅ MOVED TO BUILD_PLAN: Vercel AI SDK Tool-Based Architecture
 
-**Status:** Moved to Phase 6.4 in BUILD_PLAN  
+**Status:** Moved to Phase 6.5 in BUILD_PLAN  
 **Priority:** High  
 **Current State:** Phase 1 complete, Phase 2 ready to start
 
@@ -281,7 +287,7 @@ Project 3 (imports package)
 - Phase 2: Tool-based search (2-3 days)
 - Benefits: 30-50% fewer unnecessary searches, better UX
 
-**Reference:** See Phase 6.4 in BUILD_PLAN.md
+**Reference:** See Phase 6.5 in BUILD_PLAN.md
 
 ---
 

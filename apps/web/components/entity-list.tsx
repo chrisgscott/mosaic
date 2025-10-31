@@ -556,7 +556,7 @@ export function EntityList({
                   </TableCell>
                   <TableCell>
                     <button
-                      onClick={() => router.push(`/graph/${entity.id}`)}
+                      onClick={() => router.push(`/admin/graph/${entity.id}`)}
                       className="flex items-center gap-2 hover:underline text-left w-full"
                     >
                       <span className="font-medium">{entity.name.charAt(0).toUpperCase() + entity.name.slice(1)}</span>
@@ -607,7 +607,7 @@ export function EntityList({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => router.push(`/graph/${entity.id}`)}>
+                        <DropdownMenuItem onClick={() => router.push(`/admin/graph/${entity.id}`)}>
                           <Network className="mr-2 h-4 w-4" />
                           View Details
                         </DropdownMenuItem>

@@ -18,6 +18,126 @@ This file contains new ideas and enhancements that haven't yet been prioritized 
 ---
 
 ## 💡 Enhancements & Ideas
+
+### Entity Deduplication During Extraction
+**Priority:** Medium  
+**Effort:** 2-5 days (phased implementation)  
+**Context:** Improve knowledge graph quality by preventing duplicate entities at extraction time rather than cleaning them up later.
+
+---
+
+#### **Core Concept**
+Add an entity resolution step during extraction that checks existing entities before creating new ones, reducing graph pollution and improving relationship quality.
+
+---
+
+#### **Current Problem**
+```
+Document A: Extracts "Tesla Motors" → Creates new entity
+Document B: Extracts "Tesla Inc" → Creates new entity  
+Document C: Extracts "Tesla" → Creates new entity
+Result: 3 duplicate Tesla entities with fragmented relationships
+```
+
+---
+
+#### **Proposed Solution**
+```
+Document A: Extracts "Tesla Motors" → Creates new entity
+Document B: Extracts "Tesla Inc" → Matches existing "Tesla Motors"
+Document C: Extracts "Tesla" → Matches existing "Tesla Motors"
+Result: 1 unified Tesla entity with complete relationships
+```
+
+---
+
+#### **Implementation Approaches**
+
+**Phase 1: Simple Exact Matching (1-2 days)**
+```python
+def extract_entities_with_dedup(text, existing_entities):
+    potential = llm_extract_entities(text)
+    resolved = []
+    
+    for entity in potential:
+        match = find_exact_match(entity.name, existing_entities)
+        if match:
+            resolved.append(match)  # Use existing
+        else:
+            resolved.append(create_entity(entity))  # Create new
+    
+    return resolved
+```
+
+**Phase 2: Fuzzy Matching + Confidence (2-3 days)**
+```python
+def resolve_entity(entity_name, existing_entities):
+    # Try exact match first
+    exact = find_exact_match(entity_name, existing_entities)
+    if exact: return exact
+    
+    # Try fuzzy match with confidence > 0.9
+    fuzzy = find_fuzzy_match(entity_name, existing_entities, threshold=0.9)
+    if fuzzy: return fuzzy
+    
+    # No match found, create new
+    return create_entity(entity_name)
+```
+
+**Phase 3: LLM-Powered Contextual Resolution (Future enhancement)**
+```python
+def resolve_with_llm(potential_entity, existing_entities):
+    prompt = f"""
+    Does "{potential_entity.name}" match any existing entities?
+    Consider context, abbreviations, and business relationships.
+    
+    Return either: MATCH: [entity_id] or NEW
+    """
+    return llm_call(prompt)
+```
+
+---
+
+#### **Benefits**
+
+1. **Cleaner Knowledge Graph** - No duplicate "Tesla" entities
+2. **Better Relationships** - Connections accumulate to single entities  
+3. **Improved Search** - Don't miss relationships due to duplicates
+4. **Cost Savings** - Fewer entities to store and process
+5. **Data Quality** - More accurate entity analytics
+6. **Prevention vs Cure** - Stop duplicates at source vs cleanup later
+
+---
+
+#### **Challenges to Consider**
+
+1. **Performance** - Checking against hundreds/thousands of entities
+2. **False Positives** - "Apple" (company) vs "Apple" (fruit)
+3. **Context Dependence** - Same name, different meanings in different docs
+4. **Entity Evolution** - "Tesla Motors" → "Tesla Inc"
+
+---
+
+#### **Integration Points**
+
+- **Graph Extractor**: Add deduplication step in `graph_extractor.py`
+- **Entity Storage**: Cache existing entities for fast lookup
+- **Confidence Scoring**: Track match confidence for manual review
+- **Relationship Accumulation**: Merge relationships when entities match
+
+---
+
+#### **Relationship to Existing Plans**
+
+This complements the planned **Phase 10.1: Entity Deduplication & Merge Assistant** by:
+- Providing automatic prevention vs manual cleanup
+- Reducing the need for the merge assistant
+- Working alongside manual merge for edge cases
+- Could be implemented before or as part of Phase 10
+
+---
+
+### Three-Tier Architecture: Multi-Tenant Foundation (MOVED)
 **Priority:** High  
 **Effort:** 2-3 weeks  
 **Status:** Planning Phase  

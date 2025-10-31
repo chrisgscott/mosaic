@@ -43,10 +43,11 @@ export default async function GeneralSettingsPage() {
     redirect("/");
   }
 
-  // Fetch current settings
+  // Fetch current settings (exclude prompts category)
   const { data: settings } = await supabase
     .from("system_settings")
     .select("*")
+    .neq("category", "prompts")
     .order("category", { ascending: true })
     .order("key", { ascending: true });
 
@@ -71,7 +72,11 @@ export default async function GeneralSettingsPage() {
         <div>
           <h1 className="text-3xl font-bold">General Settings</h1>
           <p className="text-muted-foreground mt-2">
-            Configure system-wide settings. These settings affect all users.
+            Configure system-wide settings. These settings affect all users. 
+            <br />
+            <span className="text-sm">
+              For prompt customization, see the <a href="/settings/prompts" className="text-blue-600 hover:underline">Prompts</a> page.
+            </span>
           </p>
         </div>
 

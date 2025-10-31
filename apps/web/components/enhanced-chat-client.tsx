@@ -1,6 +1,7 @@
 'use client';
 
-import { useChat, DefaultChatTransport } from '@ai-sdk/react';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport, type UIMessage } from 'ai';
 import {
   Conversation,
   ConversationContent,
@@ -32,7 +33,6 @@ import { cn } from '@/lib/utils';
 import { RotateCcwIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { type FormEventHandler, useCallback, useEffect, useState } from 'react';
-import type { UIMessage } from 'ai';
 
 // Define our enhanced message interface
 type EnhancedChatMessage = UIMessage & {
@@ -173,14 +173,24 @@ export function EnhancedChatClient({
             <div key={message.id} className="space-y-3">
               <Message from={message.role}>
                 <MessageContent>
-                  {message.isStreaming && message.content === '' ? (
-                    <div className="flex items-center gap-2">
-                      <Loader size={14} />
-                      <span className="text-muted-foreground text-sm">Thinking...</span>
-                    </div>
-                  ) : (
-                    message.content
-                  )}
+                  {(() => {
+                    // Extract text content from message parts
+                    const textContent = message.parts
+                      ?.filter(part => part.type === 'text')
+                      .map(part => part.text)
+                      .join('') || '';
+                    
+                    if (message.isStreaming && textContent === '') {
+                      return (
+                        <div className="flex items-center gap-2">
+                          <Loader size={14} />
+                          <span className="text-muted-foreground text-sm">Thinking...</span>
+                        </div>
+                      );
+                    }
+                    
+                    return textContent;
+                  })()}
                 </MessageContent>
                 <MessageAvatar 
                   src={message.role === 'user' ? 'https://github.com/dovazencot.png' : 'https://github.com/vercel.png'} 

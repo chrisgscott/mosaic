@@ -29,11 +29,20 @@ export default async function SchemaSettingsPage() {
     console.error("Error fetching schema settings:", error);
   }
 
-  // Convert to key-value object
+  // Convert to key-value object and stringify JSONB values
   const settingsObj = settings?.reduce((acc, setting) => {
-    acc[setting.key] = setting.value;
+    const key = setting.key.replace('schema.', '');
+    // JSONB values come as objects, stringify them for the form
+    // Boolean values come as booleans, convert to strings
+    if (typeof setting.value === 'boolean') {
+      acc[key] = setting.value.toString();
+    } else if (typeof setting.value === 'object') {
+      acc[key] = JSON.stringify(setting.value);
+    } else {
+      acc[key] = setting.value;
+    }
     return acc;
-  }, {} as { [key: string]: any }) || {};
+  }, {} as Record<string, string>) || {};
 
   return (
     <>

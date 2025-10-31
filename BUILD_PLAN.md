@@ -86,7 +86,53 @@ Mosaic is a comprehensive RAG platform combining semantic search with graph-base
 
 ### Phase 6: Advanced RAG Features
 
-#### 6.1 Context Management (In Progress)
+#### 6.1 Vercel AI SDK Tool-Based Architecture
+**Status:** Phase 1 complete, Phase 2 ready to start  
+**Priority:** High (Daily QoL improvement)  
+**Estimated:** 2-3 days for Phase 2
+
+**Current State:**
+- Phase 1 (message persistence) completed
+- Chat always calls search endpoint (not optimal)
+
+**Phase 2: Tool-Based Search**
+- Make search a tool (AI decides when to search)
+- Enable multi-step reasoning
+- Add knowledge management tools
+- Optimize with caching
+
+**Benefits:**
+- More natural conversation flow
+- Fewer unnecessary searches (30-50% reduction)
+- Can search multiple times per query
+- Better AI decision-making
+- Aligns with industry best practices
+
+#### 6.2 Conversation Features
+**Status:** Scheduled  
+**Priority:** High  
+**Estimated:** 3-4 days
+
+**Features:**
+- Conversation persistence in database
+- Thread management UI
+- Conversation search
+- Export functionality
+
+**Rationale:** Foundation for context management and better UX
+
+#### 6.3 Grounding Controls
+**Status:** Ready to start  
+**Priority:** High  
+**Estimated:** 2-3 days
+
+**Features:**
+- Toggle between strict grounding vs interpretive analysis
+- Clear labeling of facts vs AI inference
+- User trust improvements
+- Answer quality indicators
+
+#### 6.4 Context Management
 **Status:** Planning  
 **Priority:** High  
 **Estimated:** 2-3 days
@@ -103,29 +149,7 @@ Mosaic is a comprehensive RAG platform combining semantic search with graph-base
 - Create chunk prioritization algorithms
 - Add conversation compression
 
-#### 6.2 Conversation Features (Planned)
-**Status:** Scheduled  
-**Priority:** Medium  
-**Estimated:** 3-4 days
-
-**Features:**
-- Conversation persistence in database
-- Thread management UI
-- Conversation search
-- Export functionality
-
-#### 6.3 Grounding Controls (High Priority)
-**Status:** Ready to start  
-**Priority:** High  
-**Estimated:** 2-3 days
-
-**Features:**
-- Toggle between strict grounding vs interpretive analysis
-- Clear labeling of facts vs AI inference
-- User trust improvements
-- Answer quality indicators
-
-#### 6.4 Entity Deduplication During Extraction
+#### 6.5 Entity Deduplication During Extraction
 **Status:** Ready to start  
 **Priority:** Medium  
 **Estimated:** 2-5 days (phased)
@@ -158,28 +182,6 @@ def extract_entities_with_dedup(text, existing_entities):
     
     return resolved
 ```
-
-#### 6.5 Vercel AI SDK Tool-Based Architecture
-**Status:** Phase 1 complete, Phase 2 ready to start  
-**Priority:** High  
-**Estimated:** 2-3 days for Phase 2
-
-**Current State:**
-- Phase 1 (message persistence) completed
-- Chat always calls search endpoint (not optimal)
-
-**Phase 2: Tool-Based Search**
-- Make search a tool (AI decides when to search)
-- Enable multi-step reasoning
-- Add knowledge management tools
-- Optimize with caching
-
-**Benefits:**
-- More natural conversation flow
-- Fewer unnecessary searches (30-50% reduction)
-- Can search multiple times per query
-- Better AI decision-making
-- Aligns with industry best practices
 
 #### 6.6 Intelligent Query Caching
 **Status:** Ready to start  
@@ -550,12 +552,12 @@ def process_csv(file_path, document_id):
 ### Development Focus (Next 12 Weeks)
 
 #### Short Term (Weeks 1-4): Core RAG Enhancement
-1. **Week 1-2:** Grounding Controls & Context Management
-2. **Week 3:** Entity Deduplication During Extraction (Phase 1)
-3. **Week 4:** Intelligent Query Caching (Phase 1) - Quick win
-4. **Week 5:** Schema Analytics & Usage Tracking
-5. **Week 6:** Vercel AI SDK Tool-Based Architecture (Phase 2)
-6. **Week 7:** Conversation Features
+1. **Week 1-2:** Vercel AI SDK Tool-Based Architecture (Phase 2) - Daily QoL
+2. **Week 2-3:** Conversation Features & Grounding Controls
+3. **Week 4:** Context Management (builds on conversations)
+4. **Week 5:** Entity Deduplication During Extraction (Phase 1)
+5. **Week 6:** Intelligent Query Caching (Phase 1) - Quick win
+6. **Week 7:** Schema Analytics & Usage Tracking
 7. **Week 8:** DEG-RAG Planning & Setup
 
 #### Medium Term (Weeks 5-8): Knowledge Graph & Living Entities

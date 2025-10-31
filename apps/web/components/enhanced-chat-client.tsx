@@ -39,6 +39,7 @@ type EnhancedChatMessage = UIMessage & {
   reasoning?: string;
   sources?: Array<{ title: string; url: string }>;
   isStreaming?: boolean;
+  createdAt?: Date;
 };
 
 // Available models - using our semantic model keys
@@ -103,23 +104,15 @@ export function EnhancedChatClient({
 
   // Update enhanced messages when chat messages change
   useEffect(() => {
-    // Remove any temporary "thinking" messages and replace with real messages
-    setEnhancedMessages(prev => {
-      // Filter out thinking messages if we have real messages
-      const withoutThinking = messages.length > 0 
-        ? prev.filter(msg => !msg.id.startsWith('thinking-'))
-        : prev;
-      
-      // Map real messages with enhanced data
-      const realMessages = messages.map(msg => ({
-        ...msg,
-        reasoning: (msg as EnhancedChatMessage).reasoning,
-        sources: (msg as EnhancedChatMessage).sources,
-        isStreaming: status === 'streaming' && msg === messages[messages.length - 1],
-      }));
-      
-      return realMessages;
-    });
+    // Map real messages with enhanced data
+    const realMessages = messages.map(msg => ({
+      ...msg,
+      reasoning: (msg as EnhancedChatMessage).reasoning,
+      sources: (msg as EnhancedChatMessage).sources,
+      isStreaming: status === 'streaming' && msg === messages[messages.length - 1],
+    }));
+    
+    setEnhancedMessages(realMessages);
   }, [messages, status]);
 
   const handleReset = useCallback(() => {
@@ -297,7 +290,7 @@ export function EnhancedChatClient({
             </PromptInputTools>
             <PromptInputSubmit 
               disabled={status === 'streaming'}
-              status={status as any}
+              status={status as 'ready' | 'streaming' | 'submitted'}
             />
           </PromptInputToolbar>
         </PromptInput>

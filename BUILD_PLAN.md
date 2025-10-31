@@ -181,6 +181,46 @@ def extract_entities_with_dedup(text, existing_entities):
 - Better AI decision-making
 - Aligns with industry best practices
 
+#### 6.6 Intelligent Query Caching
+**Status:** Ready to start  
+**Priority:** High (quick win)  
+**Estimated:** 1-2 days for Phase 1
+
+**Current State:**
+- No caching, every search runs full pipeline (500-1000ms)
+- Significant performance improvement opportunity
+
+**Phase 1: Simple Query Cache with TTL**
+- Cache exact query matches with 1-hour TTL
+- Use Redis or Supabase cache
+- Expected: 30-50% cache hit rate
+- Result: <50ms response for cached queries (10-20x faster)
+
+**Implementation Approach:**
+```typescript
+// Simple cache wrapper
+async function searchWithCache(query: string) {
+  const cacheKey = `search:${hash(query)}`
+  const cached = await cache.get(cacheKey)
+  
+  if (cached) return cached
+  
+  const result = await fullSearchPipeline(query)
+  await cache.set(cacheKey, result, { ttl: 3600 })
+  return result
+}
+```
+
+**Benefits:**
+- Immediate user experience improvement
+- Reduced API costs
+- Foundation for advanced caching (semantic, prediction)
+
+**Future Phases:**
+- Phase 2: Semantic cache matching (2-3 days)
+- Phase 3: Smart pre-computation (2-3 days)
+- Phase 4: Query prediction (2-3 days)
+
 ---
 
 ## Future Roadmap 🗺️
@@ -462,9 +502,10 @@ def process_csv(file_path, document_id):
 #### Short Term (Weeks 1-4): Core RAG Enhancement
 1. **Week 1-2:** Grounding Controls & Context Management
 2. **Week 3:** Entity Deduplication During Extraction (Phase 1)
-3. **Week 4:** Vercel AI SDK Tool-Based Architecture (Phase 2)
-4. **Week 5:** Conversation Features
-5. **Week 6:** DEG-RAG Planning & Setup
+3. **Week 4:** Intelligent Query Caching (Phase 1) - Quick win
+4. **Week 5:** Vercel AI SDK Tool-Based Architecture (Phase 2)
+5. **Week 6:** Conversation Features
+6. **Week 7:** DEG-RAG Planning & Setup
 
 #### Medium Term (Weeks 5-8): Knowledge Graph & Living Entities
 1. **Week 5-6:** DEG-RAG Implementation

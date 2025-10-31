@@ -316,104 +316,38 @@ Project 3 (imports package)
 
 ---
 
-### 4. Intelligent Query Caching
+### 4. ✅ MOVED TO BUILD_PLAN: Intelligent Query Caching
 
-**Current State:** No caching, every search runs full pipeline (500-1000ms).
+**Status:** Moved to Phase 6.6 in BUILD_PLAN  
+**Priority:** High (quick win)  
+**Implementation:** 
+- Phase 1: Simple query cache with TTL (1-2 days)
+- Expected: 30-50% cache hit rate, 10-20x faster for cached queries
 
-**Proposed Solution:**
-- **Phase 1:** Simple query cache with TTL (1-2 days)
-- **Phase 2:** Semantic cache matching (2-3 days)
-- **Phase 3:** Smart pre-computation (2-3 days)
-- **Phase 4:** Query prediction (2-3 days)
-
-**Expected Results:**
-- 30-50% cache hit rate
-- <50ms response for cached queries (10-20x faster)
-- Reduced API costs
-
-**Decision Needed:**
-- Implement Phase 1 now for quick wins?
-- What's the priority vs other performance improvements?
-- Should this wait until we have more usage data?
-
-**Recommendation:** Implement Phase 1 now - it's a quick win with immediate impact.
-
-**Priority:** High (performance + cost savings)  
-**Estimated Effort:** 1-2 days for Phase 1
-
-**Reference:** Full details in INBOX
+**Reference:** See Phase 6.6 in BUILD_PLAN.md
 
 ---
 
-### 5. OpenAI Structured Outputs Migration
+### 5. ✅ LOW PRIORITY: OpenAI Structured Outputs Migration
 
-**Current State:**
-- ✅ Planner-Executor Chunker migrated (Oct 23, 2025)
-- ⏳ Sorting Hat still uses JSON mode
-- ⏳ Agentic Chunker still uses JSON mode
-- ⏳ Graph Extractor still uses JSON mode
-
-**Benefits:**
-- 100% schema adherence (vs ~95% with JSON mode)
-- Type safety with Pydantic
-- Better error handling
-- Future-proof
-
-**Decision Needed:**
-- Complete migration for remaining files?
-- What's the priority vs other improvements?
-- Should we wait for streaming support in SDK?
-
-**Recommendation:** Low priority - current JSON mode works fine. Complete when doing other chunker improvements.
-
+**Status:** Deferred - current JSON mode works fine  
 **Priority:** Low  
-**Estimated Effort:** 1-2 days total
-
-**Reference:** Migration pattern in INBOX
+**Current State:** 1 of 4 files migrated (Planner-Executor complete)
+**Action:** Complete when doing other chunker improvements
 
 ---
 
-### 6. MCP Server for External Tool Integration
+### 6. ✅ ALREADY IN BUILD_PLAN: MCP Server for External Tool Integration
 
-**Current State:** Edge Function provides search endpoint with API key auth.
-
-**Proposed Solution:** Build MCP server to expose multiple tools (search, graph, documents) under standard protocol.
-
-**Benefits:**
-- Native integration with Claude Desktop, Cline
-- Standard protocol for tool discovery
-- Type-safe API with automatic docs
-- Single endpoint for multiple capabilities
-
-**Decision Needed:**
-- Is external tool integration a priority?
-- Do we have users requesting n8n/Make/Zapier integration?
-- Should this wait until multi-tenant is implemented?
-
-**Recommendation:** Medium priority - wait for user demand signals before investing 1-2 weeks.
-
+**Status:** Already planned as Phase 10.1 in BUILD_PLAN  
 **Priority:** Medium (wait for demand)  
-**Estimated Effort:** 1-2 weeks
-
-**Reference:** Full architecture in INBOX
+**Reference:** See Phase 10.1 in BUILD_PLAN.md
 
 ---
 
-### 7. Custom Relationship Types - Python Integration
+### 7. ✅ LOW PRIORITY: Custom Relationship Types - Python Integration
 
-**Current State:**
-- ✅ Schema settings page implemented (Oct 31, 2025)
-- ✅ UI loads types from database
-- ⏳ Python extractor still uses hardcoded types
-
-**Decision Needed:**
-- Should Python extractor load types from database?
-- What's the fallback if database unavailable?
-- Is this worth 2-3 days of effort?
-
-**Recommendation:** Low priority - current approach works. Python integration can wait until we need dynamic types during extraction.
-
+**Status:** Deferred - current approach works  
 **Priority:** Low  
-**Estimated Effort:** 2-3 days
-
-**Reference:** Implementation details in INBOX
+**Current State:** UI implemented, Python uses hardcoded types
+**Action:** Wait until dynamic types needed during extraction

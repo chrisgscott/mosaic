@@ -1,19 +1,20 @@
 # INBOX
 
-**Last Cleaned:** October 30, 2025
+**Last Cleaned:** October 31, 2025
 
 This file contains new ideas and enhancements that haven't yet been prioritized for BUILD_PLAN or TO_PROCESS.
 
 ---
 
-## ✅ Recently Moved Items (Oct 30, 2025)
+## ✅ Recently Completed (Oct 31, 2025)
 
-### Moved to BUILD_PLAN:
-- **Phase 15: Inline Citations with Deep-Linking** - Perplexity-style citations with Docling support
-- **Phase 16: shadcn AI Components UI Modernization** - Professional AI interface overhaul
-
-### Moved to TO_PROCESS:
-- **Multi-Hop Graph Traversal Analysis** - Decision on whether to implement true multi-hop
+### Implemented:
+- **Schema Settings Management** - Entity and relationship type management via settings page
+- **LLM Dropdown Fixes** - Settings page dropdowns now populate correctly from database
+- **Breadcrumb Navigation** - All breadcrumbs updated to use /admin/ prefix
+- **Bulk Entity Type Updates** - Conflict detection prevents unique constraint violations
+- **Source Chunks Fallback** - Entity pages show chunks even when chunk_ids are stale
+- **Graph Learning Phase 1** - Search signal capture system implemented and logging
 
 ---
 

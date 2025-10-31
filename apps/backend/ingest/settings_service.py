@@ -8,6 +8,7 @@ variables if database is unavailable.
 
 import os
 import logging
+import time
 from typing import Optional, Any, Union, List, Dict
 import json
 from supabase import create_client, Client
@@ -182,7 +183,6 @@ class SettingsService:
         """
         entity_types_json = self._get_value('schema.entityTypes', '[]')
         try:
-            import json
             return json.loads(entity_types_json)
         except json.JSONDecodeError as e:
             logger.error(f"Error parsing entity types: {e}")
@@ -197,7 +197,6 @@ class SettingsService:
         """
         relationship_types_json = self._get_value('schema.relationshipTypes', '[]')
         try:
-            import json
             return json.loads(relationship_types_json)
         except json.JSONDecodeError as e:
             logger.error(f"Error parsing relationship types: {e}")

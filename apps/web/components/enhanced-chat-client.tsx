@@ -82,9 +82,14 @@ export function EnhancedChatClient({
       return {
         body: {
           messages,
-          input,
-          model: selectedModel,
+          message: {
+            id: `msg-${Date.now()}`,
+            role: 'user',
+            content: input,
+            createdAt: new Date(),
+          },
           chatId: id,
+          model: selectedModel,
         },
       };
     },
@@ -133,6 +138,7 @@ export function EnhancedChatClient({
     
     if (!input.trim() || status === 'streaming') return;
     
+    // Append the message to the chat
     sendMessage(input);
   }, [sendMessage, status]);
 

@@ -1,5 +1,5 @@
-import {
 import { requireAdmin } from "@/lib/auth/admin-check";
+import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
@@ -29,7 +29,7 @@ export default async function GraphVisualizePage() {
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink href="/graph">Knowledge Graph</BreadcrumbLink>
+              <BreadcrumbLink href="/admin/graph">Knowledge Graph</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>

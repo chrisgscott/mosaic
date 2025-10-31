@@ -52,7 +52,7 @@ export default async function SchemaSettingsPage() {
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink href="/settings/general">Settings</BreadcrumbLink>
+              <BreadcrumbLink href="/admin/settings/general">Settings</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>

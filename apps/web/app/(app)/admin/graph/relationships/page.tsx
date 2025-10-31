@@ -44,7 +44,7 @@ export default async function RelationshipsPage() {
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink href="/graph">Knowledge Graph</BreadcrumbLink>
+              <BreadcrumbLink href="/admin/graph">Knowledge Graph</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>

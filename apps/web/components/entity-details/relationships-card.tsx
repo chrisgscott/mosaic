@@ -54,7 +54,7 @@ export function RelationshipsCard({
         .eq("key", "schema.relationshipTypes")
         .single();
 
-      if (schemaSettings?.value) {
+      if (schemaSettings?.value && Array.isArray(schemaSettings.value)) {
         const types = (schemaSettings.value as Array<{ name: string; description: string }>).map(t => t.name);
         setRelationshipTypes(types);
       }

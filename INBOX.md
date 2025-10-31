@@ -16,6 +16,15 @@ This file contains new ideas and enhancements that haven't yet been prioritized 
 - **Source Chunks Fallback** - Entity pages show chunks even when chunk_ids are stale
 - **Graph Learning Phase 1** - Search signal capture system implemented and logging
 
+### Moved to TO_PROCESS:
+- **Entity Deduplication During Extraction** - Needs decision on implementation timing
+- **Vercel AI SDK Tool-Based Architecture** - Phase 2+ decisions needed
+- **Graph Learning Phases 2-6** - Waiting for data collection before next phase
+- **Intelligent Query Caching** - Quick win opportunity, needs priority decision
+- **OpenAI Structured Outputs Migration** - Partial completion, needs decision on remainder
+- **MCP Server for External Tools** - Needs demand validation before investment
+- **Custom Relationship Types Python Integration** - UI done, Python integration optional
+
 ---
 
 ## 💡 Enhancements & Ideas

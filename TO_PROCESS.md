@@ -404,3 +404,201 @@ Project 3 (imports package)
 **Priority:** Low - Wait for user demand signals
 
 **Reference:** Complete analysis in INBOX (now moved here)
+
+---
+
+## 🎯 Feature Enhancement Decisions
+
+### 1. Entity Deduplication During Extraction
+
+**Current State:** Entities are extracted without checking for existing duplicates, leading to graph pollution.
+
+**Proposed Solution:** Add entity resolution step during extraction to match against existing entities before creating new ones.
+
+**Implementation Phases:**
+- **Phase 1:** Simple exact matching (1-2 days)
+- **Phase 2:** Fuzzy matching with confidence scores (2-3 days)  
+- **Phase 3:** LLM-powered contextual resolution (future)
+
+**Benefits:**
+- Cleaner knowledge graph
+- Better relationship accumulation
+- Improved search quality
+- Prevention vs cure approach
+
+**Challenges:**
+- Performance (checking against thousands of entities)
+- False positives ("Apple" company vs fruit)
+- Context dependence
+- Entity evolution over time
+
+**Decision Needed:**
+- Should we implement Phase 1 now or wait?
+- Does this complement or replace Phase 10.1 (Entity Deduplication & Merge Assistant)?
+- What's the priority vs other graph improvements?
+
+**Recommendation:** Implement Phase 1 (exact matching) as it's low-effort and provides immediate value. Phase 2 can wait for user feedback.
+
+**Priority:** Medium  
+**Estimated Effort:** 2-5 days (phased)
+
+**Reference:** Full details in INBOX
+
+---
+
+### 2. Vercel AI SDK Tool-Based Architecture
+
+**Current State:** Chat always calls search endpoint. Phase 1 (message persistence) completed.
+
+**Proposed Next Steps:**
+- Make search a tool (AI decides when to search)
+- Enable multi-step reasoning
+- Add knowledge management tools
+- Optimize with caching
+
+**Decision Needed:**
+- Proceed with Phase 2 (tool-based search) now?
+- What's the priority vs other chat improvements?
+- Should we complete this before multi-tenant work?
+
+**Benefits:**
+- More natural conversation flow
+- Fewer unnecessary searches (30-50% reduction)
+- Can search multiple times per query
+- Better AI decision-making
+
+**Recommendation:** High priority - this is a significant UX improvement that aligns with industry best practices.
+
+**Priority:** High  
+**Estimated Effort:** 2-3 days for Phase 2
+
+**Reference:** Full implementation plan in INBOX
+
+---
+
+### 3. Graph Learning System (Phases 2-6)
+
+**Current State:** Phase 1 (search signal capture) completed and logging.
+
+**Remaining Phases:**
+- **Phase 2:** Co-occurrence analysis (3-4 days)
+- **Phase 3:** Relationship type inference (2-3 days)
+- **Phase 4:** Suggestion review UI (3-4 days)
+- **Phase 5:** Real-time inline suggestions (3-5 days)
+- **Phase 6:** Autonomous learning (1 week)
+
+**Decision Needed:**
+- Wait 1-2 weeks to collect data before Phase 2?
+- What's the priority for self-improving graph?
+- Should we validate approach with manual analysis first?
+
+**Recommendation:** Let Phase 1 run for 2 weeks, then analyze patterns manually to validate before building Phases 2-3.
+
+**Priority:** Medium-High (innovative feature, but needs data first)  
+**Estimated Effort:** 2-3 weeks total (Phases 2-6)
+
+**Reference:** Full design in INBOX and docs/graph-learning.md
+
+---
+
+### 4. Intelligent Query Caching
+
+**Current State:** No caching, every search runs full pipeline (500-1000ms).
+
+**Proposed Solution:**
+- **Phase 1:** Simple query cache with TTL (1-2 days)
+- **Phase 2:** Semantic cache matching (2-3 days)
+- **Phase 3:** Smart pre-computation (2-3 days)
+- **Phase 4:** Query prediction (2-3 days)
+
+**Expected Results:**
+- 30-50% cache hit rate
+- <50ms response for cached queries (10-20x faster)
+- Reduced API costs
+
+**Decision Needed:**
+- Implement Phase 1 now for quick wins?
+- What's the priority vs other performance improvements?
+- Should this wait until we have more usage data?
+
+**Recommendation:** Implement Phase 1 now - it's a quick win with immediate impact.
+
+**Priority:** High (performance + cost savings)  
+**Estimated Effort:** 1-2 days for Phase 1
+
+**Reference:** Full details in INBOX
+
+---
+
+### 5. OpenAI Structured Outputs Migration
+
+**Current State:**
+- ✅ Planner-Executor Chunker migrated (Oct 23, 2025)
+- ⏳ Sorting Hat still uses JSON mode
+- ⏳ Agentic Chunker still uses JSON mode
+- ⏳ Graph Extractor still uses JSON mode
+
+**Benefits:**
+- 100% schema adherence (vs ~95% with JSON mode)
+- Type safety with Pydantic
+- Better error handling
+- Future-proof
+
+**Decision Needed:**
+- Complete migration for remaining files?
+- What's the priority vs other improvements?
+- Should we wait for streaming support in SDK?
+
+**Recommendation:** Low priority - current JSON mode works fine. Complete when doing other chunker improvements.
+
+**Priority:** Low  
+**Estimated Effort:** 1-2 days total
+
+**Reference:** Migration pattern in INBOX
+
+---
+
+### 6. MCP Server for External Tool Integration
+
+**Current State:** Edge Function provides search endpoint with API key auth.
+
+**Proposed Solution:** Build MCP server to expose multiple tools (search, graph, documents) under standard protocol.
+
+**Benefits:**
+- Native integration with Claude Desktop, Cline
+- Standard protocol for tool discovery
+- Type-safe API with automatic docs
+- Single endpoint for multiple capabilities
+
+**Decision Needed:**
+- Is external tool integration a priority?
+- Do we have users requesting n8n/Make/Zapier integration?
+- Should this wait until multi-tenant is implemented?
+
+**Recommendation:** Medium priority - wait for user demand signals before investing 1-2 weeks.
+
+**Priority:** Medium (wait for demand)  
+**Estimated Effort:** 1-2 weeks
+
+**Reference:** Full architecture in INBOX
+
+---
+
+### 7. Custom Relationship Types - Python Integration
+
+**Current State:**
+- ✅ Schema settings page implemented (Oct 31, 2025)
+- ✅ UI loads types from database
+- ⏳ Python extractor still uses hardcoded types
+
+**Decision Needed:**
+- Should Python extractor load types from database?
+- What's the fallback if database unavailable?
+- Is this worth 2-3 days of effort?
+
+**Recommendation:** Low priority - current approach works. Python integration can wait until we need dynamic types during extraction.
+
+**Priority:** Low  
+**Estimated Effort:** 2-3 days
+
+**Reference:** Implementation details in INBOX

@@ -49,18 +49,26 @@ async function getEntityDetails(entityId: string, userId: string) {
     .eq("user_id", userId);
 
   // Get related documents
-  const { data: documents } = await supabase
+  const { data: documents, error: docsError } = await supabase
     .from("documents")
     .select("id, file_name, created_at")
-    .in("id", entity.document_ids || []);
+    .in("id", entity.document_ids && entity.document_ids.length > 0 ? entity.document_ids : ['00000000-0000-0000-0000-000000000000']);
+
+  if (docsError) {
+    console.error('Error fetching documents:', docsError);
+  }
 
   // Get related chunks with content
-  const { data: chunks } = await supabase
+  const { data: chunks, error: chunksError } = await supabase
     .from("chunks")
     .select("id, content, document_id, chunk_index")
-    .in("id", entity.chunk_ids || [])
+    .in("id", entity.chunk_ids && entity.chunk_ids.length > 0 ? entity.chunk_ids : ['00000000-0000-0000-0000-000000000000'])
     .order("document_id")
     .order("chunk_index");
+
+  if (chunksError) {
+    console.error('Error fetching chunks:', chunksError);
+  }
 
   return {
     entity,

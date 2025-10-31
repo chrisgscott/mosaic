@@ -221,6 +221,56 @@ async function searchWithCache(query: string) {
 - Phase 3: Smart pre-computation (2-3 days)
 - Phase 4: Query prediction (2-3 days)
 
+#### 6.7 Schema Analytics & Usage Tracking
+**Status:** Ready to start  
+**Priority:** Medium  
+**Estimated:** 2-3 days
+
+**Current State:**
+- Custom entity/relationship types implemented
+- No visibility into which types are actively used
+- Users cannot identify unused or redundant types
+
+**Features:**
+- Display active usage count for each entity type
+- Display active usage count for each relationship type
+- Show last used date for each type
+- Identify unused types for cleanup
+- Export usage analytics
+
+**Implementation Approach:**
+```sql
+-- Query to get entity type usage
+SELECT 
+  e.type,
+  COUNT(*) as entity_count,
+  MAX(e.created_at) as last_used
+FROM entities e
+GROUP BY e.type
+ORDER BY entity_count DESC;
+
+-- Query to get relationship type usage
+SELECT 
+  r.relationship_type,
+  COUNT(*) as relationship_count,
+  MAX(r.created_at) as last_used
+FROM relationships r
+GROUP BY r.relationship_type
+ORDER BY relationship_count DESC;
+```
+
+**UI Updates:**
+- Add usage counts to Schema Configuration page
+- Color-code unused types (gray)
+- Show "Last used" column
+- Add "Clean up unused types" button
+
+**Benefits:**
+- Users can identify which types add value
+- Ability to clean up unused schema elements
+- Better understanding of graph composition
+- Data-driven schema management
+
 ---
 
 ## Future Roadmap 🗺️
@@ -503,9 +553,10 @@ def process_csv(file_path, document_id):
 1. **Week 1-2:** Grounding Controls & Context Management
 2. **Week 3:** Entity Deduplication During Extraction (Phase 1)
 3. **Week 4:** Intelligent Query Caching (Phase 1) - Quick win
-4. **Week 5:** Vercel AI SDK Tool-Based Architecture (Phase 2)
-5. **Week 6:** Conversation Features
-6. **Week 7:** DEG-RAG Planning & Setup
+4. **Week 5:** Schema Analytics & Usage Tracking
+5. **Week 6:** Vercel AI SDK Tool-Based Architecture (Phase 2)
+6. **Week 7:** Conversation Features
+7. **Week 8:** DEG-RAG Planning & Setup
 
 #### Medium Term (Weeks 5-8): Knowledge Graph & Living Entities
 1. **Week 5-6:** DEG-RAG Implementation

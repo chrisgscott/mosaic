@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from enum import Enum
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import defaultdict
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ class RelationshipType(str, Enum):
 class Entity(BaseModel):
     """Entity extracted from text"""
     name: str = Field(description="The name of the entity")
-    type: EntityType = Field(description="The type/category of the entity")
+    type: str = Field(description="The type/category of the entity")
     description: str = Field(description="A brief description of what this entity is or represents")
     aliases: List[str] = Field(default_factory=list, description="Alternative names or acronyms for this entity")
 
@@ -66,7 +67,7 @@ class Relationship(BaseModel):
     """Relationship between two entities"""
     source: str = Field(description="The name of the source entity")
     target: str = Field(description="The name of the target entity")
-    type: RelationshipType = Field(description="The type of relationship between the entities")
+    type: str = Field(description="The type of relationship between the entities")
     description: str = Field(description="A brief description of how these entities are related")
     bidirectional: bool = Field(default=False, description="Whether this relationship works both ways")
 
@@ -75,6 +76,66 @@ class ExtractionResult(BaseModel):
     """Result of entity and relationship extraction"""
     entities: List[Entity] = Field(description="List of entities found in the text")
     relationships: List[Relationship] = Field(description="List of relationships between entities")
+
+
+# ============================================================================
+# DYNAMIC ENUM CREATION
+# ============================================================================
+
+def create_entity_enum(entity_types: List[Dict[str, str]]) -> type:
+    """
+    Dynamically create EntityType enum from database settings.
+    
+    Args:
+        entity_types: List of entity type dictionaries from database
+        
+    Returns:
+        Enum class for entity types
+    """
+    # Fallback to hardcoded types if no database types
+    if not entity_types:
+        return EntityType
+    
+    # Create enum from database types
+    enum_values = {}
+    for entity_type in entity_types:
+        name = entity_type.get('name', '').upper().replace(' ', '_')
+        # Clean name to be valid Python identifier
+        name = ''.join(c if c.isalnum() or c == '_' else '_' for c in name)
+        enum_values[name] = entity_type.get('name', '').lower()
+    
+    # Add OTHER as fallback
+    enum_values['OTHER'] = 'other'
+    
+    return Enum('EntityType', enum_values)
+
+
+def create_relationship_enum(relationship_types: List[Dict[str, str]]) -> type:
+    """
+    Dynamically create RelationshipType enum from database settings.
+    
+    Args:
+        relationship_types: List of relationship type dictionaries from database
+        
+    Returns:
+        Enum class for relationship types
+    """
+    # Fallback to hardcoded types if no database types
+    if not relationship_types:
+        return RelationshipType
+    
+    # Create enum from database types
+    enum_values = {}
+    for rel_type in relationship_types:
+        name = rel_type.get('name', '').upper().replace(' ', '_')
+        # Clean name to be valid Python identifier
+        name = ''.join(c if c.isalnum() or c == '_' else '_' for c in name)
+        enum_values[name] = rel_type.get('name', '').lower()
+    
+    # Add OTHER as fallback
+    enum_values['OTHER'] = 'other'
+    
+    return Enum('RelationshipType', enum_values)
 
 
 # ============================================================================
@@ -99,6 +160,25 @@ class GraphExtractor:
         self.similarity_threshold = float(os.getenv("ENTITY_SIMILARITY_THRESHOLD", "0.85"))
         self.max_workers = int(os.getenv("GRAPH_EXTRACTION_WORKERS", "5"))  # Reduced from 20 to 5
         
+        # Load entity and relationship types from database
+        self.entity_types = []
+        self.relationship_types = []
+        self.EntityType = EntityType  # Default to hardcoded
+        self.RelationshipType = RelationshipType  # Default to hardcoded
+        
+        if self.settings_service:
+            try:
+                self.entity_types = self.settings_service.get_entity_types()
+                self.relationship_types = self.settings_service.get_relationship_types()
+                
+                # Create dynamic enums from database settings
+                self.EntityType = create_entity_enum(self.entity_types)
+                self.RelationshipType = create_relationship_enum(self.relationship_types)
+                
+                logger.info(f"Loaded {len(self.entity_types)} entity types and {len(self.relationship_types)} relationship types from database")
+            except Exception as e:
+                logger.warning(f"Failed to load schema types from database, using defaults: {e}")
+        
         # Entity cache to avoid redundant lookups within same document
         self.entity_cache: Dict[str, str] = {}  # canonical_name -> entity_id
         self.cache_hits = 0
@@ -109,6 +189,82 @@ class GraphExtractor:
         self.min_db_interval = 0.1  # 100ms between DB calls
         
         logger.info(f"Initialized GraphExtractor (similarity_threshold={self.similarity_threshold}, max_workers={self.max_workers})")
+    
+    def _get_extraction_prompt(self) -> str:
+        """
+        Generate extraction prompt with dynamic entity and relationship types.
+        
+        Returns:
+            Prompt string with current schema types
+        """
+        # Build entity types section
+        entity_types_desc = []
+        if self.entity_types:
+            for entity_type in self.entity_types[:10]:  # Limit to first 10 to avoid prompt overflow
+                entity_types_desc.append(f"- ✅ {entity_type['name']}: {entity_type['description']}")
+        else:
+            # Fallback to hardcoded types
+            entity_types_desc = [
+                "- ✅ Person: Individual people, including names, roles, and personal identifiers",
+                "- ✅ Organization: Companies, agencies, institutions, and other organized groups",
+                "- ✅ Location: Geographic places, facilities, and spatial locations",
+                "- ✅ Technology: Software, hardware, systems, platforms, and technical tools",
+                "- ✅ Concept: Abstract ideas, methodologies, and principles"
+            ]
+        
+        # Build relationship types section
+        relationship_types_desc = []
+        if self.relationship_types:
+            for rel_type in self.relationship_types[:10]:  # Limit to first 10
+                relationship_types_desc.append(f"- ✅ {rel_type['name']}: {rel_type['description']} ({rel_type.get('direction', 'Entity → Entity')})")
+        else:
+            # Fallback to hardcoded types
+            relationship_types_desc = [
+                "- ✅ uses: Technology or tool usage (Person/Organization → Technology)",
+                "- ✅ part_of: Component or membership relationship (Part → Whole)",
+                "- ✅ manages: Management or oversight relationship (Person → Organization/Project)",
+                "- ✅ creates: Creation or production relationship (Person/Organization → Product/Document)",
+                "- ✅ related_to: General association or connection (Entity ↔ Entity)"
+            ]
+        
+        return f"""You are an expert at extracting entities and relationships from text for knowledge graph construction.
+
+**ENTITY EXTRACTION RULES:**
+
+Extract MAXIMUM 3-7 entities per chunk. ONLY extract proper nouns or significant domain concepts.
+
+**NEVER extract (FORBIDDEN):**
+- ❌ ANY number, date, or year (e.g., "2024", "2020-2025", "January")
+- ❌ ANY dollar amount or price (e.g., "$34 billion", "$450 billion")
+- ❌ ANY percentage or statistic (e.g., "15%", "0.85")
+- ❌ ANY measurement or quantity (e.g., "90 tons", "21 States", "27 companies")
+- ❌ ANY technical ID or code (e.g., "#ffffff", "8112.99.9100", "4.1-specific-gravity")
+- ❌ Generic descriptors (e.g., "high", "low", "significant", "advanced")
+- ❌ Common industry terms (e.g., "production", "supply chains", "industry")
+
+**ALLOWED ENTITY TYPES:**
+{chr(10).join(entity_types_desc)}
+
+**RELATIONSHIP EXTRACTION RULES:**
+
+For each pair of entities that are meaningfully connected in the text, extract their relationship.
+
+**ALLOWED RELATIONSHIP TYPES:**
+{chr(10).join(relationship_types_desc)}
+
+**Extract relationships when:**
+- ✅ One entity uses, requires, or depends on another
+- ✅ One entity is part of or belongs to another
+- ✅ One entity creates, manages, or analyzes another
+- ✅ Entities collaborate, compete, or interact
+- ✅ There's a clear action or connection between entities
+
+**DO NOT extract relationships when:**
+- ❌ Entities are only mentioned in the same sentence but not connected
+- ❌ The connection is vague or unclear
+- ❌ You're guessing at a relationship not stated in the text
+
+**Relationship quality:** Only extract relationships that are explicitly stated or strongly implied in the text."""
     
     def extract_from_chunk(self, text: str, max_retries: int = 3) -> ExtractionResult:
         """
@@ -133,47 +289,7 @@ class GraphExtractor:
                     messages=[
                         {
                             "role": "system",
-                            "content": """You are an expert at extracting entities and relationships from text for knowledge graph construction.
-
-**ENTITY EXTRACTION RULES:**
-
-Extract MAXIMUM 3-7 entities per chunk. ONLY extract proper nouns or significant domain concepts.
-
-**NEVER extract (FORBIDDEN):**
-- ❌ ANY number, date, or year (e.g., "2024", "2020-2025", "January")
-- ❌ ANY dollar amount or price (e.g., "$34 billion", "$450 billion")
-- ❌ ANY percentage or statistic (e.g., "15%", "0.85")
-- ❌ ANY measurement or quantity (e.g., "90 tons", "21 States", "27 companies")
-- ❌ ANY technical ID or code (e.g., "#ffffff", "8112.99.9100", "4.1-specific-gravity")
-- ❌ Generic descriptors (e.g., "high", "low", "significant", "advanced")
-- ❌ Common industry terms (e.g., "production", "supply chains", "industry")
-
-**ONLY extract (ALLOWED):**
-- ✅ Named people (e.g., "Adam M. Merrill")
-- ✅ Named organizations/companies (e.g., "American Petroleum Institute", "Tesla")
-- ✅ Specific countries/cities/regions (e.g., "United States", "China", "Alabama")
-- ✅ Named minerals/materials (e.g., "Gallium", "Cobalt", "Aluminum")
-- ✅ Named technologies/systems (e.g., "Airborne Visible/Infrared Imaging Spectrometer")
-- ✅ Named events/initiatives (e.g., "Paris Agreement", "American Battery Initiative")
-- ✅ Named documents (e.g., "2022 Final List of Critical Minerals")
-
-**RELATIONSHIP EXTRACTION RULES:**
-
-For each pair of entities that are meaningfully connected in the text, extract their relationship.
-
-**Extract relationships when:**
-- ✅ One entity uses, requires, or depends on another
-- ✅ One entity is part of or belongs to another
-- ✅ One entity creates, manages, or analyzes another
-- ✅ Entities collaborate, compete, or interact
-- ✅ There's a clear action or connection between entities
-
-**DO NOT extract relationships when:**
-- ❌ Entities are only mentioned in the same sentence but not connected
-- ❌ The connection is vague or unclear
-- ❌ You're guessing at a relationship not stated in the text
-
-**Relationship quality:** Only extract relationships that are explicitly stated or strongly implied in the text."""
+                            "content": self._get_extraction_prompt()
                         },
                         {
                             "role": "user",

@@ -345,9 +345,26 @@ Project 3 (imports package)
 
 ---
 
-### 7. ✅ LOW PRIORITY: Custom Relationship Types - Python Integration
+### 7. ✅ COMPLETED: Custom Relationship Types - Python Integration
 
-**Status:** Deferred - current approach works  
-**Priority:** Low  
-**Current State:** UI implemented, Python uses hardcoded types
-**Action:** Wait until dynamic types needed during extraction
+**Status:** FULLY IMPLEMENTED  
+**Completed:** Nov 1, 2025
+
+**What was implemented:**
+1. ✅ Added methods to SettingsService:
+   - get_entity_types() - Load entity types from database
+   - get_relationship_types() - Load relationship types from database
+   - enforce_schema_whitelist() - Check if whitelist should be enforced
+   - log_unknown_types() - Check if unknown types should be logged
+
+2. ✅ Updated GraphExtractor:
+   - Loads entity/relationship types from database during initialization
+   - Creates dynamic enums from database settings
+   - Uses dynamic types in extraction prompt
+   - Falls back to hardcoded types if database unavailable
+
+3. ✅ Updated Entity/Relationship models:
+   - Changed from enum types to str for flexibility
+   - Maintains compatibility with existing code
+
+**Result:** Custom relationship types are now fully functional end-to-end.

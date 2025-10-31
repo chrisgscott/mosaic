@@ -172,3 +172,51 @@ class SettingsService:
         """Force cache refresh on next access."""
         self._cache_time = 0
         logger.info("Settings cache invalidated")
+    
+    def get_entity_types(self) -> List[Dict[str, str]]:
+        """
+        Get entity types from database settings.
+        
+        Returns:
+            List of entity type dictionaries with 'name' and 'description' keys
+        """
+        entity_types_json = self._get_value('schema.entityTypes', '[]')
+        try:
+            import json
+            return json.loads(entity_types_json)
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing entity types: {e}")
+            return []
+    
+    def get_relationship_types(self) -> List[Dict[str, str]]:
+        """
+        Get relationship types from database settings.
+        
+        Returns:
+            List of relationship type dictionaries with 'name', 'description', and 'direction' keys
+        """
+        relationship_types_json = self._get_value('schema.relationshipTypes', '[]')
+        try:
+            import json
+            return json.loads(relationship_types_json)
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing relationship types: {e}")
+            return []
+    
+    def enforce_schema_whitelist(self) -> bool:
+        """
+        Check if schema whitelist should be enforced during extraction.
+        
+        Returns:
+            True if unknown types should be rejected, False if they should be logged but allowed
+        """
+        return self.get_bool('schema.enforceWhitelist', True)
+    
+    def log_unknown_types(self) -> bool:
+        """
+        Check if unknown entity/relationship types should be logged.
+        
+        Returns:
+            True if unknown types should be logged for review
+        """
+        return self.get_bool('schema.logUnknownTypes', True)

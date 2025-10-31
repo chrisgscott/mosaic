@@ -54,9 +54,17 @@ export function RelationshipsCard({
         .eq("key", "schema.relationshipTypes")
         .single();
 
-      if (schemaSettings?.value && Array.isArray(schemaSettings.value)) {
-        const types = (schemaSettings.value as Array<{ name: string; description: string }>).map(t => t.name);
-        setRelationshipTypes(types);
+      if (schemaSettings?.value) {
+        try {
+          const types = typeof schemaSettings.value === 'string' 
+            ? JSON.parse(schemaSettings.value)
+            : schemaSettings.value;
+          if (Array.isArray(types)) {
+            setRelationshipTypes(types.map((t: { name: string }) => t.name));
+          }
+        } catch (error) {
+          console.error('Error parsing relationship types:', error);
+        }
       }
     };
     loadData();

@@ -33,9 +33,19 @@ export default async function GraphPage() {
     .eq("key", "schema.entityTypes")
     .single();
 
-  const allEntityTypes = schemaSettings?.value && Array.isArray(schemaSettings.value)
-    ? (schemaSettings.value as Array<{ name: string; description: string }>).map(t => t.name)
-    : [];
+  let allEntityTypes: string[] = [];
+  if (schemaSettings?.value) {
+    try {
+      const types = typeof schemaSettings.value === 'string' 
+        ? JSON.parse(schemaSettings.value)
+        : schemaSettings.value;
+      if (Array.isArray(types)) {
+        allEntityTypes = types.map((t: { name: string }) => t.name);
+      }
+    } catch (error) {
+      console.error('Error parsing entity types:', error);
+    }
+  }
 
   return (
     <>

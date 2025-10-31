@@ -23,7 +23,7 @@ export function GraphPageClient({
       <div className="flex justify-end gap-2">
         <Button
           variant="outline"
-          onClick={() => router.push("/graph/relationships")}
+          onClick={() => router.push("/admin/graph/relationships")}
           className="gap-2"
         >
           <Network className="h-4 w-4" />
@@ -31,7 +31,7 @@ export function GraphPageClient({
         </Button>
         <Button
           variant="outline"
-          onClick={() => router.push("/graph/cleanup")}
+          onClick={() => router.push("/admin/graph/cleanup")}
           className="gap-2"
         >
           <Sparkles className="h-4 w-4" />

@@ -102,7 +102,7 @@ export const InlineCitationCardBody = ({
   className,
   ...props
 }: InlineCitationCardBodyProps) => (
-  <HoverCardContent className={cn('relative w-80', className)} {...props} />
+  <HoverCardContent className={cn('relative w-80 p-0', className)} {...props} />
 );
 
 export type InlineCitationCarouselProps = ComponentProps<typeof Carousel>;
@@ -287,7 +287,7 @@ export const InlineCitationQuote = ({
 }: InlineCitationQuoteProps) => (
   <blockquote
     className={cn(
-      'border-muted border-l-2 pl-3 text-muted-foreground text-sm italic',
+      'border-muted border-l-2 pl-3 pt-2 text-muted-foreground text-sm italic',
       className
     )}
     {...props}

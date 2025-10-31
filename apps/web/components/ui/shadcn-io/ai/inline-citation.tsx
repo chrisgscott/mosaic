@@ -78,10 +78,9 @@ export const InlineCitationCardTrigger = ({
     <HoverCardTrigger asChild>
       <Badge
         className={cn(
-          'ml-1 rounded-full bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer',
+          'ml-1 rounded-full bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer border-0',
           className
         )}
-        variant="secondary"
         {...props}
       >
         {sources.length ? (

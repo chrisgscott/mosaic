@@ -37,8 +37,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Parse request body - client sends only last message + chatId
-    const { message, chatId }: { message: UIMessage; chatId: string } = await request.json();
+    // Parse request body - client sends message, chatId, and optional model
+    const { message, chatId, model }: { message: UIMessage; chatId: string; model?: string } = await request.json();
 
     if (!message || !chatId) {
       return new Response(
@@ -118,9 +118,12 @@ export async function POST(request: Request) {
     // Get chat prompt from settings with context substitution
     const systemPrompt = await getPrompt('chat', { context });
 
+    // Use provided model or default to standard
+    const selectedModel = model || 'gpt-4o-mini';
+    
     // Stream response using AI SDK
     const result = streamText({
-      model: getModelForDepth('standard'),
+      model: getModelForDepth(selectedModel),
       system: systemPrompt,
       messages: convertToModelMessages(messages),
       temperature: 0.3,

@@ -1,7 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import { requireAdmin } from "@/lib/auth/admin-check";
 import { createClient } from '@/lib/supabase/server';
-import { ChatClient } from '@/components/chat-client';
+import { EnhancedChatClient } from '@/components/enhanced-chat-client';
 import type { UIMessage } from 'ai';
 
 /**
@@ -63,5 +63,5 @@ export default async function ChatSessionPage({
     createdAt: new Date(msg.created_at),
   }));
 
-  return <ChatClient id={id} initialMessages={initialMessages} />;
+  return <EnhancedChatClient id={id} initialMessages={initialMessages} />;
 }

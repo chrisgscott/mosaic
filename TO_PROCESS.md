@@ -12,13 +12,13 @@ This document contains items from INBOX that need additional decisions or resear
 - **Status:** SUSPENDED (no cost)
 - **Reason:** Using local worker successfully
 - **Savings:** $32.50/month ($25 worker + $2.50 disk)
-- **Action:** Keep suspended as backup
+- **Action:** Keep suspended as hosted service for production. Resume when ready to push to prod.
 
 **mosaic-api Service:**
 - **Status:** ACTIVE but unused
 - **Reason:** No source code exists, web app uses Next.js API routes
 - **Savings:** $7/month if deleted
-- **Action:** DELETE service
+- **Action:** Suspended service.
 
 **Total Potential Savings:** $39.50/month
 
@@ -40,6 +40,9 @@ This document contains items from INBOX that need additional decisions or resear
 
 ### 1. Structured Data & Spreadsheet Intelligence
 
+**Priority:** Medium-High (for financial/enterprise implementations)  
+**Timeline:** End of Phase 1 or Future Versions
+
 **Current State:**
 - ✅ CSV/XLSX files are processed by Docling
 - ✅ Tables extracted and converted to markdown
@@ -54,6 +57,12 @@ Traditional RAG struggles with structured data because:
 - Column headers separated from data lose meaning
 - Semantic search on raw CSV data performs poorly
 - Users can't ask analytical questions about the data
+
+**Strategic Importance:**
+- Critical for financial analysis use cases
+- Some Mosaic implementations will be heavily spreadsheet-dependent
+- Key differentiator for enterprise customers
+- Should be positioned as advanced feature
 
 **Proposed Solution: Lightweight CSV Intelligence**
 

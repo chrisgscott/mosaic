@@ -97,7 +97,7 @@ function parseCitations(text: string, citations: Citation[], baseKey: number): R
         return (
           <InlineCitation key={`${baseKey}-${index}`}>
             <InlineCitationCard>
-              <InlineCitationCardTrigger sources={[citation.url]} />
+              <InlineCitationCardTrigger sources={[citation.title]} />
               <InlineCitationCardBody>
                 <InlineCitationCarousel>
                   <InlineCitationCarouselHeader>

@@ -64,16 +64,6 @@ export const InlineCitationCardTrigger = ({
   className,
   ...props
 }: InlineCitationCardTriggerProps) => {
-  // Extract hostname or use "Document" for relative URLs
-  const getDisplayText = (url: string) => {
-    try {
-      return new URL(url).hostname;
-    } catch {
-      // For relative URLs, just show "Document"
-      return 'Document';
-    }
-  };
-
   return (
     <HoverCardTrigger asChild>
       <Badge
@@ -85,7 +75,7 @@ export const InlineCitationCardTrigger = ({
       >
         {sources.length ? (
           <>
-            {getDisplayText(sources[0])}{' '}
+            {sources[0]}{' '}
             {sources.length > 1 && `+${sources.length - 1}`}
           </>
         ) : (

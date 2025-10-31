@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils';
 import { RotateCcwIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { type FormEventHandler, useCallback, useEffect, useState } from 'react';
+import { MarkdownResponse } from '@/components/ai/markdown-response';
 
 // Define our enhanced message interface
 type EnhancedChatMessage = UIMessage & {
@@ -169,9 +170,9 @@ export function EnhancedChatClient({
   }, [sendMessage, status, setEnhancedMessages]);
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden rounded-xl border bg-background shadow-sm">
+    <div className="flex h-screen w-full flex-col overflow-hidden rounded-xl border bg-background shadow-sm">
       {/* Header */}
-      <div className="flex items-center justify-between border-b bg-muted/50 px-4 py-3">
+      <div className="flex items-center justify-between border-b bg-muted/50 px-4 py-3 shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <div className={cn(
@@ -196,8 +197,8 @@ export function EnhancedChatClient({
         </Button>
       </div>
 
-      {/* Conversation Area */}
-      <Conversation className="flex-1">
+      {/* Conversation Area - Scrollable */}
+      <Conversation className="flex-1 overflow-hidden">
         <ConversationContent className="space-y-4">
           {enhancedMessages.map((message) => (
             <div key={message.id} className="space-y-3">
@@ -219,7 +220,17 @@ export function EnhancedChatClient({
                       );
                     }
                     
-                    return textContent;
+                    // Render markdown for assistant messages, plain text for user messages
+                    if (message.role === 'assistant') {
+                      return (
+                        <MarkdownResponse 
+                          content={textContent} 
+                          isStreaming={message.isStreaming}
+                        />
+                      );
+                    }
+                    
+                    return <div className="whitespace-pre-wrap">{textContent}</div>;
                   })()}
                 </MessageContent>
                 <MessageAvatar 
@@ -257,8 +268,8 @@ export function EnhancedChatClient({
         <ConversationScrollButton />
       </Conversation>
 
-      {/* Input Area */}
-      <div className="border-t p-4">
+      {/* Input Area - Fixed at bottom */}
+      <div className="border-t p-4 shrink-0">
         <PromptInput onSubmit={handleSubmit}>
           <PromptInputTextarea
             name="message"

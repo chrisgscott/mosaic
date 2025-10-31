@@ -135,9 +135,22 @@ export async function POST(request: Request) {
     // Use provided model or default to standard
     const selectedModel = model || 'standard';
     
+    // Format sources for inline citations
+    const sources = results.slice(0, 10).map((result, idx) => ({
+      number: (idx + 1).toString(),
+      title: result.document_name,
+      url: `/admin/documents/${result.document_id}#chunk-${result.chunk_id}`,
+      description: `Chunk ${result.chunk_index}`,
+      quote: result.content.substring(0, 200) + (result.content.length > 200 ? '...' : ''),
+      score: result.rerank_score,
+      chunk_id: result.chunk_id,
+      document_id: result.document_id,
+      chunk_index: result.chunk_index,
+    }));
+    
     // Stream response using AI SDK
     const result = streamText({
-      model: getModelForDepth(selectedModel),
+      model: getModelForDepth(selectedModel as 'quick' | 'standard' | 'detailed' | 'deepResearch' | 'summary'),
       system: systemPrompt,
       messages: convertToModelMessages(messages),
       temperature: 0.3,
@@ -171,10 +184,7 @@ export async function POST(request: Request) {
               .map(p => p.text)
               .join(''),
             metadata: msg.role === 'assistant' ? {
-              sources: results.map(r => ({
-                document_name: r.document_name,
-                chunk_index: r.chunk_index,
-              })),
+              sources, // Include full source metadata for inline citations
             } : {},
           }));
 

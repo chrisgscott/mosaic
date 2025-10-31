@@ -30,10 +30,15 @@ const DEFAULT_PROMPTS: Record<PromptKey, string> = {
 ## Instructions:
 - Answer using ONLY information from the provided context
 - If context is insufficient, say so clearly
-- Cite sources using [1], [2], etc.
+- **CRITICAL**: Add inline citations [1], [2], etc. immediately after each claim or fact
+- Place citations right after the relevant sentence or phrase, before punctuation
+- Each [N] corresponds to the source number in the context above
+- Use multiple citations [1][2] when information comes from multiple sources
 - Use markdown formatting for readability
 - Your answer is ANALYSIS based on source documents (which are FACTS)
-- Be transparent about uncertainty`,
+- Be transparent about uncertainty
+
+Example: "React is a JavaScript library for building user interfaces[1]. It was created by Facebook[2] and is now maintained by Meta and the community[2][3]."`,
 
   entityExtraction: `You are an expert at extracting entities and relationships from text for knowledge graph construction.
 

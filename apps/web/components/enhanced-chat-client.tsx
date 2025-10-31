@@ -32,12 +32,21 @@ import { cn } from '@/lib/utils';
 import { RotateCcwIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { type FormEventHandler, useCallback, useEffect, useState } from 'react';
-import { MarkdownResponse } from '@/components/ai/markdown-response';
+import { CitationParser } from '@/components/ai/citation-parser';
+
+// Define citation type
+export interface Citation {
+  number: string;
+  title: string;
+  url: string;
+  description?: string;
+  quote?: string;
+}
 
 // Define our enhanced message interface
 type EnhancedChatMessage = UIMessage & {
   reasoning?: string;
-  sources?: Array<{ title: string; url: string }>;
+  sources?: Citation[];
   isStreaming?: boolean;
   createdAt?: Date;
 };
@@ -108,7 +117,8 @@ export function EnhancedChatClient({
     const realMessages = messages.map(msg => ({
       ...msg,
       reasoning: (msg as EnhancedChatMessage).reasoning,
-      sources: (msg as EnhancedChatMessage).sources,
+      // Extract sources from message data (set by backend)
+      sources: (msg as any).data?.sources || (msg as EnhancedChatMessage).sources,
       isStreaming: status === 'streaming' && msg === messages[messages.length - 1],
     }));
     
@@ -126,10 +136,7 @@ export function EnhancedChatClient({
       }],
       createdAt: new Date(),
       reasoning: undefined,
-      sources: [
-        { title: "Getting Started Guide", url: "#" },
-        { title: "API Documentation", url: "#" }
-      ],
+      sources: undefined, // No sources for welcome message
       isStreaming: false,
     }]);
   }, [setMessages]);
@@ -213,11 +220,12 @@ export function EnhancedChatClient({
                       );
                     }
                     
-                    // Render markdown for assistant messages, plain text for user messages
+                    // Render markdown with inline citations for assistant messages
                     if (message.role === 'assistant') {
                       return (
-                        <MarkdownResponse 
+                        <CitationParser 
                           content={textContent} 
+                          citations={message.sources || []}
                           isStreaming={message.isStreaming}
                         />
                       );

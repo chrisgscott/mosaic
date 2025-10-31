@@ -29,7 +29,7 @@ import {
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ui/shadcn-io/ai/source';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { MicIcon, PaperclipIcon, RotateCcwIcon } from 'lucide-react';
+import { RotateCcwIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { type FormEventHandler, useCallback, useEffect, useState } from 'react';
 import type { UIMessage } from 'ai';
@@ -41,13 +41,13 @@ type EnhancedChatMessage = UIMessage & {
   isStreaming?: boolean;
 };
 
-// Available models - will sync with our Vercel AI Gateway models
+// Available models - using our semantic model keys
 const models = [
-  { id: 'gpt-4o', name: 'GPT-4o' },
-  { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-  { id: 'claude-3-5-sonnet', name: 'Claude 3.5 Sonnet' },
-  { id: 'o4-mini-deep-research', name: 'o4 Mini Deep Research' },
-  { id: 'llama-3.1-70b', name: 'Llama 3.1 70B' },
+  { id: 'quick', name: 'Quick (GPT-4.1 Nano)' },
+  { id: 'standard', name: 'Standard (GPT-4o Mini)' },
+  { id: 'detailed', name: 'Detailed (GPT-4.1)' },
+  { id: 'deepResearch', name: 'Deep Research (o4 Mini)' },
+  { id: 'summary', name: 'Summary (GPT-4.1 Mini)' },
 ];
 
 /**
@@ -70,7 +70,7 @@ export function EnhancedChatClient({
   id: string;
   initialMessages?: UIMessage[];
 }) {
-  const [selectedModel, setSelectedModel] = useState(models[0].id);
+  const [selectedModel, setSelectedModel] = useState('standard'); // Default to standard model
   
   // useChat hook with session persistence
   const { messages, sendMessage, status, error, setMessages } = useChat({
@@ -225,13 +225,6 @@ export function EnhancedChatClient({
           />
           <PromptInputToolbar>
             <PromptInputTools>
-              <PromptInputButton disabled={status === 'streaming'}>
-                <PaperclipIcon size={16} />
-              </PromptInputButton>
-              <PromptInputButton disabled={status === 'streaming'}>
-                <MicIcon size={16} />
-                <span>Voice</span>
-              </PromptInputButton>
               <PromptInputModelSelect 
                 value={selectedModel} 
                 onValueChange={setSelectedModel}

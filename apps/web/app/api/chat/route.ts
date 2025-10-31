@@ -119,7 +119,7 @@ export async function POST(request: Request) {
     const systemPrompt = await getPrompt('chat', { context });
 
     // Use provided model or default to standard
-    const selectedModel = model || 'gpt-4o-mini';
+    const selectedModel = model || 'standard';
     
     // Stream response using AI SDK
     const result = streamText({

@@ -38,13 +38,27 @@ export async function POST(request: Request) {
     }
 
     // Parse request body - client sends message, chatId, and optional model
-    const { message, chatId, model }: { message: UIMessage; chatId: string; model?: string } = await request.json();
+    const { message, chatId, model }: { message: UIMessage | { text: string }; chatId: string; model?: string } = await request.json();
 
     if (!message || !chatId) {
       return new Response(
         JSON.stringify({ error: "Message and chatId are required" }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Convert message format if needed
+    let uiMessage: UIMessage;
+    if ('text' in message) {
+      // Convert { text: string } to UIMessage format
+      uiMessage = {
+        id: `msg-${Date.now()}`,
+        role: 'user',
+        parts: [{ type: 'text' as const, text: message.text }],
+        createdAt: new Date(),
+      };
+    } else {
+      uiMessage = message;
     }
 
     // Load previous messages from database
@@ -67,10 +81,10 @@ export async function POST(request: Request) {
     }));
 
     // Append new message to previous messages
-    const messages = [...previousMessages, message];
+    const messages = [...previousMessages, uiMessage];
 
     // Extract query from latest message for search
-    const query = message.parts
+    const query = uiMessage.parts
       .filter(part => part.type === 'text')
       .map(part => part.text)
       .join('');

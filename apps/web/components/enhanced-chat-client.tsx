@@ -1,6 +1,6 @@
 'use client';
 
-import { useChat } from '@ai-sdk/react';
+import { useChat, DefaultChatTransport } from '@ai-sdk/react';
 import {
   Conversation,
   ConversationContent,
@@ -76,23 +76,19 @@ export function EnhancedChatClient({
   const { messages, sendMessage, status, error, setMessages } = useChat({
     id, // Session ID for persistence
     messages: initialMessages, // Load initial messages from database
-    api: '/api/chat',
-    // Prepare request with model selection
-    prepareRequest({ messages, input }) {
-      return {
-        body: {
-          messages,
-          message: {
-            id: `msg-${Date.now()}`,
-            role: 'user',
-            content: input,
-            createdAt: new Date(),
+    transport: new DefaultChatTransport({
+      api: '/api/chat',
+      // Send only the last message to reduce payload
+      prepareSendMessagesRequest({ messages, id }) {
+        return {
+          body: {
+            message: messages[messages.length - 1],
+            chatId: id,
+            model: selectedModel,
           },
-          chatId: id,
-          model: selectedModel,
-        },
-      };
-    },
+        };
+      },
+    }),
   });
 
   // Enhanced message state with reasoning and sources
@@ -138,8 +134,8 @@ export function EnhancedChatClient({
     
     if (!input.trim() || status === 'streaming') return;
     
-    // Append the message to the chat
-    sendMessage(input);
+    // Append the message to the chat using correct format
+    sendMessage({ text: input.trim() });
   }, [sendMessage, status]);
 
   return (

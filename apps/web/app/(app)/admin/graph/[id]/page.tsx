@@ -59,12 +59,40 @@ async function getEntityDetails(entityId: string, userId: string) {
   }
 
   // Get related chunks with content
-  const { data: chunks, error: chunksError } = await supabase
-    .from("chunks")
-    .select("id, content, document_id, chunk_index")
-    .in("id", entity.chunk_ids && entity.chunk_ids.length > 0 ? entity.chunk_ids : ['00000000-0000-0000-0000-000000000000'])
-    .order("document_id")
-    .order("chunk_index");
+  // Try to get chunks by ID first, but if that fails or returns empty,
+  // fall back to searching chunks from the entity's documents
+  let chunks = null;
+  let chunksError = null;
+  
+  if (entity.chunk_ids && entity.chunk_ids.length > 0) {
+    const result = await supabase
+      .from("chunks")
+      .select("id, content, document_id, chunk_index")
+      .in("id", entity.chunk_ids)
+      .order("document_id")
+      .order("chunk_index");
+    
+    chunks = result.data;
+    chunksError = result.error;
+  }
+  
+  // If no chunks found by ID, try to find chunks from the entity's documents
+  // that might mention this entity
+  if ((!chunks || chunks.length === 0) && entity.document_ids && entity.document_ids.length > 0) {
+    const result = await supabase
+      .from("chunks")
+      .select("id, content, document_id, chunk_index")
+      .in("document_id", entity.document_ids)
+      .ilike("content", `%${entity.name}%`)
+      .order("document_id")
+      .order("chunk_index")
+      .limit(10); // Limit to first 10 matches
+    
+    chunks = result.data;
+    if (result.error) {
+      console.error('Error fetching chunks by content search:', result.error);
+    }
+  }
 
   if (chunksError) {
     console.error('Error fetching chunks:', chunksError);

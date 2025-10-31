@@ -125,6 +125,28 @@ Mosaic is a comprehensive RAG platform combining semantic search with graph-base
 - User trust improvements
 - Answer quality indicators
 
+#### 6.4 Vercel AI SDK Tool-Based Architecture
+**Status:** Phase 1 complete, Phase 2 ready to start  
+**Priority:** High  
+**Estimated:** 2-3 days for Phase 2
+
+**Current State:**
+- Phase 1 (message persistence) completed
+- Chat always calls search endpoint (not optimal)
+
+**Phase 2: Tool-Based Search**
+- Make search a tool (AI decides when to search)
+- Enable multi-step reasoning
+- Add knowledge management tools
+- Optimize with caching
+
+**Benefits:**
+- More natural conversation flow
+- Fewer unnecessary searches (30-50% reduction)
+- Can search multiple times per query
+- Better AI decision-making
+- Aligns with industry best practices
+
 ---
 
 ## Future Roadmap 🗺️
@@ -405,8 +427,9 @@ def process_csv(file_path, document_id):
 
 #### Short Term (Weeks 1-4): Core RAG Enhancement
 1. **Week 1-2:** Grounding Controls & Context Management
-2. **Week 3:** Conversation Features
-3. **Week 4:** DEG-RAG Planning & Setup
+2. **Week 3:** Vercel AI SDK Tool-Based Architecture (Phase 2)
+3. **Week 4:** Conversation Features
+4. **Week 5:** DEG-RAG Planning & Setup
 
 #### Medium Term (Weeks 5-8): Knowledge Graph & Living Entities
 1. **Week 5-6:** DEG-RAG Implementation

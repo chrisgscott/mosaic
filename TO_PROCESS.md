@@ -264,70 +264,24 @@ Project 3 (imports package)
 
 ## 🎯 Feature Enhancement Decisions
 
-### 1. Entity Deduplication During Extraction
+### 1. ✅ ALREADY IN BUILD_PLAN: Entity Deduplication During Extraction
 
-**Current State:** Entities are extracted without checking for existing duplicates, leading to graph pollution.
-
-**Proposed Solution:** Add entity resolution step during extraction to match against existing entities before creating new ones.
-
-**Implementation Phases:**
-- **Phase 1:** Simple exact matching (1-2 days)
-- **Phase 2:** Fuzzy matching with confidence scores (2-3 days)  
-- **Phase 3:** LLM-powered contextual resolution (future)
-
-**Benefits:**
-- Cleaner knowledge graph
-- Better relationship accumulation
-- Improved search quality
-- Prevention vs cure approach
-
-**Challenges:**
-- Performance (checking against thousands of entities)
-- False positives ("Apple" company vs fruit)
-- Context dependence
-- Entity evolution over time
-
-**Decision Needed:**
-- Should we implement Phase 1 now or wait?
-- Does this complement or replace Phase 10.1 (Entity Deduplication & Merge Assistant)?
-- What's the priority vs other graph improvements?
-
-**Recommendation:** Implement Phase 1 (exact matching) as it's low-effort and provides immediate value. Phase 2 can wait for user feedback.
-
-**Priority:** Medium  
-**Estimated Effort:** 2-5 days (phased)
-
-**Reference:** Full details in INBOX
+**Status:** Already covered in Phase 7.1 DEG-RAG Implementation  
+**Reference:** See "Entity resolution across documents" in BUILD_PLAN.md
 
 ---
 
-### 2. Vercel AI SDK Tool-Based Architecture
+### 2. ✅ MOVED TO BUILD_PLAN: Vercel AI SDK Tool-Based Architecture
 
-**Current State:** Chat always calls search endpoint. Phase 1 (message persistence) completed.
-
-**Proposed Next Steps:**
-- Make search a tool (AI decides when to search)
-- Enable multi-step reasoning
-- Add knowledge management tools
-- Optimize with caching
-
-**Decision Needed:**
-- Proceed with Phase 2 (tool-based search) now?
-- What's the priority vs other chat improvements?
-- Should we complete this before multi-tenant work?
-
-**Benefits:**
-- More natural conversation flow
-- Fewer unnecessary searches (30-50% reduction)
-- Can search multiple times per query
-- Better AI decision-making
-
-**Recommendation:** High priority - this is a significant UX improvement that aligns with industry best practices.
-
+**Status:** Moved to Phase 6.4 in BUILD_PLAN  
 **Priority:** High  
-**Estimated Effort:** 2-3 days for Phase 2
+**Current State:** Phase 1 complete, Phase 2 ready to start
 
-**Reference:** Full implementation plan in INBOX
+**Implementation:** 
+- Phase 2: Tool-based search (2-3 days)
+- Benefits: 30-50% fewer unnecessary searches, better UX
+
+**Reference:** See Phase 6.4 in BUILD_PLAN.md
 
 ---
 

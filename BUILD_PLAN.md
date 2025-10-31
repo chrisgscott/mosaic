@@ -185,7 +185,66 @@ Mosaic is a comprehensive RAG platform combining semantic search with graph-base
 
 ### Phase 8: Advanced Features
 
-#### 8.1 Advanced AI Features
+#### 8.1 Structured Data & Spreadsheet Intelligence
+**Status:** Ready to start  
+**Priority:** Medium-High (for financial/enterprise implementations)  
+**Estimated:** 2-3 days (Phase 1) + 1-2 days (Phase 2)
+
+**Strategic Importance:**
+- Critical for financial analysis use cases
+- Some Mosaic implementations will be heavily spreadsheet-dependent
+- Key differentiator for enterprise customers
+- Positioned as advanced feature for end of Phase 1
+
+**Phase 1: Document-Level Narratives** (2-3 days, ~$0.05/CSV)
+- Detect CSV/XLSX uploads
+- Generate single document-level summary:
+  - What the data represents
+  - Key columns and their purposes
+  - Data quality observations (missing values, outliers)
+  - Notable patterns or characteristics
+  - Potential use cases
+- Embed summary alongside table chunks
+- Skip: Column narratives, trends, anomalies (too expensive)
+- Skip: Long-table format (storage explosion)
+
+**Phase 2: Optional Deep Analysis** (User-triggered, 1-2 days)
+- Add "Analyze Data" button for CSVs
+- User can trigger expensive analysis on-demand:
+  - Statistical analysis
+  - Trend detection
+  - Anomaly identification
+  - Column-specific narratives
+- Show cost estimate before processing
+- Cost: ~$0.20-0.50 per CSV (multiple LLM calls)
+
+**Implementation Approach:**
+```python
+# Lightweight approach
+def process_csv(file_path, document_id):
+    # 1. Load CSV
+    df = pd.read_csv(file_path)
+    
+    # 2. Generate single summary
+    summary = generate_csv_summary(df)  # One LLM call
+    
+    # 3. Create summary chunk
+    create_chunk(summary, metadata={'type': 'csv_summary'})
+    
+    # 4. Store original table as markdown (current approach)
+    table_markdown = df.to_markdown()
+    create_chunks(table_markdown)
+    
+    return {'summary_generated': True, 'cost': 0.05}
+```
+
+**Cost Analysis:**
+- Phase 1: $0.05 per CSV → $5/month for 100 CSVs
+- Phase 2: $0.20-0.50 per CSV (user-triggered)
+- Significant improvement for spreadsheet discovery
+- Users can find relevant CSVs via summaries
+
+#### 8.2 Advanced AI Features
 **Status:** Planned  
 **Priority:** Low  
 **Estimated:** 2-3 weeks
@@ -355,9 +414,10 @@ Mosaic is a comprehensive RAG platform combining semantic search with graph-base
 3. **Week 8:** Living Entities System (CrewAI integration)
 
 #### Long Term (Weeks 9-12): Advanced Features
-1. **Week 9-10:** Multi-Floor Architecture
-2. **Week 11:** Living Data & Versioning (Phase 1-2)
-3. **Week 12:** MCP Server & External Integration
+1. **Week 9:** Structured Data & Spreadsheet Intelligence (Phase 1)
+2. **Week 9-10:** Multi-Floor Architecture
+3. **Week 11:** Living Data & Versioning (Phase 1-2)
+4. **Week 12:** MCP Server & External Integration
 
 ### Testing & QA
 - Continuous integration testing

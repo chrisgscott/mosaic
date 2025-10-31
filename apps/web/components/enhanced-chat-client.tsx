@@ -142,7 +142,8 @@ export function EnhancedChatClient({
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = useCallback((event) => {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget as HTMLFormElement);
+    const form = event.currentTarget as HTMLFormElement;
+    const formData = new FormData(form);
     const input = formData.get('message') as string;
     
     if (!input.trim() || status === 'streaming') return;
@@ -162,6 +163,9 @@ export function EnhancedChatClient({
     
     // Append the message to the chat using correct format
     sendMessage({ text: input.trim() });
+    
+    // Clear the input field
+    form.reset();
   }, [sendMessage, status, setEnhancedMessages]);
 
   return (

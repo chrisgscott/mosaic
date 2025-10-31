@@ -11,7 +11,6 @@ import { Loader } from '@/components/ui/shadcn-io/ai/loader';
 import { Message, MessageAvatar, MessageContent } from '@/components/ui/shadcn-io/ai/message';
 import {
   PromptInput,
-  PromptInputButton,
   PromptInputModelSelect,
   PromptInputModelSelectContent,
   PromptInputModelSelectItem,
@@ -103,12 +102,23 @@ export function EnhancedChatClient({
 
   // Update enhanced messages when chat messages change
   useEffect(() => {
-    setEnhancedMessages(messages.map(msg => ({
-      ...msg,
-      reasoning: (msg as any).reasoning,
-      sources: (msg as any).sources,
-      isStreaming: status === 'streaming' && msg === messages[messages.length - 1],
-    })));
+    // Remove any temporary "thinking" messages and replace with real messages
+    setEnhancedMessages(prev => {
+      // Filter out thinking messages if we have real messages
+      const withoutThinking = messages.length > 0 
+        ? prev.filter(msg => !msg.id.startsWith('thinking-'))
+        : prev;
+      
+      // Map real messages with enhanced data
+      const realMessages = messages.map(msg => ({
+        ...msg,
+        reasoning: (msg as EnhancedChatMessage).reasoning,
+        sources: (msg as EnhancedChatMessage).sources,
+        isStreaming: status === 'streaming' && msg === messages[messages.length - 1],
+      }));
+      
+      return realMessages;
+    });
   }, [messages, status]);
 
   const handleReset = useCallback(() => {
@@ -116,7 +126,10 @@ export function EnhancedChatClient({
     setEnhancedMessages([{
       id: nanoid(),
       role: 'assistant',
-      content: "Hello! I'm your AI assistant. I can help you with coding questions, explain concepts, and provide guidance on web development topics. What would you like to know?",
+      parts: [{ 
+        type: 'text' as const, 
+        text: "Hello! I'm your AI assistant. I can help you with coding questions, explain concepts, and provide guidance on web development topics. What would you like to know?" 
+      }],
       createdAt: new Date(),
       reasoning: undefined,
       sources: [
@@ -134,9 +147,22 @@ export function EnhancedChatClient({
     
     if (!input.trim() || status === 'streaming') return;
     
+    // Immediately add a "thinking" assistant message for instant feedback
+    const thinkingMessage: EnhancedChatMessage = {
+      id: `thinking-${Date.now()}`,
+      role: 'assistant',
+      parts: [{ type: 'text' as const, text: '' }],
+      createdAt: new Date(),
+      reasoning: undefined,
+      sources: undefined,
+      isStreaming: true,
+    };
+    
+    setEnhancedMessages(prev => [...prev, thinkingMessage]);
+    
     // Append the message to the chat using correct format
     sendMessage({ text: input.trim() });
-  }, [sendMessage, status]);
+  }, [sendMessage, status, setEnhancedMessages]);
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden rounded-xl border bg-background shadow-sm">

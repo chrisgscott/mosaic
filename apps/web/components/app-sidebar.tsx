@@ -75,6 +75,10 @@ const data = {
           title: "Prompts",
           url: "/admin/settings/prompts",
         },
+        {
+          title: "Schema",
+          url: "/admin/settings/schema",
+        },
       ],
     },
   ],

@@ -55,14 +55,17 @@ export default async function ChatSessionPage({
     throw new Error('Failed to load messages');
   }
 
-  // Convert database messages to UIMessage format with sources
+  // Convert database messages to UIMessage format with sources and progress
   const initialMessages: UIMessage[] = (messages || []).map((msg) => ({
     id: msg.id,
     role: msg.role as 'user' | 'assistant' | 'system',
     parts: [{ type: 'text' as const, text: msg.content }],
     createdAt: new Date(msg.created_at),
-    // Pass sources as custom data for inline citations
-    data: msg.metadata?.sources ? { sources: msg.metadata.sources } : undefined,
+    // Pass sources and progress as custom data
+    data: {
+      ...(msg.metadata?.sources ? { sources: msg.metadata.sources } : {}),
+      ...(msg.metadata?.progress ? { progress: msg.metadata.progress } : {}),
+    },
   } as UIMessage));
 
   return (

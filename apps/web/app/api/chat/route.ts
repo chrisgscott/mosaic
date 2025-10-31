@@ -5,6 +5,13 @@ import { getPrompt } from '@/lib/ai/prompts';
 import { POST as searchAPI } from "@/app/api/search/route";
 import type { SearchResult } from "@/app/api/search/route";
 
+// Progress event type
+export type ProgressEvent = {
+  message: string;
+  status: 'in-progress' | 'completed';
+  timestamp: string;
+};
+
 /**
  * RAG Chat API - Following Vercel AI SDK Pattern
  * 
@@ -98,6 +105,22 @@ export async function POST(request: Request) {
 
     console.log(`[Chat] Processing query: "${query}"`);
 
+    // Track progress events
+    const progressEvents: ProgressEvent[] = [];
+    const addProgress = (message: string, status: 'in-progress' | 'completed' = 'in-progress') => {
+      const event: ProgressEvent = {
+        message,
+        status,
+        timestamp: new Date().toISOString(),
+      };
+      progressEvents.push(event);
+      console.log(`[Progress] ${message} (${status})`);
+    };
+
+    // Add initial progress
+    addProgress('Analyzing your question', 'completed');
+    addProgress('Searching through documents', 'in-progress');
+
     // Run full search pipeline
     const searchRequest = new Request(request.url, {
       method: 'POST',
@@ -119,6 +142,9 @@ export async function POST(request: Request) {
 
     const searchData = await searchResponse.json();
     const results: SearchResult[] = searchData.results || [];
+
+    addProgress('Searching through documents', 'completed');
+    addProgress('Generating response', 'in-progress');
 
     console.log(`[Chat] Found ${results.length} relevant chunks`);
 
@@ -159,6 +185,8 @@ export async function POST(request: Request) {
     // Consume stream to ensure completion even if client disconnects
     result.consumeStream();
 
+    addProgress('Generating response', 'completed');
+
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
       // Generate server-side IDs for persistence
@@ -185,6 +213,7 @@ export async function POST(request: Request) {
               .join(''),
             metadata: msg.role === 'assistant' ? {
               sources, // Include full source metadata for inline citations
+              progress: progressEvents, // Include progress events for UI display
             } : {},
           }));
 

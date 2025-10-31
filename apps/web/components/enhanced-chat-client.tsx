@@ -27,12 +27,14 @@ import {
   ReasoningTrigger,
 } from '@/components/ui/shadcn-io/ai/reasoning';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ui/shadcn-io/ai/source';
+import { Task, TaskTrigger, TaskContent, TaskItem } from '@/components/ui/shadcn-io/ai/task';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { RotateCcwIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { type FormEventHandler, useCallback, useEffect, useState } from 'react';
 import { CitationParser } from '@/components/ai/citation-parser';
+import type { ProgressEvent } from '@/app/api/chat/route';
 
 // Define citation type
 export interface Citation {
@@ -47,6 +49,7 @@ export interface Citation {
 type EnhancedChatMessage = UIMessage & {
   reasoning?: string;
   sources?: Citation[];
+  progress?: ProgressEvent[];
   isStreaming?: boolean;
   createdAt?: Date;
 };
@@ -117,8 +120,9 @@ export function EnhancedChatClient({
     const realMessages = messages.map(msg => ({
       ...msg,
       reasoning: (msg as EnhancedChatMessage).reasoning,
-      // Extract sources from message data (set by backend)
-      sources: (msg as { data?: { sources?: Citation[] } }).data?.sources || (msg as EnhancedChatMessage).sources,
+      // Extract sources and progress from message data (set by backend)
+      sources: (msg as { data?: { sources?: Citation[]; progress?: ProgressEvent[] } }).data?.sources || (msg as EnhancedChatMessage).sources,
+      progress: (msg as { data?: { sources?: Citation[]; progress?: ProgressEvent[] } }).data?.progress || (msg as EnhancedChatMessage).progress,
       isStreaming: status === 'streaming' && msg === messages[messages.length - 1],
     }));
     
@@ -202,6 +206,21 @@ export function EnhancedChatClient({
         <ConversationContent className="space-y-4">
           {enhancedMessages.map((message) => (
             <div key={message.id} className="space-y-3">
+              {/* Progress Steps - Only for assistant messages with progress */}
+              {message.role === 'assistant' && message.progress && message.progress.length > 0 && (
+                <Task defaultOpen={false}>
+                  <TaskTrigger title="Retrieval Process" />
+                  <TaskContent>
+                    {message.progress.map((event, idx) => (
+                      <TaskItem key={idx}>
+                        {event.message}
+                        {event.status === 'completed' && ' ✓'}
+                      </TaskItem>
+                    ))}
+                  </TaskContent>
+                </Task>
+              )}
+
               <Message from={message.role}>
                 <MessageContent>
                   {(() => {

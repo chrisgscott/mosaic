@@ -43,11 +43,11 @@ export default async function GeneralSettingsPage() {
     redirect("/");
   }
 
-  // Fetch current settings (exclude prompts category)
+  // Fetch current settings (exclude prompts and schema categories)
   const { data: settings } = await supabase
     .from("system_settings")
     .select("*")
-    .neq("category", "prompts")
+    .not("category", "in", "(prompts,schema)")
     .order("category", { ascending: true })
     .order("key", { ascending: true });
 
@@ -75,7 +75,7 @@ export default async function GeneralSettingsPage() {
             Configure system-wide settings. These settings affect all users. 
             <br />
             <span className="text-sm">
-              For prompt customization, see the <a href="/settings/prompts" className="text-blue-600 hover:underline">Prompts</a> page.
+              See also: <a href="/admin/settings/prompts" className="text-blue-600 hover:underline">Prompts</a> | <a href="/admin/settings/schema" className="text-blue-600 hover:underline">Schema</a>
             </span>
           </p>
         </div>

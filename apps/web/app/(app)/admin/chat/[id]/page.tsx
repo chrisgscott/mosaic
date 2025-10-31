@@ -63,5 +63,9 @@ export default async function ChatSessionPage({
     createdAt: new Date(msg.created_at),
   }));
 
-  return <EnhancedChatClient id={id} initialMessages={initialMessages} />;
+  return (
+    <div className="h-screen flex flex-col p-4">
+      <EnhancedChatClient id={id} initialMessages={initialMessages} />
+    </div>
+  );
 }

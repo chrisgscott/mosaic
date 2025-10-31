@@ -26,8 +26,16 @@ export default async function GraphPage() {
   // Fetch entities
   const { entities = [] } = await getEntities();
 
-  // Get all unique entity types for the merge dialog
-  const allEntityTypes = Array.from(new Set(entities.map((e) => e.type))).sort();
+  // Get entity types from schema settings
+  const { data: schemaSettings } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "schema.entityTypes")
+    .single();
+
+  const allEntityTypes = schemaSettings?.value
+    ? (schemaSettings.value as Array<{ name: string; description: string }>).map(t => t.name)
+    : [];
 
   return (
     <>

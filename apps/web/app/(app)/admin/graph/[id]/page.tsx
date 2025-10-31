@@ -94,15 +94,16 @@ params,
     notFound();
   }
 
-  // Get all unique entity types for the dropdown
-  const { data: allEntities } = await supabase
-    .from("entities")
-    .select("type")
-    .eq("user_id", userId);
+  // Get entity types from schema settings
+  const { data: schemaSettings } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "schema.entityTypes")
+    .single();
 
-  const allEntityTypes = Array.from(
-    new Set(allEntities?.map((e) => e.type) || [])
-  ).sort();
+  const allEntityTypes = schemaSettings?.value
+    ? (schemaSettings.value as Array<{ name: string; description: string }>).map(t => t.name)
+    : [];
 
   return (
     <>

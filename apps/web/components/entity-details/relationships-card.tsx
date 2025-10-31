@@ -9,6 +9,7 @@ import { RelationshipEditForm } from "./relationship-edit-form";
 import type { Entity } from "@/app/(app)/admin/graph/actions";
 import { toast } from "sonner";
 import { updateRelationship, deleteRelationship, getEntities, createRelationship } from "@/app/(app)/admin/graph/actions";
+import { createClient } from "@/lib/supabase/client";
 
 interface Relationship {
   id: string;
@@ -25,22 +26,6 @@ interface RelationshipsCardProps {
   onRelationshipUpdated: () => void;
 }
 
-const relationshipTypes = [
-  "part_of",
-  "uses",
-  "implements",
-  "extends",
-  "depends_on",
-  "relates_to",
-  "requires",
-  "manages",
-  "creates",
-  "collaborates_with",
-  "analyzes",
-  "evaluates",
-  "other",
-];
-
 export function RelationshipsCard({
   currentEntityId,
   outgoingRelationships,
@@ -50,16 +35,31 @@ export function RelationshipsCard({
   const [editingRelationshipId, setEditingRelationshipId] = useState<string | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [allEntities, setAllEntities] = useState<Entity[]>([]);
+  const [relationshipTypes, setRelationshipTypes] = useState<string[]>([]);
 
-  // Load all entities for relationship editing
+  // Load all entities and relationship types
   useEffect(() => {
-    const loadEntities = async () => {
+    const loadData = async () => {
+      // Load entities
       const result = await getEntities();
       if (result.entities) {
         setAllEntities(result.entities);
       }
+
+      // Load relationship types from schema settings
+      const supabase = createClient();
+      const { data: schemaSettings } = await supabase
+        .from("system_settings")
+        .select("value")
+        .eq("key", "schema.relationshipTypes")
+        .single();
+
+      if (schemaSettings?.value) {
+        const types = (schemaSettings.value as Array<{ name: string; description: string }>).map(t => t.name);
+        setRelationshipTypes(types);
+      }
     };
-    loadEntities();
+    loadData();
   }, []);
 
   // Combine all relationships with A->Z sorting within groups

@@ -33,7 +33,7 @@ export default async function GraphPage() {
     .eq("key", "schema.entityTypes")
     .single();
 
-  const allEntityTypes = schemaSettings?.value
+  const allEntityTypes = schemaSettings?.value && Array.isArray(schemaSettings.value)
     ? (schemaSettings.value as Array<{ name: string; description: string }>).map(t => t.name)
     : [];
 

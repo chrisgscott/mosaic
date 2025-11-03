@@ -475,11 +475,14 @@ For each pair of entities that are meaningfully connected in the text, extract t
             embedding_text = f"{entity.name}: {entity.description}"
             embedding = self.generate_entity_embedding(embedding_text)
             
+            # Handle entity.type - could be string or enum
+            entity_type = entity.type.value if hasattr(entity.type, 'value') else entity.type
+            
             # Check for similar entity
             existing_entity_id = self.find_similar_entity(
                 user_id, 
                 entity.name, 
-                entity.type.value, 
+                entity_type, 
                 embedding
             )
             
@@ -538,7 +541,7 @@ For each pair of entities that are meaningfully connected in the text, extract t
             result = self.supabase.table("entities").insert({
                 "user_id": user_id,
                 "name": entity.name,
-                "type": entity.type.value,
+                "type": entity_type,
                 "description": entity.description,
                 "canonical_name": canonical_name,
                 "aliases": entity.aliases,
@@ -550,7 +553,7 @@ For each pair of entities that are meaningfully connected in the text, extract t
             
             if result.data:
                 entity_id = result.data[0]["id"]
-                logger.debug(f"Stored new entity: {entity.name} ({entity.type.value})")
+                logger.debug(f"Stored new entity: {entity.name} ({entity_type})")
                 return entity_id
             
             return None

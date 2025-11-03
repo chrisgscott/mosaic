@@ -609,12 +609,15 @@ For each pair of entities that are meaningfully connected in the text, extract t
                 logger.warning(f"Missing entity IDs for relationship: {relationship.source} -> {relationship.target}")
                 return False
             
+            # Handle relationship.type - could be string or enum
+            rel_type = relationship.type.value if hasattr(relationship.type, 'value') else relationship.type
+            
             # Check if relationship already exists
             existing = self.supabase.table("relationships").select("id, document_ids, chunk_ids").match({
                 "user_id": user_id,
                 "source_entity_id": source_id,
                 "target_entity_id": target_id,
-                "relationship_type": relationship.type.value
+                "relationship_type": rel_type
             }).execute()
             
             if existing.data and len(existing.data) > 0:
@@ -636,7 +639,7 @@ For each pair of entities that are meaningfully connected in the text, extract t
                     "updated_at": "now()"
                 }).eq("id", rel["id"]).execute()
                 
-                logger.debug(f"Updated existing relationship: {relationship.source} -{relationship.type.value}-> {relationship.target}")
+                logger.debug(f"Updated existing relationship: {relationship.source} -{rel_type}-> {relationship.target}")
                 return True
             else:
                 # New relationship - insert
@@ -644,7 +647,7 @@ For each pair of entities that are meaningfully connected in the text, extract t
                     "user_id": user_id,
                     "source_entity_id": source_id,
                     "target_entity_id": target_id,
-                    "relationship_type": relationship.type.value,
+                    "relationship_type": rel_type,
                     "description": relationship.description,
                     "bidirectional": relationship.bidirectional,
                     "document_ids": [document_id],
@@ -652,7 +655,7 @@ For each pair of entities that are meaningfully connected in the text, extract t
                     "extraction_confidence": 0.9
                 }).execute()
                 
-                logger.debug(f"Stored new relationship: {relationship.source} -{relationship.type.value}-> {relationship.target}")
+                logger.debug(f"Stored new relationship: {relationship.source} -{rel_type}-> {relationship.target}")
                 return True
             
         except Exception as e:

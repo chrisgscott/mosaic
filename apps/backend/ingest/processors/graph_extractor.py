@@ -345,6 +345,48 @@ For each pair of entities that are meaningfully connected in the text, extract t
             time.sleep(self.min_db_interval - elapsed)
         self.last_db_call = time.time()
     
+    def _merge_descriptions(self, existing: str, new: str) -> str:
+        """
+        Intelligently merge entity descriptions.
+        
+        Strategy:
+        1. If new description is empty, keep existing
+        2. If existing is empty, use new
+        3. If new description adds information not in existing, append it
+        4. Otherwise, keep existing (avoid redundancy)
+        
+        Args:
+            existing: Current entity description
+            new: New description from latest extraction
+            
+        Returns:
+            Merged description
+        """
+        if not new or not new.strip():
+            return existing
+        
+        if not existing or not existing.strip():
+            return new
+        
+        # Normalize for comparison
+        existing_lower = existing.lower()
+        new_lower = new.lower()
+        
+        # If new description is substantially different, append it
+        # Check if new description adds meaningful content
+        if new_lower not in existing_lower and existing_lower not in new_lower:
+            # Avoid duplicating similar content - check for significant overlap
+            new_words = set(new_lower.split())
+            existing_words = set(existing_lower.split())
+            overlap = len(new_words & existing_words) / len(new_words) if new_words else 0
+            
+            # If less than 70% overlap, it's adding new information
+            if overlap < 0.7:
+                return f"{existing}. {new}"
+        
+        # Otherwise keep existing (new is redundant or subset)
+        return existing
+    
     def find_similar_entity(
         self, 
         user_id: str, 
@@ -442,16 +484,19 @@ For each pair of entities that are meaningfully connected in the text, extract t
             )
             
             if existing_entity_id:
-                # Entity exists - update arrays
+                # Entity exists - enrich it with new information
                 # Rate limit before DB call
                 self._rate_limit_db_call()
                 
-                # Fetch current entity
-                result = self.supabase.table("entities").select("document_ids, chunk_ids").eq("id", existing_entity_id).single().execute()
+                # Fetch current entity with all fields
+                result = self.supabase.table("entities").select("*").eq("id", existing_entity_id).single().execute()
                 
                 if result.data:
-                    doc_ids = result.data.get("document_ids", []) or []
-                    chunk_ids = result.data.get("chunk_ids", []) or []
+                    existing = result.data
+                    doc_ids = existing.get("document_ids", []) or []
+                    chunk_ids = existing.get("chunk_ids", []) or []
+                    existing_aliases = existing.get("aliases", []) or []
+                    existing_description = existing.get("description", "")
                     
                     # Add new IDs if not present
                     if document_id not in doc_ids:
@@ -459,16 +504,31 @@ For each pair of entities that are meaningfully connected in the text, extract t
                     if chunk_id not in chunk_ids:
                         chunk_ids.append(chunk_id)
                     
+                    # Merge descriptions intelligently
+                    enriched_description = self._merge_descriptions(
+                        existing_description,
+                        entity.description
+                    )
+                    
+                    # Accumulate new aliases
+                    new_aliases = [a for a in entity.aliases if a and a not in existing_aliases]
+                    enriched_aliases = existing_aliases + new_aliases
+                    
                     # Rate limit before DB call
                     self._rate_limit_db_call()
                     
-                    # Update entity
-                    self.supabase.table("entities").update({
+                    # Update entity with enriched data
+                    update_data = {
                         "document_ids": doc_ids,
                         "chunk_ids": chunk_ids,
+                        "description": enriched_description,
+                        "aliases": enriched_aliases,
                         "updated_at": "now()"
-                    }).eq("id", existing_entity_id).execute()
+                    }
                     
+                    self.supabase.table("entities").update(update_data).eq("id", existing_entity_id).execute()
+                    
+                    logger.debug(f"Enriched existing entity: {entity.name} (added {len(new_aliases)} aliases)")
                     return existing_entity_id
             
             # New entity - insert

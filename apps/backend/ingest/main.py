@@ -499,6 +499,47 @@ class DocumentWorker:
                     
                     logger.info(f"Graph extraction complete: {entity_count} entities, {rel_count} relationships")
                     
+                    # Propagate entity associations to augmented question chunks
+                    # This allows questions to be found via entity-based searches
+                    try:
+                        logger.info("Propagating entity associations to augmented question chunks")
+                        
+                        # Get all ORIGINAL chunks with their entities/relationships
+                        original_chunks_with_entities = supabase.table("chunks").select(
+                            "id, entity_ids, relationship_ids"
+                        ).eq("document_id", document_id).eq("chunk_type", "ORIGINAL").execute()
+                        
+                        # Build a map of parent_chunk_id -> entity/relationship IDs
+                        parent_associations = {
+                            chunk["id"]: {
+                                "entity_ids": chunk.get("entity_ids") or [],
+                                "relationship_ids": chunk.get("relationship_ids") or []
+                            }
+                            for chunk in original_chunks_with_entities.data
+                        }
+                        
+                        # Get all AUGMENTED_QUESTION chunks
+                        question_chunks = supabase.table("chunks").select(
+                            "id, parent_chunk_id"
+                        ).eq("document_id", document_id).eq("chunk_type", "AUGMENTED_QUESTION").execute()
+                        
+                        # Update each question chunk with its parent's associations
+                        updates_made = 0
+                        for question_chunk in question_chunks.data:
+                            parent_id = question_chunk.get("parent_chunk_id")
+                            if parent_id and parent_id in parent_associations:
+                                associations = parent_associations[parent_id]
+                                if associations["entity_ids"] or associations["relationship_ids"]:
+                                    supabase.table("chunks").update({
+                                        "entity_ids": associations["entity_ids"],
+                                        "relationship_ids": associations["relationship_ids"]
+                                    }).eq("id", question_chunk["id"]).execute()
+                                    updates_made += 1
+                        
+                        logger.info(f"Propagated entity associations to {updates_made} augmented question chunks")
+                    except Exception as e:
+                        logger.warning(f"Failed to propagate entity associations to questions: {e}")
+                    
                     # Note: Automated cleanup disabled - use UI for entity management
                     # The UI has sophisticated entity/relationship management tools
                     # that provide better control than automated cleanup

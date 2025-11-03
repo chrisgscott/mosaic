@@ -114,7 +114,7 @@ export function DocumentHeader({ document }: DocumentHeaderProps) {
     try {
       await deleteDocument(document.id);
       toast.success("Document deleted");
-      router.push("/documents");
+      router.push("/admin/documents");
     } catch (error) {
       console.error("Delete error:", error);
       toast.error("Failed to delete document");

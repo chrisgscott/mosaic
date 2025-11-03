@@ -229,6 +229,13 @@ class GraphExtractor:
         
         return f"""You are an expert at extracting entities and relationships from text for knowledge graph construction.
 
+**CONTEXT USAGE:**
+You may receive preceding and following chunks for context. Use these to:
+- Understand what acronyms and terms mean
+- Determine correct entity types
+- Write accurate descriptions
+BUT: Only extract entities from the [CURRENT CHUNK] section, not from context sections.
+
 **ENTITY EXTRACTION RULES:**
 
 Extract MAXIMUM 3-7 entities per chunk. ONLY extract proper nouns or significant domain concepts.
@@ -273,13 +280,22 @@ For each pair of entities that are meaningfully connected in the text, extract t
 
 **Relationship quality:** Only extract relationships that are explicitly stated or strongly implied in the text."""
     
-    def extract_from_chunk(self, text: str, chunk_summary: Optional[str] = None, max_retries: int = 3) -> ExtractionResult:
+    def extract_from_chunk(
+        self, 
+        text: str, 
+        chunk_summary: Optional[str] = None,
+        previous_chunks: Optional[List[str]] = None,
+        next_chunks: Optional[List[str]] = None,
+        max_retries: int = 3
+    ) -> ExtractionResult:
         """
         Extract entities and relationships from a single text chunk.
         
         Args:
             text: The text to extract from
             chunk_summary: Optional summary of the chunk for additional context
+            previous_chunks: Optional list of preceding chunks for context
+            next_chunks: Optional list of following chunks for context
             max_retries: Maximum number of retries for rate limit errors
             
         Returns:
@@ -292,10 +308,27 @@ For each pair of entities that are meaningfully connected in the text, extract t
         
         for attempt in range(max_retries):
             try:
-                # Build user message with optional summary
-                user_content = f"Text to analyze:\n\n{text}"
+                # Build user message with context
+                context_parts = []
+                
+                # Add preceding context if available
+                if previous_chunks:
+                    prev_text = "\n\n".join(previous_chunks)
+                    context_parts.append(f"[PRECEDING CONTEXT - FOR REFERENCE ONLY]:\n{prev_text}")
+                
+                # Add summary if available
                 if chunk_summary:
-                    user_content = f"Summary: {chunk_summary}\n\n{user_content}"
+                    context_parts.append(f"[SUMMARY]:\n{chunk_summary}")
+                
+                # Add main chunk to analyze
+                context_parts.append(f"[CURRENT CHUNK - EXTRACT ENTITIES FROM THIS]:\n{text}")
+                
+                # Add following context if available
+                if next_chunks:
+                    next_text = "\n\n".join(next_chunks)
+                    context_parts.append(f"[FOLLOWING CONTEXT - FOR REFERENCE ONLY]:\n{next_text}")
+                
+                user_content = "\n\n---\n\n".join(context_parts)
                 
                 response = self.openai.beta.chat.completions.parse(
                     model=graph_model,
@@ -681,7 +714,9 @@ For each pair of entities that are meaningfully connected in the text, extract t
         chunk_content: str,
         document_id: str,
         user_id: str,
-        chunk_summary: Optional[str] = None
+        chunk_summary: Optional[str] = None,
+        previous_chunks: Optional[List[str]] = None,
+        next_chunks: Optional[List[str]] = None
     ) -> Tuple[int, int]:
         """
         Extract and store entities/relationships for a single chunk.
@@ -692,12 +727,19 @@ For each pair of entities that are meaningfully connected in the text, extract t
             document_id: Document ID
             user_id: User ID
             chunk_summary: Optional summary of the chunk for additional context
+            previous_chunks: Optional list of preceding chunks for context
+            next_chunks: Optional list of following chunks for context
             
         Returns:
             Tuple of (entity_count, relationship_count)
         """
         # Extract entities and relationships
-        extraction = self.extract_from_chunk(chunk_content, chunk_summary)
+        extraction = self.extract_from_chunk(
+            chunk_content, 
+            chunk_summary,
+            previous_chunks,
+            next_chunks
+        )
         
         # Store entities and build name->ID mapping
         entity_name_to_id = {}
@@ -743,18 +785,30 @@ For each pair of entities that are meaningfully connected in the text, extract t
         
         # Process chunks in parallel using ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            # Submit all chunks for processing
-            future_to_chunk = {
-                executor.submit(
+            # Submit all chunks for processing with neighbor context
+            future_to_chunk = {}
+            neighbor_count = 2  # Number of neighbors to include on each side
+            
+            for i, chunk in enumerate(chunks):
+                # Get previous chunks (up to neighbor_count)
+                start_idx = max(0, i - neighbor_count)
+                previous_chunks = [chunks[j]["content"] for j in range(start_idx, i)] if i > 0 else None
+                
+                # Get next chunks (up to neighbor_count)
+                end_idx = min(len(chunks), i + neighbor_count + 1)
+                next_chunks = [chunks[j]["content"] for j in range(i + 1, end_idx)] if i < len(chunks) - 1 else None
+                
+                future = executor.submit(
                     self.process_chunk,
                     chunk["id"],
-                    chunk["content"],  # Always use full content
+                    chunk["content"],
                     document_id,
                     user_id,
-                    chunk.get("summary")  # Pass summary if available
-                ): chunk
-                for chunk in chunks
-            }
+                    chunk.get("summary"),
+                    previous_chunks,
+                    next_chunks
+                )
+                future_to_chunk[future] = chunk
             
             # Collect results as they complete
             completed = 0

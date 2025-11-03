@@ -233,6 +233,8 @@ class GraphExtractor:
 
 Extract MAXIMUM 3-7 entities per chunk. ONLY extract proper nouns or significant domain concepts.
 
+**CRITICAL: Entity descriptions MUST be factual and based ONLY on information in the text. DO NOT guess, infer, or make up descriptions.**
+
 **NEVER extract (FORBIDDEN):**
 - ❌ ANY number, date, or year (e.g., "2024", "2020-2025", "January")
 - ❌ ANY dollar amount or price (e.g., "$34 billion", "$450 billion")
@@ -241,6 +243,11 @@ Extract MAXIMUM 3-7 entities per chunk. ONLY extract proper nouns or significant
 - ❌ ANY technical ID or code (e.g., "#ffffff", "8112.99.9100", "4.1-specific-gravity")
 - ❌ Generic descriptors (e.g., "high", "low", "significant", "advanced")
 - ❌ Common industry terms (e.g., "production", "supply chains", "industry")
+
+**ENTITY TYPE CONSISTENCY:**
+- If you see an acronym (e.g., "ODA", "TWS", "RMAT"), determine its type from context
+- Use the SAME type for the same entity throughout - don't create "ODA" as both Organization and Methodology
+- If unsure about type, prefer Concept over Organization
 
 **ALLOWED ENTITY TYPES:**
 {chr(10).join(entity_types_desc)}
@@ -266,12 +273,13 @@ For each pair of entities that are meaningfully connected in the text, extract t
 
 **Relationship quality:** Only extract relationships that are explicitly stated or strongly implied in the text."""
     
-    def extract_from_chunk(self, text: str, max_retries: int = 3) -> ExtractionResult:
+    def extract_from_chunk(self, text: str, chunk_summary: Optional[str] = None, max_retries: int = 3) -> ExtractionResult:
         """
         Extract entities and relationships from a single text chunk.
         
         Args:
             text: The text to extract from
+            chunk_summary: Optional summary of the chunk for additional context
             max_retries: Maximum number of retries for rate limit errors
             
         Returns:
@@ -284,6 +292,11 @@ For each pair of entities that are meaningfully connected in the text, extract t
         
         for attempt in range(max_retries):
             try:
+                # Build user message with optional summary
+                user_content = f"Text to analyze:\n\n{text}"
+                if chunk_summary:
+                    user_content = f"Summary: {chunk_summary}\n\n{user_content}"
+                
                 response = self.openai.beta.chat.completions.parse(
                     model=graph_model,
                     messages=[
@@ -293,7 +306,7 @@ For each pair of entities that are meaningfully connected in the text, extract t
                         },
                         {
                             "role": "user",
-                            "content": f"Text to analyze:\n\n{text}"
+                            "content": user_content
                         }
                     ],
                     response_format=ExtractionResult,
@@ -667,7 +680,8 @@ For each pair of entities that are meaningfully connected in the text, extract t
         chunk_id: str,
         chunk_content: str,
         document_id: str,
-        user_id: str
+        user_id: str,
+        chunk_summary: Optional[str] = None
     ) -> Tuple[int, int]:
         """
         Extract and store entities/relationships for a single chunk.
@@ -677,12 +691,13 @@ For each pair of entities that are meaningfully connected in the text, extract t
             chunk_content: Chunk text content
             document_id: Document ID
             user_id: User ID
+            chunk_summary: Optional summary of the chunk for additional context
             
         Returns:
             Tuple of (entity_count, relationship_count)
         """
         # Extract entities and relationships
-        extraction = self.extract_from_chunk(chunk_content)
+        extraction = self.extract_from_chunk(chunk_content, chunk_summary)
         
         # Store entities and build name->ID mapping
         entity_name_to_id = {}
@@ -735,7 +750,8 @@ For each pair of entities that are meaningfully connected in the text, extract t
                     chunk["id"],
                     chunk["content"],  # Always use full content
                     document_id,
-                    user_id
+                    user_id,
+                    chunk.get("summary")  # Pass summary if available
                 ): chunk
                 for chunk in chunks
             }

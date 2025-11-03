@@ -485,8 +485,10 @@ class DocumentWorker:
                 logger.info("Extracting entities and relationships for knowledge graph")
                 try:
                     # Get stored chunks with IDs for graph extraction
-                    chunks_result = supabase.table("chunks").select("id, content, summary").eq("document_id", document_id).execute()
+                    # ONLY extract from ORIGINAL chunks, not AUGMENTED_QUESTION chunks
+                    chunks_result = supabase.table("chunks").select("id, content, summary").eq("document_id", document_id).eq("chunk_type", "ORIGINAL").execute()
                     stored_chunks_for_graph = chunks_result.data
+                    logger.info(f"Extracting from {len(stored_chunks_for_graph)} ORIGINAL chunks (excluding augmented questions)")
                     
                     # Process chunks for graph extraction
                     entity_count, rel_count = self.graph_extractor.process_chunks_batch(

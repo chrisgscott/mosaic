@@ -229,18 +229,28 @@ class GraphExtractor:
         
         return f"""You are an expert at extracting entities and relationships from text for knowledge graph construction.
 
-**CONTEXT USAGE:**
-You may receive preceding and following chunks for context. Use these to:
-- Understand what acronyms and terms mean
-- Determine correct entity types
-- Write accurate descriptions
-BUT: Only extract entities from the [CURRENT CHUNK] section, not from context sections.
+**CRITICAL INSTRUCTION:**
+You will receive a [CURRENT CHUNK] section - this is the ONLY section you should extract entities from.
+Preceding and following context sections are provided ONLY to help you understand what terms mean.
+DO NOT extract entities from context sections. DO NOT mix information from context into current chunk entities.
+
+**HOW TO USE CONTEXT:**
+Context chunks help you:
+- Understand what "ODA" or "TWS" stands for if it's defined nearby
+- Determine if something is a Methodology vs Organization vs Concept
+- Write accurate descriptions using the full picture
+
+**WHAT YOU MUST DO:**
+1. Read context sections to understand terminology
+2. Extract entities ONLY from [CURRENT CHUNK]
+3. Use context knowledge to write better descriptions for current chunk entities
+4. Keep entity descriptions focused on what's in the current chunk
 
 **ENTITY EXTRACTION RULES:**
 
 Extract MAXIMUM 3-7 entities per chunk. ONLY extract proper nouns or significant domain concepts.
 
-**CRITICAL: Entity descriptions MUST be factual and based ONLY on information in the text. DO NOT guess, infer, or make up descriptions.**
+**CRITICAL: Entity descriptions MUST be factual and based on information in the current chunk and context. DO NOT guess or make up descriptions.**
 
 **NEVER extract (FORBIDDEN):**
 - ❌ ANY number, date, or year (e.g., "2024", "2020-2025", "January")

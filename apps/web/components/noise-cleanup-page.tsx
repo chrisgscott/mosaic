@@ -10,26 +10,23 @@ import { toast } from "sonner";
 import { type Entity } from "@/app/(app)/admin/graph/actions";
 import { deleteEntity } from "@/app/(app)/admin/graph/actions";
 
-interface NoiseGroup {
-  entities: Entity[];
+interface NoiseEntity extends Entity {
+  noiseScore: number;
   noiseType: string;
-  severity: number;
-  reason: string;
+  noiseReason: string;
 }
 
 export function NoiseCleanupPage() {
   const router = useRouter();
   const [isDetecting, setIsDetecting] = useState(false);
-  const [noiseGroups, setNoiseGroups] = useState<NoiseGroup[]>([]);
-  const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
+  const [noiseEntities, setNoiseEntities] = useState<NoiseEntity[]>([]);
+  const [selectedEntityIds, setSelectedEntityIds] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
-  const [processedGroups, setProcessedGroups] = useState<Set<number>>(new Set());
 
   const detectNoise = async () => {
     setIsDetecting(true);
-    setNoiseGroups([]);
-    setCurrentGroupIndex(0);
-    setProcessedGroups(new Set());
+    setNoiseEntities([]);
+    setSelectedEntityIds(new Set());
 
     try {
       const response = await fetch("/api/ai/detect-noise", {
@@ -48,9 +45,25 @@ export function NoiseCleanupPage() {
       if (data.noiseGroups.length === 0) {
         toast.success("No noise entities found! Your graph is clean. 🎉");
       } else {
-        setNoiseGroups(data.noiseGroups);
+        // Flatten all noise entities into a single list
+        const flattenedEntities: NoiseEntity[] = [];
+        data.noiseGroups.forEach((group: any) => {
+          group.entities.forEach((entity: Entity) => {
+            flattenedEntities.push({
+              ...entity,
+              noiseScore: group.severity,
+              noiseType: group.noiseType,
+              noiseReason: group.reason,
+            });
+          });
+        });
+
+        // Sort by noise score (highest first)
+        flattenedEntities.sort((a, b) => b.noiseScore - a.noiseScore);
+
+        setNoiseEntities(flattenedEntities);
         toast.success(
-          `Found ${data.totalGroups} noise groups (${data.totalEntities} entities)`
+          `Found ${flattenedEntities.length} noise entities to review`
         );
       }
     } catch (error) {
@@ -61,9 +74,14 @@ export function NoiseCleanupPage() {
     }
   };
 
-  const handleDeleteGroup = async (group: NoiseGroup) => {
+  const handleDeleteSelected = async () => {
+    if (selectedEntityIds.size === 0) {
+      toast.error("Please select entities to delete");
+      return;
+    }
+
     const confirmed = window.confirm(
-      `Are you sure you want to delete all ${group.entities.length} entities in this noise group? This action cannot be undone.`
+      `Are you sure you want to delete ${selectedEntityIds.size} selected noise entities? This action cannot be undone.`
     );
 
     if (!confirmed) return;
@@ -71,8 +89,10 @@ export function NoiseCleanupPage() {
     setIsDeleting(true);
 
     try {
-      // Delete all entities in the group
-      const deletePromises = group.entities.map((entity) => deleteEntity(entity.id));
+      // Delete selected entities
+      const deletePromises = Array.from(selectedEntityIds).map((entityId) => 
+        deleteEntity(entityId)
+      );
       const results = await Promise.allSettled(deletePromises);
 
       const successful = results.filter((r) => r.status === "fulfilled").length;
@@ -80,20 +100,14 @@ export function NoiseCleanupPage() {
 
       if (failed === 0) {
         toast.success(`Deleted ${successful} noise entities`);
+        // Remove deleted entities from the list
+        setNoiseEntities(prev => prev.filter(entity => !selectedEntityIds.has(entity.id)));
       } else {
         toast.error(`Failed to delete ${failed} entities`);
       }
 
-      // Mark this group as processed and move to next
-      setProcessedGroups((prev) => new Set(prev).add(currentGroupIndex));
-      
-      if (currentGroupIndex < noiseGroups.length - 1) {
-        const nextIndex = currentGroupIndex + 1;
-        setCurrentGroupIndex(nextIndex);
-      } else {
-        toast.success("All noise groups processed!");
-        router.push("/admin/graph");
-      }
+      // Clear selection
+      setSelectedEntityIds(new Set());
     } catch (error) {
       console.error("Delete error:", error);
       toast.error("Failed to delete entities");
@@ -102,21 +116,19 @@ export function NoiseCleanupPage() {
     }
   };
 
-  const handleSkipGroup = () => {
-    setProcessedGroups((prev) => new Set(prev).add(currentGroupIndex));
-    if (currentGroupIndex < noiseGroups.length - 1) {
-      const nextIndex = currentGroupIndex + 1;
-      setCurrentGroupIndex(nextIndex);
+  const handleSelectAll = () => {
+    if (selectedEntityIds.size === noiseEntities.length) {
+      // Deselect all
+      setSelectedEntityIds(new Set());
     } else {
-      toast.info("All groups reviewed!");
-      router.push("/admin/graph");
+      // Select all
+      setSelectedEntityIds(new Set(noiseEntities.map(entity => entity.id)));
     }
   };
 
   const handleDeleteAllNoise = async () => {
-    const totalEntities = noiseGroups.reduce((sum, g) => sum + g.entities.length, 0);
     const confirmed = window.confirm(
-      `Are you sure you want to delete ALL ${totalEntities} noise entities? This is a destructive action that cannot be undone.`
+      `Are you sure you want to delete ALL ${noiseEntities.length} noise entities? This is a destructive action that cannot be undone.`
     );
 
     if (!confirmed) return;
@@ -124,9 +136,8 @@ export function NoiseCleanupPage() {
     setIsDeleting(true);
 
     try {
-      // Delete all entities in all groups
-      const allEntities = noiseGroups.flatMap(g => g.entities);
-      const deletePromises = allEntities.map((entity) => deleteEntity(entity.id));
+      // Delete all entities
+      const deletePromises = noiseEntities.map((entity) => deleteEntity(entity.id));
       const results = await Promise.allSettled(deletePromises);
 
       const successful = results.filter((r) => r.status === "fulfilled").length;
@@ -134,11 +145,10 @@ export function NoiseCleanupPage() {
 
       if (failed === 0) {
         toast.success(`Deleted all ${successful} noise entities`);
+        router.push("/admin/graph");
       } else {
         toast.error(`Failed to delete ${failed} entities`);
       }
-
-      router.push("/admin/graph");
     } catch (error) {
       console.error("Delete all error:", error);
       toast.error("Failed to delete entities");
@@ -147,11 +157,8 @@ export function NoiseCleanupPage() {
     }
   };
 
-  const currentGroup = noiseGroups[currentGroupIndex];
-  const remainingGroups = noiseGroups.length - processedGroups.size;
-
-  // Don't render if no current group
-  if (noiseGroups.length > 0 && !currentGroup) {
+  // Don't render if no entities
+  if (noiseEntities.length === 0 && !isDetecting) {
     return null;
   }
 
@@ -196,24 +203,49 @@ export function NoiseCleanupPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {noiseGroups.length > 0 && (
-            <Button
-              variant="destructive"
-              onClick={handleDeleteAllNoise}
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting All...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete All Noise
-                </>
-              )}
-            </Button>
+          {noiseEntities.length > 0 && (
+            <>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteAllNoise}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deleting All...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete All ({noiseEntities.length})
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleSelectAll}
+                disabled={isDeleting}
+              >
+                {selectedEntityIds.size === noiseEntities.length ? "Deselect All" : "Select All"} ({selectedEntityIds.size})
+              </Button>
+              <Button
+                onClick={handleDeleteSelected}
+                disabled={isDeleting || selectedEntityIds.size === 0}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Selected ({selectedEntityIds.size})
+                  </>
+                )}
+              </Button>
+            </>
           )}
           <Button
             variant="outline"
@@ -226,7 +258,7 @@ export function NoiseCleanupPage() {
       </div>
 
       {/* Detection or Results */}
-      {noiseGroups.length === 0 ? (
+      {noiseEntities.length === 0 ? (
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col items-center space-y-4 text-center">
@@ -263,132 +295,109 @@ export function NoiseCleanupPage() {
         </Card>
       ) : (
         <>
-          {/* Progress */}
+          {/* Results Summary */}
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold">Noise Groups Remaining</h3>
+                  <h3 className="font-semibold">Noise Entities Found</h3>
                   <p className="text-sm text-muted-foreground">
-                    {remainingGroups} of {noiseGroups.length} groups to review
+                    {selectedEntityIds.size} of {noiseEntities.length} selected for deletion
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-orange-500" />
                   <span className="text-sm font-medium">
-                    {noiseGroups.reduce((sum, g) => sum + g.entities.length, 0)} total noise entities
+                    {noiseEntities.length} total noise entities
                   </span>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Current Group */}
-          {currentGroup && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <AlertTriangle className="h-5 w-5 text-orange-500" />
-                      {getNoiseTypeLabel(currentGroup.noiseType)}
-                    </CardTitle>
-                    <CardDescription className="mt-2">
-                      {currentGroup.reason}
-                    </CardDescription>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge 
-                      variant="secondary" 
-                      className={`${getNoiseTypeColor(currentGroup.noiseType)} text-white`}
-                    >
-                      Severity: {(currentGroup.severity * 100).toFixed(0)}%
-                    </Badge>
-                    <Badge variant="outline">
-                      {currentGroup.entities.length} entities
-                    </Badge>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {/* Entity List */}
-                  <div className="max-h-96 overflow-y-auto space-y-2">
-                    {currentGroup.entities.map((entity) => (
-                      <div
-                        key={entity.id}
-                        className="p-3 border rounded-lg bg-muted/20"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{entity.name}</span>
-                              <Badge variant="outline" className="text-xs">
-                                {entity.type}
-                              </Badge>
-                              {entity.extraction_confidence && (
-                                <Badge 
-                                  variant="secondary" 
-                                  className="text-xs"
-                                >
-                                  {(entity.extraction_confidence * 100).toFixed(0)}% conf.
-                                </Badge>
-                              )}
-                            </div>
-                            {entity.description && (
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {entity.description}
-                              </p>
-                            )}
-                            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                              <span>{entity.chunk_ids.length} chunks</span>
-                              <span>{entity.document_ids.length} documents</span>
-                              {entity.aliases && entity.aliases.length > 0 && (
-                                <span>{entity.aliases.length} aliases</span>
-                              )}
-                            </div>
-                          </div>
+          {/* Entity List */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="max-h-96 overflow-y-auto space-y-2">
+                {noiseEntities.map((entity) => (
+                  <div
+                    key={entity.id}
+                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                      selectedEntityIds.has(entity.id) 
+                        ? "bg-red-50 border-red-200" 
+                        : "bg-muted/20 hover:bg-muted/30"
+                    }`}
+                    onClick={() => {
+                      const newSelected = new Set(selectedEntityIds);
+                      if (newSelected.has(entity.id)) {
+                        newSelected.delete(entity.id);
+                      } else {
+                        newSelected.add(entity.id);
+                      }
+                      setSelectedEntityIds(newSelected);
+                    }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedEntityIds.has(entity.id)}
+                        onChange={() => {}}
+                        className="cursor-pointer h-4 w-4 mt-1"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{entity.name}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {entity.type}
+                          </Badge>
+                          <Badge 
+                            variant="secondary" 
+                            className={`text-xs ${getNoiseTypeColor(entity.noiseType)} text-white`}
+                          >
+                            {getNoiseTypeLabel(entity.noiseType)}
+                          </Badge>
+                          {entity.extraction_confidence && (
+                            <Badge 
+                              variant="secondary" 
+                              className="text-xs"
+                            >
+                              {(entity.extraction_confidence * 100).toFixed(0)}% conf.
+                            </Badge>
+                          )}
+                          <Badge 
+                            variant="outline" 
+                            className="text-xs"
+                          >
+                            {(entity.noiseScore * 100).toFixed(0)}% noise
+                          </Badge>
+                        </div>
+                        {entity.description && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {entity.description}
+                          </p>
+                        )}
+                        <p className="text-xs text-orange-600 mt-1">
+                          {entity.noiseReason}
+                        </p>
+                        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                          <span>{entity.chunk_ids.length} chunks</span>
+                          <span>{entity.document_ids.length} documents</span>
+                          {entity.aliases && entity.aliases.length > 0 && (
+                            <span>{entity.aliases.length} aliases</span>
+                          )}
                         </div>
                       </div>
-                    ))}
+                    </div>
                   </div>
+                ))}
+              </div>
 
-                  <p className="text-xs text-muted-foreground">
-                    ⚠️ These entities will be permanently deleted along with all their relationships
-                  </p>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2 pt-4 border-t">
-                  <Button
-                    variant="destructive"
-                    onClick={() => handleDeleteGroup(currentGroup)}
-                    disabled={isDeleting}
-                    className="flex-1"
-                  >
-                    {isDeleting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Deleting...
-                      </>
-                    ) : (
-                      <>
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete Group
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleSkipGroup}
-                    disabled={isDeleting}
-                  >
-                    Skip
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+              <p className="text-xs text-muted-foreground mt-4">
+                ⚠️ Selected entities will be permanently deleted along with all their relationships
+              </p>
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

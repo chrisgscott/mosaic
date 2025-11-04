@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
 
 type Chunk = {
   id: string;
@@ -322,8 +323,41 @@ export function ChunksTable({ chunks, documentId }: ChunksTableProps) {
               <div className="text-sm font-medium text-muted-foreground mb-2">
                 Content ({selectedChunk?.token_count} tokens)
               </div>
-              <div className="p-4 bg-muted rounded-lg whitespace-pre-wrap text-sm">
-                {selectedChunk?.content}
+              <div className="p-4 bg-muted rounded-lg text-sm prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown
+                  components={{
+                    // Style markdown elements
+                    p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,
+                    ul: ({ children }) => <ul className="mb-4 ml-6 list-disc">{children}</ul>,
+                    ol: ({ children }) => <ol className="mb-4 ml-6 list-decimal">{children}</ol>,
+                    li: ({ children }) => <li className="mb-1">{children}</li>,
+                    code: ({ inline, children, ...props }: { inline?: boolean; children?: React.ReactNode }) =>
+                      inline ? (
+                        <code className="px-1 py-0.5 rounded bg-background font-mono text-xs" {...props}>
+                          {children}
+                        </code>
+                      ) : (
+                        <code className="block p-4 rounded bg-background font-mono text-xs overflow-x-auto" {...props}>
+                          {children}
+                        </code>
+                      ),
+                    a: ({ children, href }) => (
+                      <a href={href} className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+                        {children}
+                      </a>
+                    ),
+                    h1: ({ children }) => <h1 className="text-xl font-bold mb-4 mt-6">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-lg font-bold mb-3 mt-5">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-base font-bold mb-2 mt-4">{children}</h3>,
+                    blockquote: ({ children }) => (
+                      <blockquote className="border-l-4 border-muted-foreground pl-4 italic my-4">
+                        {children}
+                      </blockquote>
+                    ),
+                  }}
+                >
+                  {selectedChunk?.content || ''}
+                </ReactMarkdown>
               </div>
             </div>
             {selectedChunk?.metadata && Object.keys(selectedChunk.metadata).length > 0 && (

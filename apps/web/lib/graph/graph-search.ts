@@ -96,7 +96,7 @@ export async function searchEntitiesSemantic(
       
       if (!lowerError && lowerThresholdEntities && lowerThresholdEntities.length > 0) {
         console.log(`[Search Entities] Found ${lowerThresholdEntities.length} entities with lower threshold`);
-        return lowerThresholdEntities.map((entity: any) => ({
+        return lowerThresholdEntities.map((entity: SupabaseEntity) => ({
           id: entity.id,
           name: entity.name,
           type: entity.type,
@@ -137,7 +137,7 @@ export async function searchEntitiesSemantic(
 
     console.log(`[Search Entities] Found ${entities.length} entities via semantic search`);
 
-    return entities.map((entity: any) => ({
+    return entities.map((entity: SupabaseEntity) => ({
       id: entity.id,
       name: entity.name,
       type: entity.type,
@@ -338,6 +338,16 @@ export async function graphEnhancedSearch(
 /**
  * Detect if a query is relationship-focused
  */
+interface SupabaseEntity {
+  id: string;
+  name: string;
+  type: string;
+  description: string | null;
+  similarity: number | null;
+  document_ids: string[] | null;
+  chunk_ids: string[] | null;
+}
+
 export function isRelationshipQuery(query: string): boolean {
   const relationshipKeywords = [
     'relate',

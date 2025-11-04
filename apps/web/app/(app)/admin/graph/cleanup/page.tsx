@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/auth/admin-check";
+import { createClient } from "@/lib/supabase/server";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -10,18 +11,33 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { CleanupGraphPage } from "@/components/cleanup-graph-page";
-import { getEntities } from "../actions";
 
 export default async function GraphCleanupPage() {
   // Check admin access
   await requireAdmin();
 
-  const { entities } = await getEntities();
-  
-  // Get unique entity types
-  const entityTypes = entities 
-    ? Array.from(new Set(entities.map((e) => e.type))).sort()
-    : [];
+  const supabase = await createClient();
+
+  // Get entity types from schema settings
+  const { data: schemaSettings } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "schema.entityTypes")
+    .single();
+
+  let allEntityTypes: string[] = [];
+  if (schemaSettings?.value) {
+    try {
+      const types = typeof schemaSettings.value === 'string' 
+        ? JSON.parse(schemaSettings.value)
+        : schemaSettings.value;
+      if (Array.isArray(types)) {
+        allEntityTypes = types.map((t: { name: string }) => t.name);
+      }
+    } catch (error) {
+      console.error('Error parsing entity types:', error);
+    }
+  }
 
   return (
     <>
@@ -41,7 +57,7 @@ export default async function GraphCleanupPage() {
         </Breadcrumb>
       </header>
       <div className="flex-1 space-y-4 p-4">
-        <CleanupGraphPage allEntityTypes={entityTypes} />
+        <CleanupGraphPage allEntityTypes={allEntityTypes} />
       </div>
     </>
   );

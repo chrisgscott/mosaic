@@ -66,12 +66,10 @@ const STOP_WORDS = new Set([
 function calculateNoiseScore(entity: Entity): { score: number; type: string; reason: string } {
   const name = entity.name.toLowerCase().trim();
   let score = 0;
-  let maxScore = 0;
-  let reasons: string[] = [];
+  const reasons: string[] = [];
   let detectedType = "unknown";
 
   // 1. Generic terms (highest severity)
-  maxScore += 0.3;
   if (GENERIC_TERMS.includes(name)) {
     score += 0.3;
     reasons.push("Generic business term");
@@ -79,15 +77,13 @@ function calculateNoiseScore(entity: Entity): { score: number; type: string; rea
   }
 
   // 2. Very short names
-  maxScore += 0.2;
-  if (name.length <= 2) {
+    if (name.length <= 2) {
     score += 0.2;
     reasons.push("Very short name");
     detectedType = detectedType === "unknown" ? "short" : detectedType;
   }
 
   // 3. All uppercase (likely unprocessed abbreviation)
-  maxScore += 0.15;
   if (name === name.toUpperCase() && name.length > 1) {
     score += 0.15;
     reasons.push("All uppercase abbreviation");
@@ -95,8 +91,7 @@ function calculateNoiseScore(entity: Entity): { score: number; type: string; rea
   }
 
   // 4. Mostly numbers/symbols
-  maxScore += 0.2;
-  const nonAlphaChars = (name.match(/[^a-zA-Z\s]/g) || []).length;
+    const nonAlphaChars = (name.match(/[^a-zA-Z\s]/g) || []).length;
   if (nonAlphaChars / name.length > 0.5) {
     score += 0.2;
     reasons.push("Contains many numbers/symbols");
@@ -104,8 +99,7 @@ function calculateNoiseScore(entity: Entity): { score: number; type: string; rea
   }
 
   // 5. Low extraction confidence
-  maxScore += 0.2;
-  if (entity.extraction_confidence && entity.extraction_confidence < 0.6) {
+    if (entity.extraction_confidence && entity.extraction_confidence < 0.6) {
     const confidenceScore = (0.6 - entity.extraction_confidence) * 0.5; // Scale to 0.2 max
     score += confidenceScore;
     reasons.push(`Low confidence (${entity.extraction_confidence.toFixed(2)})`);
@@ -113,7 +107,6 @@ function calculateNoiseScore(entity: Entity): { score: number; type: string; rea
   }
 
   // 6. Missing or very short description
-  maxScore += 0.15;
   if (!entity.description || entity.description.trim().length < 10) {
     score += 0.15;
     reasons.push("Missing or very short description");
@@ -121,7 +114,6 @@ function calculateNoiseScore(entity: Entity): { score: number; type: string; rea
   }
 
   // 7. Single common words
-  maxScore += 0.1;
   if (name.split(/\s+/).length === 1 && STOP_WORDS.has(name)) {
     score += 0.1;
     reasons.push("Common stop word");
@@ -129,7 +121,6 @@ function calculateNoiseScore(entity: Entity): { score: number; type: string; rea
   }
 
   // 8. Name is just a year, quarter, or other date pattern
-  maxScore += 0.15;
   if (
     /^\d{4}$/.test(name) || // Year: 2023
     /^q[1-4]\s*\d{4}$/i.test(name) || // Quarter: Q1 2023
@@ -144,15 +135,13 @@ function calculateNoiseScore(entity: Entity): { score: number; type: string; rea
   }
 
   // 9. Pure numbers (not dates)
-  maxScore += 0.2;
-  if (/^\d+$/.test(name) && !/^\d{4}$/.test(name)) {
+    if (/^\d+$/.test(name) && !/^\d{4}$/.test(name)) {
     score += 0.2;
     reasons.push("Pure number");
     detectedType = detectedType === "unknown" ? "numeric" : detectedType;
   }
 
   // 10. Numbers with units or symbols
-  maxScore += 0.15;
   if (/^\d+[a-z%$£€¥]+$/i.test(name) || /^\d+\.?\d*[a-z%$£€¥]+$/i.test(name)) {
     score += 0.15;
     reasons.push("Number with units");

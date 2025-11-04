@@ -194,6 +194,19 @@ export async function POST(request: Request) {
         prefix: 'msg',
         size: 16,
       }),
+      // Append sources data to the assistant message
+      append: (message) => {
+        if (message.role === 'assistant') {
+          return {
+            ...message,
+            data: {
+              sources,
+              progress: progressEvents,
+            },
+          };
+        }
+        return message;
+      },
       onFinish: async ({ messages: allMessages }) => {
         // Save all messages to database
         try {

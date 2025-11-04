@@ -70,6 +70,24 @@ export function ChunksTable({ chunks, documentId }: ChunksTableProps) {
   const [isExtracting, setIsExtracting] = useState(false);
   const [chunkEntities, setChunkEntities] = useState<Entity[]>([]);
 
+  // Handle URL hash to open specific chunk on page load
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.startsWith('#chunk-')) {
+      const chunkId = hash.replace('#chunk-', '');
+      const chunk = chunks.find(c => c.id === chunkId);
+      if (chunk) {
+        setSelectedChunk(chunk);
+        fetchChunkEntities(chunk.id);
+        // Scroll to the chunk in the table
+        setTimeout(() => {
+          const element = document.getElementById(`chunk-row-${chunkId}`);
+          element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+      }
+    }
+  }, [chunks]);
+
   const filteredChunks = chunks.filter((chunk) =>
     chunk.content.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -180,7 +198,7 @@ export function ChunksTable({ chunks, documentId }: ChunksTableProps) {
                 </TableHeader>
                 <TableBody>
                   {filteredChunks.map((chunk) => (
-                    <TableRow key={chunk.id}>
+                    <TableRow key={chunk.id} id={`chunk-row-${chunk.id}`}>
                       <TableCell className="font-mono text-sm">
                         #{chunk.chunk_index}
                       </TableCell>

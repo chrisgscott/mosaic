@@ -14,10 +14,10 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Sparkles, Check, X, ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, Sparkles, Check, X, ArrowLeft, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { type Entity } from "@/app/(app)/admin/graph/actions";
-import { mergeEntities } from "@/app/(app)/admin/graph/actions";
+import { mergeEntities, deleteEntity } from "@/app/(app)/admin/graph/actions";
 
 interface DuplicateGroup {
   entities: Entity[];
@@ -34,6 +34,7 @@ export function CleanupGraphPage({
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
   const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
   const [isMerging, setIsMerging] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [processedGroups, setProcessedGroups] = useState<Set<number>>(new Set());
   
   // Editable fields for current group
@@ -266,6 +267,55 @@ export function CleanupGraphPage({
     } else {
       toast.info("All groups reviewed!");
       router.push("/admin/graph");
+    }
+  };
+
+  const handleDelete = async () => {
+    const currentGroup = duplicateGroups[currentGroupIndex];
+    if (!currentGroup) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete all ${currentGroup.entities.length} entities in this group? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+
+    try {
+      // Delete all entities in the group
+      const deletePromises = currentGroup.entities.map((entity) => deleteEntity(entity.id));
+      const results = await Promise.allSettled(deletePromises);
+
+      const successful = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.filter((r) => r.status === "rejected").length;
+
+      if (failed === 0) {
+        toast.success(`Deleted ${successful} entities`);
+      } else {
+        toast.error(`Failed to delete ${failed} entities`);
+      }
+
+      // Mark this group as processed and move to next
+      setProcessedGroups((prev) => new Set(prev).add(currentGroupIndex));
+      
+      if (currentGroupIndex < duplicateGroups.length - 1) {
+        const nextIndex = currentGroupIndex + 1;
+        setCurrentGroupIndex(nextIndex);
+        // Initialize fields for next group with simple defaults
+        const nextGroup = duplicateGroups[nextIndex];
+        setEditedName(getSimpleName(nextGroup.entities));
+        setEditedType(getSimpleType(nextGroup.entities));
+        setEditedDescription("");
+      } else {
+        toast.info("All groups reviewed!");
+        router.push("/admin/graph");
+      }
+    } catch (error) {
+      console.error("Delete error:", error);
+      toast.error("Failed to delete entities");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -583,9 +633,26 @@ export function CleanupGraphPage({
                     )}
                   </Button>
                   <Button
+                    variant="destructive"
+                    onClick={handleDelete}
+                    disabled={isMerging || isEnhancing || isDeleting}
+                  >
+                    {isDeleting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete All
+                      </>
+                    )}
+                  </Button>
+                  <Button
                     variant="outline"
                     onClick={handleSkip}
-                    disabled={isMerging || isEnhancing}
+                    disabled={isMerging || isEnhancing || isDeleting}
                   >
                     <X className="mr-2 h-4 w-4" />
                     Skip

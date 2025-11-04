@@ -157,10 +157,7 @@ export function NoiseCleanupPage() {
     }
   };
 
-  // Don't render if no entities
-  if (noiseEntities.length === 0 && !isDetecting) {
-    return null;
-  }
+  // Always render - show detection UI when no entities found
 
   const getNoiseTypeColor = (type: string) => {
     const colors: Record<string, string> = {

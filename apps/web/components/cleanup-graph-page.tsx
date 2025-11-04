@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Sparkles, Check, X, ArrowLeft, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { Loader2, Sparkles, Check, X, ArrowLeft, ChevronDown, ChevronUp, Trash2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { type Entity } from "@/app/(app)/admin/graph/actions";
 import { mergeEntities, deleteEntity } from "@/app/(app)/admin/graph/actions";
@@ -356,16 +356,17 @@ export function CleanupGraphPage({
                 <Sparkles className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold">Find Duplicate Entities</h3>
+                <h3 className="text-lg font-semibold">Clean Up Your Graph</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Scan your knowledge graph for potential duplicates using AI-powered name similarity
+                  Choose what to clean: find duplicates or remove noise entities
                 </p>
               </div>
-              <div className="flex justify-center">
+              <div className="flex justify-center gap-3">
                 <Button
                   onClick={detectDuplicates}
                   disabled={isDetecting}
                   size="lg"
+                  variant="default"
                 >
                   {isDetecting ? (
                     <>
@@ -378,6 +379,14 @@ export function CleanupGraphPage({
                       Detect Duplicates
                     </>
                   )}
+                </Button>
+                <Button
+                  onClick={() => router.push("/admin/graph/noise")}
+                  size="lg"
+                  variant="outline"
+                >
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                  Detect Noise
                 </Button>
               </div>
             </div>

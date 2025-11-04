@@ -60,6 +60,10 @@ const data = {
           title: "Clean Up Duplicates",
           url: "/admin/graph/cleanup",
         },
+        {
+          title: "Clean Up Noise",
+          url: "/admin/graph/noise",
+        },
       ],
     },
     {

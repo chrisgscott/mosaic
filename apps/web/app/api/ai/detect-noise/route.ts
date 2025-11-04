@@ -137,10 +137,12 @@ function calculateNoiseScore(entity: Entity): { score: number; type: string; rea
   }
 
   // Normalize score to 0-1 range
-  const normalizedScore = maxScore > 0 ? score / maxScore : 0;
+  // The score is already in 0-1 range since each component is weighted properly
+  // No need for additional normalization - the raw score should work
+  const finalScore = score;
 
   return {
-    score: normalizedScore,
+    score: finalScore,
     type: detectedType,
     reason: reasons.join(", ") || "General low quality"
   };
@@ -153,8 +155,9 @@ function groupNoiseEntities(entities: Entity[]): NoiseGroup[] {
     score: calculateNoiseScore(entity)
   }));
 
-  // Filter out non-noise entities (score < 0.5)
-  const noiseEntities = scoredEntities.filter(item => item.score.score >= 0.5);
+  // Filter out non-noise entities (score < 0.3)
+  // Lower threshold since most noise only gets 1-2 criteria
+  const noiseEntities = scoredEntities.filter(item => item.score.score >= 0.3);
 
   // Group by noise type
   const groupsByType = new Map<string, Entity[]>();

@@ -27,7 +27,8 @@ import {
   ReasoningTrigger,
 } from '@/components/ui/shadcn-io/ai/reasoning';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ui/shadcn-io/ai/source';
-import { Task, TaskTrigger, TaskContent, TaskItem } from '@/components/ui/shadcn-io/ai/task';
+// Temporarily commented out until real-time progress display is implemented
+// import { Task, TaskTrigger, TaskContent, TaskItem } from '@/components/ui/shadcn-io/ai/task';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { RotateCcwIcon } from 'lucide-react';
@@ -211,8 +212,9 @@ export function EnhancedChatClient({
         <ConversationContent className="space-y-4">
           {enhancedMessages.map((message) => (
             <div key={message.id} className="space-y-3">
-              {/* Progress Steps - Only for assistant messages with progress */}
-              {message.role === 'assistant' && message.progress && message.progress.length > 0 && (
+              {/* Progress Steps - Temporarily hidden until real-time display is implemented */}
+              {/* TODO: Re-enable when progress events stream in real-time during retrieval */}
+              {/* {message.role === 'assistant' && message.progress && message.progress.length > 0 && (
                 <Task defaultOpen={false}>
                   <TaskTrigger title="Retrieval Process" />
                   <TaskContent>
@@ -224,7 +226,7 @@ export function EnhancedChatClient({
                     ))}
                   </TaskContent>
                 </Task>
-              )}
+              )} */}
 
               <Message from={message.role}>
                 <MessageContent>

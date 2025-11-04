@@ -351,6 +351,17 @@ export function isRelationshipQuery(query: string): boolean {
     'what is the relationship',
     'how are',
     'related to',
+    // Location queries
+    'where is',
+    'located',
+    'location',
+    'address',
+    'where does',
+    'where can',
+    'find',
+    'what city',
+    'what state',
+    'what country',
   ];
 
   const lowerQuery = query.toLowerCase();

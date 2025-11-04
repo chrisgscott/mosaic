@@ -108,7 +108,7 @@ export function EntityDetailsClient({
 
     if (result.success) {
       toast.success("Entity deleted successfully");
-      router.push("/graph");
+      router.push("/admin/graph");
     } else {
       toast.error(result.error || "Failed to delete entity");
       setIsDeleting(false);

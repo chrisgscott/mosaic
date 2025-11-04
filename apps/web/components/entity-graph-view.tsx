@@ -190,7 +190,7 @@ export function EntityGraphView({
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       if (node.id !== entity.id) {
-        router.push(`/graph/${node.id}`);
+        router.push(`/admin/graph/${node.id}`);
       }
     },
     [entity.id, router]
@@ -296,7 +296,7 @@ export function EntityGraphView({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.push("/graph/visualize")}
+              onClick={() => router.push("/admin/graph/visualize")}
             >
               <Maximize2 className="h-4 w-4 mr-2" />
               Full Graph
@@ -379,7 +379,7 @@ export function EntityGraphView({
             linkDirectionalParticleSpeed={0.006}
             onNodeClick={(node: any) => {
               if (node.id !== entity.id) {
-                router.push(`/graph/${node.id}`);
+                router.push(`/admin/graph/${node.id}`);
               }
             }}
             // Improved physics for better spacing

@@ -281,7 +281,7 @@ export function ChunksTable({ chunks, documentId }: ChunksTableProps) {
                   {chunkEntities.map((entity) => (
                     <Link
                       key={entity.id}
-                      href={`/graph?entity=${entity.id}`}
+                      href={`/admin/graph/${entity.id}`}
                       className="transition-opacity hover:opacity-80"
                     >
                       <Badge

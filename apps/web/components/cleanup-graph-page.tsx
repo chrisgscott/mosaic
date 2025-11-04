@@ -243,7 +243,7 @@ export function CleanupGraphPage({
         setEditedDescription("");
       } else {
         toast.success("All duplicates processed!");
-        router.push("/graph");
+        router.push("/admin/graph");
       }
     } catch (error) {
       console.error("Merge error:", error);
@@ -265,7 +265,7 @@ export function CleanupGraphPage({
       setEditedDescription("");
     } else {
       toast.info("All groups reviewed!");
-      router.push("/graph");
+      router.push("/admin/graph");
     }
   };
 
@@ -290,7 +290,7 @@ export function CleanupGraphPage({
         </div>
         <Button
           variant="outline"
-          onClick={() => router.push("/graph")}
+          onClick={() => router.push("/admin/graph")}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Graph

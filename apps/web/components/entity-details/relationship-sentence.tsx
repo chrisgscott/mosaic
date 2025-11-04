@@ -39,7 +39,7 @@ export function RelationshipSentence({
           {/* Source Entity */}
           <span
             className="font-medium hover:underline cursor-pointer"
-            onClick={() => router.push(`/graph/${sourceEntity.id}`)}
+            onClick={() => router.push(`/admin/graph/${sourceEntity.id}`)}
           >
             {sourceEntity.name}
           </span>
@@ -50,7 +50,7 @@ export function RelationshipSentence({
           {/* Target Entity */}
           <span
             className="font-medium hover:underline cursor-pointer"
-            onClick={() => router.push(`/graph/${targetEntity.id}`)}
+            onClick={() => router.push(`/admin/graph/${targetEntity.id}`)}
           >
             {targetEntity.name}
           </span>

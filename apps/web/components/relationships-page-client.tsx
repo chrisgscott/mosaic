@@ -187,7 +187,7 @@ export function RelationshipsPageClient({
                             <div className="flex flex-col gap-2">
                               <div className="flex items-center gap-2">
                                 <button
-                                  onClick={() => router.push(`/graph/${rel.source?.id}`)}
+                                  onClick={() => router.push(`/admin/graph/${rel.source?.id}`)}
                                   className="text-sm hover:underline"
                                 >
                                   {rel.source?.name}
@@ -201,7 +201,7 @@ export function RelationshipsPageClient({
                                 />
                                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
                                 <button
-                                  onClick={() => router.push(`/graph/${rel.target?.id}`)}
+                                  onClick={() => router.push(`/admin/graph/${rel.target?.id}`)}
                                   className="text-sm hover:underline"
                                 >
                                   {rel.target?.name}
@@ -229,7 +229,7 @@ export function RelationshipsPageClient({
                         <>
                           <TableCell>
                             <button
-                              onClick={() => router.push(`/graph/${rel.source?.id}`)}
+                              onClick={() => router.push(`/admin/graph/${rel.source?.id}`)}
                               className="hover:underline"
                             >
                               {rel.source?.name}
@@ -240,7 +240,7 @@ export function RelationshipsPageClient({
                           </TableCell>
                           <TableCell>
                             <button
-                              onClick={() => router.push(`/graph/${rel.target?.id}`)}
+                              onClick={() => router.push(`/admin/graph/${rel.target?.id}`)}
                               className="hover:underline"
                             >
                               {rel.target?.name}

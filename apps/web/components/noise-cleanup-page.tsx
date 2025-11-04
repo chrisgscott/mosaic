@@ -303,80 +303,78 @@ export function NoiseCleanupPage() {
           </div>
 
           {/* Entity List */}
-          <div className="max-h-96 overflow-y-auto space-y-2">
-            {noiseEntities.map((entity) => (
-              <div
-                key={entity.id}
-                className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                  selectedEntityIds.has(entity.id) 
-                    ? "bg-red-50 border-red-200" 
-                    : "bg-muted/20 hover:bg-muted/30"
-                }`}
-                onClick={() => {
-                  const newSelected = new Set(selectedEntityIds);
-                  if (newSelected.has(entity.id)) {
-                    newSelected.delete(entity.id);
-                  } else {
-                    newSelected.add(entity.id);
-                  }
-                  setSelectedEntityIds(newSelected);
-                }}
-              >
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedEntityIds.has(entity.id)}
-                    onChange={() => {}}
-                    className="cursor-pointer h-4 w-4 mt-1"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{entity.name}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {entity.type}
-                      </Badge>
+          {noiseEntities.map((entity) => (
+            <div
+              key={entity.id}
+              className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                selectedEntityIds.has(entity.id) 
+                  ? "bg-red-50 border-red-200" 
+                  : "bg-muted/20 hover:bg-muted/30"
+              }`}
+              onClick={() => {
+                const newSelected = new Set(selectedEntityIds);
+                if (newSelected.has(entity.id)) {
+                  newSelected.delete(entity.id);
+                } else {
+                  newSelected.add(entity.id);
+                }
+                setSelectedEntityIds(newSelected);
+              }}
+            >
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={selectedEntityIds.has(entity.id)}
+                  onChange={() => {}}
+                  className="cursor-pointer h-4 w-4 mt-1"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{entity.name}</span>
+                    <Badge variant="outline" className="text-xs">
+                      {entity.type}
+                    </Badge>
+                    <Badge 
+                      variant="secondary" 
+                      className={`text-xs ${getNoiseTypeColor(entity.noiseType)} text-white`}
+                    >
+                      {getNoiseTypeLabel(entity.noiseType)}
+                    </Badge>
+                    {entity.extraction_confidence && (
                       <Badge 
                         variant="secondary" 
-                        className={`text-xs ${getNoiseTypeColor(entity.noiseType)} text-white`}
-                      >
-                        {getNoiseTypeLabel(entity.noiseType)}
-                      </Badge>
-                      {entity.extraction_confidence && (
-                        <Badge 
-                          variant="secondary" 
-                          className="text-xs"
-                        >
-                          {(entity.extraction_confidence * 100).toFixed(0)}% conf.
-                        </Badge>
-                      )}
-                      <Badge 
-                        variant="outline" 
                         className="text-xs"
                       >
-                        {(entity.noiseScore * 100).toFixed(0)}% noise
+                        {(entity.extraction_confidence * 100).toFixed(0)}% conf.
                       </Badge>
-                    </div>
-                    {entity.description && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {entity.description}
-                      </p>
                     )}
-                    <p className="text-xs text-orange-600 mt-1">
-                      {entity.noiseReason}
+                    <Badge 
+                      variant="outline" 
+                      className="text-xs"
+                    >
+                      {(entity.noiseScore * 100).toFixed(0)}% noise
+                    </Badge>
+                  </div>
+                  {entity.description && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {entity.description}
                     </p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                      <span>{entity.chunk_ids.length} chunks</span>
-                      <span>{entity.document_ids.length} documents</span>
-                      {entity.aliases && entity.aliases.length > 0 && (
-                        <span>{entity.aliases.length} aliases</span>
-                      )}
-                    </div>
+                  )}
+                  <p className="text-xs text-orange-600 mt-1">
+                    {entity.noiseReason}
+                  </p>
+                  <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                    <span>{entity.chunk_ids.length} chunks</span>
+                    <span>{entity.document_ids.length} documents</span>
+                    {entity.aliases && entity.aliases.length > 0 && (
+                      <span>{entity.aliases.length} aliases</span>
+                    )}
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
 
           <p className="text-xs text-muted-foreground">
             ⚠️ Selected entities will be permanently deleted along with all their relationships

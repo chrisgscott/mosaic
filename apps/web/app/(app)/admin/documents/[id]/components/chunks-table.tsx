@@ -365,7 +365,7 @@ export function ChunksTable({ chunks, documentId }: ChunksTableProps) {
                 <div className="text-sm font-medium text-muted-foreground mb-2">
                   Metadata
                 </div>
-                <pre className="p-4 bg-muted rounded-lg text-xs overflow-x-auto">
+                <pre className="p-4 bg-muted rounded-lg text-xs whitespace-pre-wrap break-words overflow-hidden">
                   {JSON.stringify(selectedChunk.metadata, null, 2)}
                 </pre>
               </div>

@@ -348,7 +348,7 @@ interface SupabaseEntity {
   chunk_ids: string[] | null;
 }
 
-export function isRelationshipQuery(query: string): boolean {
+export async function isRelationshipQuery(query: string): Promise<boolean> {
   const relationshipKeywords = [
     'relate',
     'relationship',
@@ -375,7 +375,43 @@ export function isRelationshipQuery(query: string): boolean {
   ];
 
   const lowerQuery = query.toLowerCase();
-  return relationshipKeywords.some(keyword => lowerQuery.includes(keyword));
+  
+  // Check hardcoded keywords first
+  if (relationshipKeywords.some(keyword => lowerQuery.includes(keyword))) {
+    return true;
+  }
+
+  // Check against dynamic relationship types from database
+  try {
+    const supabase = await createClient();
+    const { data: relationshipTypes, error } = await supabase
+      .from('relationships')
+      .select('relationship_type')
+      .not('relationship_type', 'is', null);
+
+    if (!error && relationshipTypes) {
+      const types = [...new Set(relationshipTypes.map(r => r.relationship_type))];
+      
+      // Check if query contains any relationship type keywords
+      return types.some(type => {
+        // Convert relationship type to searchable keywords
+        const keywords = type
+          .toLowerCase()
+          .split(/[\s_]+/) // Split on spaces and underscores
+          .filter(word => word.length > 2); // Filter out very short words
+        
+        return keywords.some(keyword => 
+          lowerQuery.includes(keyword) || 
+          lowerQuery.includes(keyword.replace(/ed$/, '')) || // Remove 'ed' suffix
+          lowerQuery.includes(keyword.replace(/s$/, '')) // Remove 's' suffix
+        );
+      });
+    }
+  } catch (error) {
+    console.warn('[Graph Search] Error fetching relationship types:', error);
+  }
+
+  return false;
 }
 
 /**

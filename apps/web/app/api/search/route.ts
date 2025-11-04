@@ -316,7 +316,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Detect if this is a relationship query that would benefit from graph search
-    const isRelQuery = use_graph && isRelationshipQuery(query);
+    const isRelQuery = use_graph && await isRelationshipQuery(query);
     if (isRelQuery) {
       console.log(`[Graph] Relationship query detected - will use graph search`);
     }

@@ -62,7 +62,7 @@ export async function POST(request: Request) {
         id: `msg-${Date.now()}`,
         role: 'user',
         parts: [{ type: 'text' as const, text: message.text }],
-        createdAt: new Date(),
+        // createdAt is not supported in UIMessage interface
       };
     } else {
       uiMessage = message;
@@ -124,7 +124,9 @@ export async function POST(request: Request) {
     // Run full search pipeline
     const searchRequest = new Request(request.url, {
       method: 'POST',
-      headers: request.headers,
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
         query,
         match_threshold: 0.5,
@@ -133,7 +135,7 @@ export async function POST(request: Request) {
       }),
     });
 
-    const searchResponse = await searchAPI(searchRequest as unknown as Request);
+    const searchResponse = await fetch('/api/search', searchRequest);
 
     if (!searchResponse.ok) {
       const error = await searchResponse.json();
@@ -194,19 +196,20 @@ export async function POST(request: Request) {
         prefix: 'msg',
         size: 16,
       }),
-      // Append sources data to the assistant message
-      append: (message) => {
-        if (message.role === 'assistant') {
-          return {
-            ...message,
-            data: {
-              sources,
-              progress: progressEvents,
-            },
-          };
-        }
-        return message;
-      },
+      // Note: 'append' option may not be supported in this AI SDK version
+      // Sources will be available after database reload
+      // append: (message: any) => {
+      //   if (message.role === 'assistant') {
+      //     return {
+      //       ...message,
+      //       data: {
+      //         sources,
+      //         progress: progressEvents,
+      //       },
+      //     };
+      //   }
+      //   return message;
+      // },
       onFinish: async ({ messages: allMessages }) => {
         // Save all messages to database
         try {

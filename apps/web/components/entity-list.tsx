@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { deleteEntity, bulkUpdateEntityType, type Entity } from "@/app/(app)/admin/graph/actions";
+import { deleteEntity, bulkUpdateEntityType, getEntities, type Entity } from "@/app/(app)/admin/graph/actions";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -207,6 +207,12 @@ export function EntityList({
     }
   }, [externalEntities, onEntitiesChange]);
 
+  // Refresh entities from server
+  const refreshEntities = async () => {
+    const { entities: freshEntities = [] } = await getEntities();
+    setEntities(() => freshEntities);
+  };
+
   const handleDelete = async (id: string) => {
     setDeletingId(id);
 
@@ -221,10 +227,8 @@ export function EntityList({
     toast.success("Entity deleted");
     setDeletingId(null);
 
-    // Update local state
-    setEntities((current) => current.filter((entity) => entity.id !== id));
-
-    // Refresh server data
+    // Refresh entities from server
+    await refreshEntities();
     router.refresh();
   };
 
@@ -251,8 +255,8 @@ export function EntityList({
       toast.error(`Failed to delete ${failed} entit${failed > 1 ? "ies" : "y"}`);
     }
 
-    // Update local state
-    setEntities((current) => current.filter((entity) => !selectedIds.has(entity.id)));
+    // Refresh entities from server
+    await refreshEntities();
     setSelectedIds(new Set());
     setIsDeleting(false);
     router.refresh();
@@ -634,7 +638,8 @@ export function EntityList({
         onOpenChange={setShowMergeDialog}
         entities={entities.filter((e) => selectedIds.has(e.id))}
         allEntityTypes={allEntityTypes}
-        onMergeComplete={() => {
+        onMergeComplete={async () => {
+          await refreshEntities();
           setSelectedIds(new Set());
           router.refresh();
         }}

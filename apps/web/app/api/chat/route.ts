@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
+import { NextRequest } from 'next/server';
 import { streamText, convertToModelMessages, createIdGenerator, type UIMessage } from 'ai';
 import { getModelForDepth } from '@/lib/ai/gateway';
 import { getPrompt } from '@/lib/ai/prompts';
+import { POST as searchAPI } from "@/app/api/search/route";
 import type { SearchResult } from "@/app/api/search/route";
 
 // Progress event type
@@ -120,21 +122,24 @@ export async function POST(request: Request) {
     addProgress('Analyzing your question', 'completed');
     addProgress('Searching through documents', 'in-progress');
 
-    // Run full search pipeline
-    const searchRequest = new Request(request.url, {
+    // Run full search pipeline by calling search API directly
+    const searchBody = JSON.stringify({
+      query,
+      match_threshold: 0.5,
+      match_count: 10,
+      graph_hops: 1,
+    });
+    
+    const searchRequest = new Request(new URL('/api/search', request.url).toString(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        query,
-        match_threshold: 0.5,
-        match_count: 10,
-        graph_hops: 1,
-      }),
+      body: searchBody,
     });
 
-    const searchResponse = await fetch('/api/search', searchRequest);
+    // Cast to NextRequest to satisfy type requirements
+    const searchResponse = await searchAPI(searchRequest as unknown as NextRequest);
 
     if (!searchResponse.ok) {
       const error = await searchResponse.json();

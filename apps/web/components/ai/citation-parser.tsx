@@ -40,17 +40,26 @@ export function CitationParser({ content, citations, className, isStreaming }: C
       <ReactMarkdown
         components={{
           // Custom rendering for better styling
-          p: ({ children }) => (
-            <p className="mb-4 last:mb-0">
-              {/* Process children to inject citations */}
-              {Array.isArray(children) ? children.map((child, idx) => {
-                if (typeof child === 'string') {
-                  return parseCitations(child, citations, idx);
-                }
-                return child;
-              }) : parseCitations(String(children), citations, 0)}
-            </p>
-          ),
+          p: ({ children }) => {
+            const childrenStr = Array.isArray(children) ? children.join('') : String(children);
+            const hasCitations = /\[\d+\]/.test(childrenStr);
+            
+            // Use div instead of p when citations are present to avoid HTML validation errors
+            const Container = hasCitations ? 'div' : 'p';
+            const containerClassName = hasCitations ? 'mb-4 last:mb-0' : 'mb-4 last:mb-0';
+            
+            return (
+              <Container className={containerClassName}>
+                {/* Process children to inject citations */}
+                {Array.isArray(children) ? children.map((child, idx) => {
+                  if (typeof child === 'string') {
+                    return parseCitations(child, citations, idx);
+                  }
+                  return child;
+                }) : parseCitations(String(children), citations, 0)}
+              </Container>
+            );
+          },
           ul: ({ children }) => <ul className="mb-4 ml-6 list-disc">{children}</ul>,
           ol: ({ children }) => <ol className="mb-4 ml-6 list-decimal">{children}</ol>,
           li: ({ children }) => <li className="mb-1">{children}</li>,

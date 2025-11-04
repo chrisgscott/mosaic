@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Sparkles, Trash2, AlertTriangle, ArrowLeft, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { type Entity } from "@/app/(app)/admin/graph/actions";
@@ -190,9 +189,9 @@ export function NoiseCleanupPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-4">
+      {/* Action Buttons */}
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Clean Up Noise</h1>
           <p className="text-muted-foreground mt-1">
@@ -256,145 +255,132 @@ export function NoiseCleanupPage() {
 
       {/* Detection or Results */}
       {noiseEntities.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-center space-y-4 text-center">
-              <div className="flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full">
-                <Filter className="h-8 w-8 text-primary" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">Detect Noise Entities</h3>
-                <p className="text-muted-foreground mt-2 max-w-md">
-                  Find and remove low-quality entities like generic terms, abbreviations, 
-                  numbers, and entities with poor descriptions that clutter your knowledge graph.
-                </p>
-              </div>
-              <Button
-                onClick={detectNoise}
-                disabled={isDetecting}
-                size="lg"
-                className="mt-4"
-              >
-                {isDetecting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Detecting Noise...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Detect Noise
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center space-y-4 text-center py-12">
+          <div className="flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full">
+            <Filter className="h-8 w-8 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold">Detect Noise Entities</h3>
+            <p className="text-muted-foreground mt-2 max-w-md">
+              Find and remove low-quality entities like generic terms, abbreviations, 
+              numbers, and entities with poor descriptions that clutter your knowledge graph.
+            </p>
+          </div>
+          <Button
+            onClick={detectNoise}
+            disabled={isDetecting}
+            size="lg"
+          >
+            {isDetecting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Detecting Noise...
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-4 w-4" />
+                Detect Noise
+              </>
+            )}
+          </Button>
+        </div>
       ) : (
         <>
           {/* Results Summary */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold">Noise Entities Found</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedEntityIds.size} of {noiseEntities.length} selected for deletion
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-orange-500" />
-                  <span className="text-sm font-medium">
-                    {noiseEntities.length} total noise entities
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+            <div>
+              <h3 className="font-semibold">Noise Entities Found</h3>
+              <p className="text-sm text-muted-foreground">
+                {selectedEntityIds.size} of {noiseEntities.length} selected for deletion
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-orange-500" />
+              <span className="text-sm font-medium">
+                {noiseEntities.length} total noise entities
+              </span>
+            </div>
+          </div>
 
           {/* Entity List */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="max-h-96 overflow-y-auto space-y-2">
-                {noiseEntities.map((entity) => (
-                  <div
-                    key={entity.id}
-                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                      selectedEntityIds.has(entity.id) 
-                        ? "bg-red-50 border-red-200" 
-                        : "bg-muted/20 hover:bg-muted/30"
-                    }`}
-                    onClick={() => {
-                      const newSelected = new Set(selectedEntityIds);
-                      if (newSelected.has(entity.id)) {
-                        newSelected.delete(entity.id);
-                      } else {
-                        newSelected.add(entity.id);
-                      }
-                      setSelectedEntityIds(newSelected);
-                    }}
-                  >
-                    <div className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedEntityIds.has(entity.id)}
-                        onChange={() => {}}
-                        className="cursor-pointer h-4 w-4 mt-1"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{entity.name}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {entity.type}
-                          </Badge>
-                          <Badge 
-                            variant="secondary" 
-                            className={`text-xs ${getNoiseTypeColor(entity.noiseType)} text-white`}
-                          >
-                            {getNoiseTypeLabel(entity.noiseType)}
-                          </Badge>
-                          {entity.extraction_confidence && (
-                            <Badge 
-                              variant="secondary" 
-                              className="text-xs"
-                            >
-                              {(entity.extraction_confidence * 100).toFixed(0)}% conf.
-                            </Badge>
-                          )}
-                          <Badge 
-                            variant="outline" 
-                            className="text-xs"
-                          >
-                            {(entity.noiseScore * 100).toFixed(0)}% noise
-                          </Badge>
-                        </div>
-                        {entity.description && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {entity.description}
-                          </p>
-                        )}
-                        <p className="text-xs text-orange-600 mt-1">
-                          {entity.noiseReason}
-                        </p>
-                        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                          <span>{entity.chunk_ids.length} chunks</span>
-                          <span>{entity.document_ids.length} documents</span>
-                          {entity.aliases && entity.aliases.length > 0 && (
-                            <span>{entity.aliases.length} aliases</span>
-                          )}
-                        </div>
-                      </div>
+          <div className="max-h-96 overflow-y-auto space-y-2">
+            {noiseEntities.map((entity) => (
+              <div
+                key={entity.id}
+                className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                  selectedEntityIds.has(entity.id) 
+                    ? "bg-red-50 border-red-200" 
+                    : "bg-muted/20 hover:bg-muted/30"
+                }`}
+                onClick={() => {
+                  const newSelected = new Set(selectedEntityIds);
+                  if (newSelected.has(entity.id)) {
+                    newSelected.delete(entity.id);
+                  } else {
+                    newSelected.add(entity.id);
+                  }
+                  setSelectedEntityIds(newSelected);
+                }}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedEntityIds.has(entity.id)}
+                    onChange={() => {}}
+                    className="cursor-pointer h-4 w-4 mt-1"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{entity.name}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {entity.type}
+                      </Badge>
+                      <Badge 
+                        variant="secondary" 
+                        className={`text-xs ${getNoiseTypeColor(entity.noiseType)} text-white`}
+                      >
+                        {getNoiseTypeLabel(entity.noiseType)}
+                      </Badge>
+                      {entity.extraction_confidence && (
+                        <Badge 
+                          variant="secondary" 
+                          className="text-xs"
+                        >
+                          {(entity.extraction_confidence * 100).toFixed(0)}% conf.
+                        </Badge>
+                      )}
+                      <Badge 
+                        variant="outline" 
+                        className="text-xs"
+                      >
+                        {(entity.noiseScore * 100).toFixed(0)}% noise
+                      </Badge>
+                    </div>
+                    {entity.description && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {entity.description}
+                      </p>
+                    )}
+                    <p className="text-xs text-orange-600 mt-1">
+                      {entity.noiseReason}
+                    </p>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                      <span>{entity.chunk_ids.length} chunks</span>
+                      <span>{entity.document_ids.length} documents</span>
+                      {entity.aliases && entity.aliases.length > 0 && (
+                        <span>{entity.aliases.length} aliases</span>
+                      )}
                     </div>
                   </div>
-                ))}
+                </div>
               </div>
+            ))}
+          </div>
 
-              <p className="text-xs text-muted-foreground mt-4">
-                ⚠️ Selected entities will be permanently deleted along with all their relationships
-              </p>
-            </CardContent>
-          </Card>
+          <p className="text-xs text-muted-foreground">
+            ⚠️ Selected entities will be permanently deleted along with all their relationships
+          </p>
         </>
       )}
     </div>

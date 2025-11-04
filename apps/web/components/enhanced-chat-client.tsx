@@ -102,6 +102,11 @@ export function EnhancedChatClient({
         };
       },
     }),
+    // Reload messages from database after streaming completes to get sources
+    onFinish: async () => {
+      // Reload the page to get updated messages with sources from database
+      window.location.reload();
+    },
   });
 
   // Enhanced message state with reasoning and sources

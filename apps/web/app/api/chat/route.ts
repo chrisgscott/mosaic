@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/server';
 import { streamText, convertToModelMessages, createIdGenerator, type UIMessage } from 'ai';
 import { getModelForDepth } from '@/lib/ai/gateway';
 import { getPrompt } from '@/lib/ai/prompts';
-import { POST as searchAPI } from "@/app/api/search/route";
 import type { SearchResult } from "@/app/api/search/route";
 
 // Progress event type

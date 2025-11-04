@@ -128,12 +128,35 @@ function calculateNoiseScore(entity: Entity): { score: number; type: string; rea
     detectedType = detectedType === "unknown" ? "stop_word" : detectedType;
   }
 
-  // 8. Name is just a year or quarter
-  maxScore += 0.1;
-  if (/^\d{4}$/.test(name) || /^q[1-4]\s*\d{4}$/i.test(name)) {
-    score += 0.1;
-    reasons.push("Year or quarter");
+  // 8. Name is just a year, quarter, or other date pattern
+  maxScore += 0.15;
+  if (
+    /^\d{4}$/.test(name) || // Year: 2023
+    /^q[1-4]\s*\d{4}$/i.test(name) || // Quarter: Q1 2023
+    /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(name) || // Date: 12/25/23 or 12/25/2023
+    /^\d{1,2}-\d{1,2}-\d{2,4}$/.test(name) || // Date: 12-25-23 or 12-25-2023
+    /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{1,2},?\s*\d{4}$/i.test(name) || // Month date: Jan 15, 2023
+    /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{4}$/i.test(name) // Month year: Jan 2023
+  ) {
+    score += 0.15;
+    reasons.push("Date or temporal reference");
     detectedType = detectedType === "unknown" ? "temporal" : detectedType;
+  }
+
+  // 9. Pure numbers (not dates)
+  maxScore += 0.2;
+  if (/^\d+$/.test(name) && !/^\d{4}$/.test(name)) {
+    score += 0.2;
+    reasons.push("Pure number");
+    detectedType = detectedType === "unknown" ? "numeric" : detectedType;
+  }
+
+  // 10. Numbers with units or symbols
+  maxScore += 0.15;
+  if (/^\d+[a-z%$£€¥]+$/i.test(name) || /^\d+\.?\d*[a-z%$£€¥]+$/i.test(name)) {
+    score += 0.15;
+    reasons.push("Number with units");
+    detectedType = detectedType === "unknown" ? "numeric" : detectedType;
   }
 
   // Normalize score to 0-1 range

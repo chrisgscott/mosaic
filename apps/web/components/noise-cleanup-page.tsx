@@ -46,7 +46,7 @@ export function NoiseCleanupPage() {
       } else {
         // Flatten all noise entities into a single list
         const flattenedEntities: NoiseEntity[] = [];
-        data.noiseGroups.forEach((group: any) => {
+        data.noiseGroups.forEach((group: { entities: Entity[]; noiseType: string; reason: string; severity: number }) => {
           group.entities.forEach((entity: Entity) => {
             flattenedEntities.push({
               ...entity,
@@ -195,7 +195,7 @@ export function NoiseCleanupPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Clean Up Noise</h1>
           <p className="text-muted-foreground mt-1">
-            Remove low-quality entities that shouldn't exist in your knowledge graph
+            Remove low-quality entities that shouldn&apos;t exist in your knowledge graph
           </p>
         </div>
         <div className="flex gap-2">

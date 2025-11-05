@@ -27,14 +27,13 @@ import {
   ReasoningTrigger,
 } from '@/components/ui/shadcn-io/ai/reasoning';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ui/shadcn-io/ai/source';
-// Temporarily commented out until real-time progress display is implemented
-// import { Task, TaskTrigger, TaskContent, TaskItem } from '@/components/ui/shadcn-io/ai/task';
+import { Task, TaskTrigger, TaskContent, TaskItem } from '@/components/ui/shadcn-io/ai/task';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { RotateCcwIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { type FormEventHandler, useCallback, useEffect, useState } from 'react';
-import { CitationParser } from '@/components/ai/citation-parser';
+import ReactMarkdown from 'react-markdown';
 import type { ProgressEvent } from '@/app/api/chat/route';
 
 // Define citation type
@@ -53,6 +52,13 @@ type EnhancedChatMessage = UIMessage & {
   progress?: ProgressEvent[];
   isStreaming?: boolean;
   createdAt?: Date;
+  toolInvocations?: Array<{
+    toolCallId: string;
+    toolName: string;
+    args: any;
+    state: 'call' | 'result' | 'partial-call';
+    result?: any;
+  }>;
 };
 
 // Available models - using our semantic model keys
@@ -252,21 +258,28 @@ export function EnhancedChatClient({
         <ConversationContent className="space-y-4">
           {enhancedMessages.map((message) => (
             <div key={message.id} className="space-y-3">
-              {/* Progress Steps - Temporarily hidden until real-time display is implemented */}
-              {/* TODO: Re-enable when progress events stream in real-time during retrieval */}
-              {/* {message.role === 'assistant' && message.progress && message.progress.length > 0 && (
-                <Task defaultOpen={false}>
-                  <TaskTrigger title="Retrieval Process" />
+              {/* Real-time Tool Invocations Display */}
+              {message.role === 'assistant' && message.toolInvocations && message.toolInvocations.length > 0 && (
+                <Task defaultOpen={true}>
+                  <TaskTrigger title="Search Process" />
                   <TaskContent>
-                    {message.progress.map((event, idx) => (
-                      <TaskItem key={idx}>
-                        {event.message}
-                        {event.status === 'completed' && ' ✓'}
-                      </TaskItem>
-                    ))}
+                    {message.toolInvocations.map((tool, idx) => {
+                      const toolName = tool.toolName === 'search_documents' ? 'Searching documents' :
+                                      tool.toolName === 'quick_search' ? 'Quick search' :
+                                      tool.toolName === 'deep_graph_search' ? 'Deep graph search' :
+                                      tool.toolName;
+                      
+                      return (
+                        <TaskItem key={idx}>
+                          {toolName}
+                          {tool.state === 'result' && ' ✓'}
+                          {tool.state === 'call' && '...'}
+                        </TaskItem>
+                      );
+                    })}
                   </TaskContent>
                 </Task>
-              )} */}
+              )}
 
               <Message from={message.role}>
                 <MessageContent>
@@ -292,18 +305,45 @@ export function EnhancedChatClient({
                       );
                     }
                     
-                    // Render markdown with inline citations for assistant messages
+                    // Render clean markdown for assistant messages
                     if (message.role === 'assistant') {
-                      // Debug: log citations to see what numbers we have
-                      if (message.sources && message.sources.length > 0) {
-                        console.log('[EnhancedChat] Citations:', message.sources.map(s => ({ number: s.number, title: s.title })));
-                      }
                       return (
-                        <CitationParser 
-                          content={textContent} 
-                          citations={message.sources || []}
-                          isStreaming={message.isStreaming}
-                        />
+                        <div className="prose prose-sm dark:prose-invert max-w-none">
+                          <ReactMarkdown
+                            components={{
+                              // Custom rendering for better styling
+                              p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,
+                              ul: ({ children }) => <ul className="mb-4 ml-6 list-disc">{children}</ul>,
+                              ol: ({ children }) => <ol className="mb-4 ml-6 list-decimal">{children}</ol>,
+                              li: ({ children }) => <li className="mb-1">{children}</li>,
+                              code: ({ inline, children, ...props }: { inline?: boolean; children?: React.ReactNode }) =>
+                                inline ? (
+                                  <code className="px-1 py-0.5 rounded bg-muted font-mono text-sm" {...props}>
+                                    {children}
+                                  </code>
+                                ) : (
+                                  <pre className="mb-4 rounded-lg bg-muted p-3 overflow-x-auto">
+                                    <code className="font-mono text-sm" {...props}>
+                                      {children}
+                                    </code>
+                                  </pre>
+                                ),
+                              strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                              em: ({ children }) => <em className="italic">{children}</em>,
+                              blockquote: ({ children }) => (
+                                <blockquote className="mb-4 border-l-4 border-muted-foreground/20 pl-4 italic">
+                                  {children}
+                                </blockquote>
+                              ),
+                              h1: ({ children }) => <h1 className="mb-4 text-2xl font-bold">{children}</h1>,
+                              h2: ({ children }) => <h2 className="mb-3 text-xl font-semibold">{children}</h2>,
+                              h3: ({ children }) => <h3 className="mb-2 text-lg font-semibold">{children}</h3>,
+                              h4: ({ children }) => <h4 className="mb-2 text-base font-semibold">{children}</h4>,
+                            }}
+                          >
+                            {textContent}
+                          </ReactMarkdown>
+                        </div>
                       );
                     }
                     

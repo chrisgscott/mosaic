@@ -35,6 +35,9 @@ interface CitationParserProps {
  * Parses markdown content and replaces [1], [2], etc. with inline citation components
  */
 export function CitationParser({ content, citations, className, isStreaming }: CitationParserProps) {
+  // Use a counter to generate unique keys across the entire document
+  let citationKeyCounter = 0;
+  
   return (
     <div className={cn("prose prose-sm dark:prose-invert max-w-none", className)}>
       <ReactMarkdown
@@ -56,11 +59,11 @@ export function CitationParser({ content, citations, className, isStreaming }: C
                 {/* Process children to inject citations */}
                 {Array.isArray(children) ? children.map((child, idx) => {
                   if (typeof child === 'string') {
-                    return parseCitations(child, citations, idx);
+                    return parseCitations(child, citations, citationKeyCounter++);
                   }
                   // Return non-string children (React elements) as-is with a key
                   return <span key={`child-${idx}`}>{child}</span>;
-                }) : (typeof children === 'string' ? parseCitations(children, citations, 0) : children)}
+                }) : (typeof children === 'string' ? parseCitations(children, citations, citationKeyCounter++) : children)}
               </Container>
             );
           },

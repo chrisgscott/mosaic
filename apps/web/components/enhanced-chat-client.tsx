@@ -103,11 +103,8 @@ export function EnhancedChatClient({
         };
       },
     }),
-    // Reload messages from database after streaming completes to get sources
-    onFinish: async () => {
-      // Reload the page to get updated messages with sources from database
-      window.location.reload();
-    },
+    // Sources are automatically included in the streamed response via toUIMessageStreamResponse
+    // No need to reload - the useChat hook handles everything
   });
 
   // Enhanced message state with reasoning and sources
@@ -123,14 +120,36 @@ export function EnhancedChatClient({
   // Update enhanced messages when chat messages change
   useEffect(() => {
     // Map real messages with enhanced data
-    const realMessages = messages.map(msg => ({
-      ...msg,
-      reasoning: (msg as EnhancedChatMessage).reasoning,
-      // Extract sources and progress from message data (set by backend)
-      sources: (msg as { data?: { sources?: Citation[]; progress?: ProgressEvent[] } }).data?.sources || (msg as EnhancedChatMessage).sources,
-      progress: (msg as { data?: { sources?: Citation[]; progress?: ProgressEvent[] } }).data?.progress || (msg as EnhancedChatMessage).progress,
-      isStreaming: status === 'streaming' && msg === messages[messages.length - 1],
-    }));
+    const realMessages = messages.map(msg => {
+      // Check both metadata (streaming) and data (DB load) for sources
+      const metadata = (msg as { metadata?: { sources?: Citation[]; progress?: ProgressEvent[] } }).metadata;
+      const data = (msg as { data?: { sources?: Citation[]; progress?: ProgressEvent[] } }).data;
+      const sources = metadata?.sources || data?.sources || (msg as EnhancedChatMessage).sources;
+      const progress = metadata?.progress || data?.progress || (msg as EnhancedChatMessage).progress;
+      
+      // Debug logging
+      if (msg.role === 'assistant') {
+        console.log('[EnhancedChat] Assistant message:', {
+          id: msg.id,
+          hasMetadata: !!metadata,
+          hasData: !!data,
+          metadataSources: metadata?.sources?.length || 0,
+          dataSources: data?.sources?.length || 0,
+          finalSources: sources?.length || 0,
+          metadata: metadata,
+          data: data,
+        });
+      }
+      
+      return {
+        ...msg,
+        reasoning: (msg as EnhancedChatMessage).reasoning,
+        // Extract sources and progress from message metadata/data
+        sources,
+        progress,
+        isStreaming: status === 'streaming' && msg === messages[messages.length - 1],
+      };
+    });
     
     setEnhancedMessages(realMessages);
   }, [messages, status]);

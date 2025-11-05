@@ -1,52 +1,126 @@
 import { openai } from '@ai-sdk/openai';
+import { createClient } from '@/lib/supabase/server';
 
 /**
- * OpenAI Direct Configuration
+ * Dynamic Model Configuration from Database
  * 
- * Uses OpenAI SDK directly without AI Gateway for simplicity.
- * All models use standard OpenAI model names (no provider prefix).
+ * Models are loaded from system_settings table with keys like:
+ * - llm.quickModel: Fast operations (HyDE, multi-query)
+ * - llm.standardModel: Default tasks (chat, entities)
+ * - llm.detailedModel: High-quality analysis
+ * - llm.deepResearchModel: Advanced reasoning
+ * - llm.summaryModel: Document summarization
+ * - llm.vlmModel: Vision-language tasks
+ * - llm.embeddingModel: Text embeddings
  */
 
 /**
- * Model Registry
- * 
- * Centralized model definitions with semantic names.
- * All models use direct OpenAI SDK.
- * 
- * Model Selection Guide:
- * - quick: Fast, cheap operations (HyDE, multi-query generation)
- * - standard: Default for most tasks (chat, entity extraction)
- * - detailed: High-quality analysis (complex reasoning)
- * - deepResearch: Advanced reasoning with extended thinking
- * - summary: Document/chunk summarization
- * - vlm: Vision-language model for image understanding
- * - embedding: Text embeddings for semantic search
+ * Default models (fallback if database settings unavailable)
  */
-/**
- * Default models (used as fallback if settings unavailable)
- * These match the database defaults and use provider/model format
- */
-export const models = {
-  // Core models for different quality/speed tradeoffs
-  quick: openai('gpt-4.1-nano'),              // Ultra-fast: HyDE, multi-query
-  standard: openai('gpt-4o-mini'),            // Default: chat, entities, graph
-  detailed: openai('gpt-4.1'),                // High quality: complex analysis
-  deepResearch: openai('o4-mini-deep-research'), // Advanced reasoning
-  
-  // Specialized models
-  summary: openai('gpt-4.1-mini'),            // Chunk/document summarization
-  vlm: openai('gpt-4o-mini'),                 // Vision-language model
-  embedding: openai('text-embedding-3-small'), // Semantic embeddings
+const DEFAULT_MODELS = {
+  quick: 'gpt-4.1-nano',
+  standard: 'gpt-4.1-mini', 
+  detailed: 'gpt-4.1',
+  deepResearch: 'o4-mini-deep-research',
+  summary: 'gpt-4o-mini',
+  vlm: 'gpt-4o-mini',
+  embedding: 'text-embedding-3-small',
 } as const;
 
-export type ResponseDepth = keyof typeof models;
+/**
+ * Get model configuration from database settings
+ */
+async function getModelSettings() {
+  try {
+    const supabase = await createClient();
+    
+    const { data: settings, error } = await supabase
+      .from('system_settings')
+      .select('key, value')
+      .eq('category', 'llm');
+
+    if (error) {
+      console.warn('[Gateway] Error loading model settings, using defaults:', error);
+      return DEFAULT_MODELS;
+    }
+
+    // Convert settings to model config
+    const modelConfig: Record<string, string> = {};
+    settings?.forEach((setting: { key: string; value: string }) => {
+      // Convert llm.quickModel -> quick, llm.standardModel -> standard, etc.
+      const modelType = setting.key.replace('llm.', '').replace('Model', '');
+      modelConfig[modelType] = setting.value;
+    });
+
+    console.log('[Gateway] Loaded model settings:', modelConfig);
+    return { ...DEFAULT_MODELS, ...modelConfig };
+  } catch (error) {
+    console.error('[Gateway] Error loading model settings:', error);
+    return DEFAULT_MODELS;
+  }
+}
+
+/**
+ * Create dynamic models object
+ */
+export async function getModels() {
+  const modelSettings = await getModelSettings();
+  
+  return {
+    quick: openai(modelSettings.quick || DEFAULT_MODELS.quick),
+    standard: openai(modelSettings.standard || DEFAULT_MODELS.standard),
+    detailed: openai(modelSettings.detailed || DEFAULT_MODELS.detailed),
+    deepResearch: openai(modelSettings.deepResearch || DEFAULT_MODELS.deepResearch),
+    summary: openai(modelSettings.summary || DEFAULT_MODELS.summary),
+    vlm: openai(modelSettings.vlm || DEFAULT_MODELS.vlm),
+    embedding: openai(modelSettings.embedding || DEFAULT_MODELS.embedding),
+  } as const;
+}
+
+/**
+ * Cached models for synchronous access
+ * Note: This loads models once at startup. Settings changes require restart.
+ */
+let cachedModels: Awaited<ReturnType<typeof getModels>> | null = null;
+
+async function getCachedModels() {
+  if (!cachedModels) {
+    cachedModels = await getModels();
+  }
+  return cachedModels;
+}
+
+/**
+ * Synchronous model access (for compatibility with existing code)
+ */
+export const models = new Proxy({} as Awaited<ReturnType<typeof getModels>>, {
+  get(target, prop) {
+    if (!cachedModels) {
+      throw new Error('Models not initialized. Call initModels() first.');
+    }
+    return cachedModels[prop as keyof typeof cachedModels];
+  }
+});
+
+/**
+ * Initialize models at startup
+ */
+export async function initModels() {
+  cachedModels = await getModels();
+}
 
 /**
  * Get the appropriate model for a given response depth
  */
-export function getModelForDepth(depth: ResponseDepth = 'standard') {
+export async function getModelForDepth(depth: keyof Awaited<ReturnType<typeof getModels>> = 'standard') {
+  const models = await getCachedModels();
   return models[depth];
 }
+
+/**
+ * Get model type for TypeScript
+ */
+export type ModelDepth = keyof Awaited<ReturnType<typeof getModels>>;
 
 /**
  * Estimate token cost for a query

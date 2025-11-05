@@ -1,10 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
-import { NextRequest } from 'next/server';
-import { streamText, convertToModelMessages, createIdGenerator, type UIMessage } from 'ai';
-import { getModelForDepth } from '@/lib/ai/gateway';
+import { streamText, convertToModelMessages, createIdGenerator, stepCountIs, type UIMessage } from 'ai';
+import { getModelForDepth, type ModelDepth } from '@/lib/ai/gateway';
 import { getPrompt } from '@/lib/ai/prompts';
-import { POST as searchAPI } from "@/app/api/search/route";
-import type { SearchResult } from "@/app/api/search/route";
+import { searchTools } from "@/lib/ai/tools-fixed";
 
 // Progress event type
 export type ProgressEvent = {
@@ -14,16 +12,22 @@ export type ProgressEvent = {
 };
 
 /**
- * RAG Chat API - Following Vercel AI SDK Pattern
+ * Tool-Based RAG Chat API - Following Vercel AI SDK Pattern
  * 
  * Documentation: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot-message-persistence
  * 
  * Flow:
  * 1. Receive last message + chatId from client
  * 2. Load previous messages from database
- * 3. Run search with latest query
- * 4. Stream response with RAG context
- * 5. Save all messages (including new response) to database
+ * 3. Stream response with AI-powered tool selection
+ * 4. AI decides when to search and which tool to use
+ * 5. Tools handle search with progress visibility
+ * 6. Save all messages (including new response) to database
+ * 
+ * Tools Available:
+ * - search_documents: Comprehensive search (90% of queries)
+ * - quick_search: Fast semantic-only search
+ * - deep_graph_search: Extended relationship exploration
  */
 
 export const maxDuration = 30;
@@ -106,7 +110,7 @@ export async function POST(request: Request) {
 
     console.log(`[Chat] Processing query: "${query}"`);
 
-    // Track progress events
+    // Track progress events (now handled by tools)
     const progressEvents: ProgressEvent[] = [];
     const addProgress = (message: string, status: 'in-progress' | 'completed' = 'in-progress') => {
       const event: ProgressEvent = {
@@ -120,72 +124,23 @@ export async function POST(request: Request) {
 
     // Add initial progress
     addProgress('Analyzing your question', 'completed');
-    addProgress('Searching through documents', 'in-progress');
 
-    // Run full search pipeline by calling search API directly
-    const searchBody = JSON.stringify({
-      query,
-      match_threshold: 0.5,
-      match_count: 10,
-      graph_hops: 1,
+    // Get chat prompt (now includes tool guidance)
+    const systemPrompt = await getPrompt('chat', { 
+      context: '', // Context will be provided by tools
     });
-    
-    const searchRequest = new Request(new URL('/api/search', request.url).toString(), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: searchBody,
-    });
-
-    // Cast to NextRequest to satisfy type requirements
-    const searchResponse = await searchAPI(searchRequest as unknown as NextRequest);
-
-    if (!searchResponse.ok) {
-      const error = await searchResponse.json();
-      throw new Error(`Search failed: ${error.message}`);
-    }
-
-    const searchData = await searchResponse.json();
-    const results: SearchResult[] = searchData.results || [];
-
-    addProgress('Searching through documents', 'completed');
-    addProgress('Generating response', 'in-progress');
-
-    console.log(`[Chat] Found ${results.length} relevant chunks`);
-
-    // Build RAG context from search results
-    const context = results
-      .map((result, idx) => {
-        return `[${idx + 1}] ${result.content}\n(Source: ${result.document_name}, Chunk ${result.chunk_index})`;
-      })
-      .join('\n\n---\n\n');
-
-    // Get chat prompt from settings with context substitution
-    const systemPrompt = await getPrompt('chat', { context });
 
     // Use provided model or default to standard
     const selectedModel = model || 'standard';
     
-    // Format sources for inline citations
-    const sources = results.slice(0, 10).map((result, idx) => ({
-      number: (idx + 1).toString(),
-      title: result.document_name,
-      url: `/admin/documents/${result.document_id}#chunk-${result.chunk_id}`,
-      description: `Chunk ${result.chunk_index}`,
-      quote: result.content.substring(0, 200) + (result.content.length > 200 ? '...' : ''),
-      score: result.rerank_score,
-      chunk_id: result.chunk_id,
-      document_id: result.document_id,
-      chunk_index: result.chunk_index,
-    }));
-    
-    // Stream response using AI SDK
+    // Stream response using AI SDK with tools
     const result = streamText({
-      model: getModelForDepth(selectedModel as 'quick' | 'standard' | 'detailed' | 'deepResearch' | 'summary'),
+      model: await getModelForDepth(selectedModel as ModelDepth),
       system: systemPrompt,
       messages: convertToModelMessages(messages),
+      tools: searchTools,
       temperature: 0.3,
+      stopWhen: stepCountIs(5), // Enable multi-step: AI can call tools then generate text response
     });
 
     // Consume stream to ensure completion even if client disconnects
@@ -200,21 +155,7 @@ export async function POST(request: Request) {
         prefix: 'msg',
         size: 16,
       }),
-      // Note: 'append' option may not be supported in this AI SDK version
-      // Sources will be available after database reload
-      // append: (message: any) => {
-      //   if (message.role === 'assistant') {
-      //     return {
-      //       ...message,
-      //       data: {
-      //         sources,
-      //         progress: progressEvents,
-      //       },
-      //     };
-      //   }
-      //   return message;
-      // },
-      onFinish: async ({ messages: allMessages }) => {
+      onFinish: async ({ messages: allMessages, responseMessage }) => {
         // Save all messages to database
         try {
           // Delete existing messages for this session
@@ -222,6 +163,62 @@ export async function POST(request: Request) {
             .from('chat_messages')
             .delete()
             .eq('session_id', chatId);
+
+          // Extract sources from tool calls in the assistant message
+          const sources: Array<{
+            number: string;
+            title: string;
+            url: string;
+            description: string;
+            quote: string;
+            score?: number;
+            chunk_id: string;
+            document_id: string;
+            chunk_index: number;
+          }> = [];
+
+          // Check if responseMessage has tool calls and extract results
+          if (responseMessage && responseMessage.parts) {
+            responseMessage.parts.forEach((part) => {
+              // Check if this is a tool part with output (AI SDK v5 format)
+              const toolPart = part as unknown as { 
+                type: string; 
+                output?: { results?: unknown[] };
+                state?: string;
+              };
+              
+              // Tool parts have type like "tool-search_documents" and output with results
+              if (toolPart.type?.startsWith('tool-') && 
+                  toolPart.state === 'output-available' && 
+                  toolPart.output?.results) {
+                // Extract search results from tool output
+                const searchResults = toolPart.output.results;
+                searchResults.slice(0, 10).forEach((result: unknown) => {
+                  const r = result as {
+                    document_name?: string;
+                    document_id?: string;
+                    chunk_id?: string;
+                    chunk_index?: number;
+                    content?: string;
+                    rerank_score?: number;
+                  };
+                  sources.push({
+                    number: (sources.length + 1).toString(),
+                    title: r.document_name || 'Unknown',
+                    url: `/admin/documents/${r.document_id}#chunk-${r.chunk_id}`,
+                    description: `Chunk ${r.chunk_index || 0}`,
+                    quote: r.content?.substring(0, 200) + (r.content && r.content.length > 200 ? '...' : '') || '',
+                    score: r.rerank_score,
+                    chunk_id: r.chunk_id || '',
+                    document_id: r.document_id || '',
+                    chunk_index: r.chunk_index || 0,
+                  });
+                });
+              }
+            });
+          }
+          
+          console.log(`[Chat] Extracted ${sources.length} sources from tool results`);
 
           // Insert all messages (including new response)
           const messagesToSave = allMessages.map((msg) => ({

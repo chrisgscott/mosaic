@@ -1,0 +1,207 @@
+/**
+ * Search Tools for Vercel AI SDK - Fixed Version
+ * 
+ * Using inputSchema (AI SDK v5) instead of parameters
+ */
+
+import { tool } from 'ai';
+import { z } from 'zod';
+import type { SearchResult, SearchResponse } from '@/app/api/search/route';
+import { POST as searchAPI } from "@/app/api/search/route";
+import { NextRequest } from "next/server";
+
+// Tool result types
+export interface SearchToolResult {
+  results: SearchResult[];
+  query: string;
+  count: number;
+  processing_time_ms: number;
+  tool_used: string;
+  error?: string; // Optional error message for graceful degradation
+}
+
+/**
+ * Main comprehensive search tool
+ */
+export const searchDocumentsTool = tool({
+  description: `Comprehensive search through documents using multiple advanced techniques. Use for most questions about document content.`,
+  
+  inputSchema: z.object({
+    query: z.string().describe('The search query to find relevant documents'),
+  }),
+  
+  execute: async ({ query }) => {
+    console.log(`[Tool] search_documents called with query: "${query}"`);
+    
+    try {
+      const searchBody = JSON.stringify({
+        query,
+        match_threshold: 0.5,
+        match_count: 10,
+        graph_hops: 1,
+      });
+      
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const searchRequest = new NextRequest(`${baseUrl}/api/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: searchBody,
+      });
+
+      const searchResponse = await searchAPI(searchRequest);
+
+      if (!searchResponse.ok) {
+        const error = await searchResponse.json();
+        throw new Error(`Search failed: ${error.message}`);
+      }
+
+      const searchData: SearchResponse = await searchResponse.json();
+      
+      console.log(`[Tool] search_documents completed: ${searchData.count} results`);
+      
+      return {
+        ...searchData,
+        tool_used: 'search_documents',
+      };
+    } catch (error) {
+      console.error(`[Tool] search_documents error:`, error);
+      return {
+        results: [],
+        query,
+        count: 0,
+        processing_time_ms: 0,
+        tool_used: 'search_documents',
+        error: error instanceof Error ? error.message : 'Search failed',
+      };
+    }
+  },
+});
+
+/**
+ * Quick search tool
+ */
+export const quickSearchTool = tool({
+  description: `Fast semantic search for quick factual lookups. Use for simple questions and definitions.`,
+  
+  inputSchema: z.object({
+    query: z.string().describe('The search query for quick lookup'),
+  }),
+  
+  execute: async ({ query }) => {
+    console.log(`[Tool] quick_search called with query: "${query}"`);
+    
+    try {
+      const searchBody = JSON.stringify({
+        query,
+        match_threshold: 0.5,
+        match_count: 10,
+        graph_hops: 1,
+        skip_multi_query: true,
+        skip_graph_search: true,
+        skip_reranking: true,
+      });
+      
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const searchRequest = new NextRequest(`${baseUrl}/api/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: searchBody,
+      });
+
+      const searchResponse = await searchAPI(searchRequest);
+
+      if (!searchResponse.ok) {
+        const error = await searchResponse.json();
+        throw new Error(`Quick search failed: ${error.message}`);
+      }
+
+      const searchData: SearchResponse = await searchResponse.json();
+      
+      console.log(`[Tool] quick_search completed: ${searchData.count} results`);
+      
+      return {
+        ...searchData,
+        tool_used: 'quick_search',
+      };
+    } catch (error) {
+      console.error(`[Tool] quick_search error:`, error);
+      return {
+        results: [],
+        query,
+        count: 0,
+        processing_time_ms: 0,
+        tool_used: 'quick_search',
+        error: error instanceof Error ? error.message : 'Quick search failed',
+      };
+    }
+  },
+});
+
+/**
+ * Deep graph search tool
+ */
+export const deepGraphSearchTool = tool({
+  description: `Deep graph search for complex relationship queries. Use for questions about how entities are related.`,
+  
+  inputSchema: z.object({
+    query: z.string().describe('The relationship query to explore'),
+    max_hops: z.number().optional().default(3).describe('Maximum graph hops to explore (default: 3)'),
+  }),
+  
+  execute: async ({ query, max_hops = 3 }) => {
+    console.log(`[Tool] deep_graph_search called with query: "${query}", max_hops: ${max_hops}`);
+    
+    try {
+      const searchBody = JSON.stringify({
+        query,
+        match_threshold: 0.5,
+        match_count: 10,
+        graph_hops: max_hops,
+        force_graph_search: true,
+        extended_graph_traversal: true,
+      });
+      
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const searchRequest = new NextRequest(`${baseUrl}/api/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: searchBody,
+      });
+
+      const searchResponse = await searchAPI(searchRequest);
+
+      if (!searchResponse.ok) {
+        const error = await searchResponse.json();
+        throw new Error(`Deep graph search failed: ${error.message}`);
+      }
+
+      const searchData: SearchResponse = await searchResponse.json();
+      
+      console.log(`[Tool] deep_graph_search completed: ${searchData.count} results`);
+      
+      return {
+        ...searchData,
+        tool_used: 'deep_graph_search',
+      };
+    } catch (error) {
+      console.error(`[Tool] deep_graph_search error:`, error);
+      return {
+        results: [],
+        query,
+        count: 0,
+        processing_time_ms: 0,
+        tool_used: 'deep_graph_search',
+        error: error instanceof Error ? error.message : 'Deep graph search failed',
+      };
+    }
+  },
+});
+
+/**
+ * Export all tools for registration with AI SDK
+ */
+export const searchTools = {
+  search_documents: searchDocumentsTool,
+  quick_search: quickSearchTool,
+  deep_graph_search: deepGraphSearchTool,
+} as const;

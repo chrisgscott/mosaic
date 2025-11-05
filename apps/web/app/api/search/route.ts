@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import { generateText } from 'ai';
-import { models } from '@/lib/ai/gateway';
+import { getModelForDepth, type ModelDepth } from '@/lib/ai/gateway';
 import { getPrompt } from '@/lib/ai/prompts';
 import { createProgressEvent, type ProgressCallback } from "@/lib/search-progress";
 import { graphEnhancedSearch, isRelationshipQuery } from "@/lib/graph/graph-search";
@@ -76,7 +76,7 @@ async function generateMultiQuery(query: string): Promise<string[]> {
     const prompt = await getPrompt('multiQuery', { query });
     
     const { text } = await generateText({
-      model: models.quick,
+      model: await getModelForDepth('quick' as ModelDepth),
       prompt,
       temperature: 0.8,
     });
@@ -104,7 +104,7 @@ async function generateHyDE(query: string): Promise<string> {
     const prompt = await getPrompt('hyde', { query });
     
     const { text } = await generateText({
-      model: models.quick,
+      model: await getModelForDepth('quick' as ModelDepth),
       prompt,
       temperature: 0.7,
     });
@@ -294,13 +294,28 @@ export async function POST(request: NextRequest) {
       match_threshold = 0.5,  // Lowered from 0.7 - semantic search typically gets 0.5-0.8 scores
       match_count = 10,
       graph_hops = 1,    // Number of hops for graph traversal
+      // Tool-specific overrides
+      skip_multi_query = false,
+      skip_graph_search = false,
+      skip_reranking = false,
+      force_graph_search = false,
+      extended_graph_traversal = false,
     } = body;
     
     // System settings take precedence over request body
     const use_hyde = systemSettings["search.useHyDE"] ?? true;
-    const use_multi_query = systemSettings["search.useMultiQuery"] ?? true;
-    const use_reranking = systemSettings["search.useReranking"] ?? true;
-    const use_graph = systemSettings["search.useGraphSearch"] ?? true;
+    let use_multi_query = systemSettings["search.useMultiQuery"] ?? true;
+    let use_reranking = systemSettings["search.useReranking"] ?? true;
+    let use_graph = systemSettings["search.useGraphSearch"] ?? true;
+    
+    // Apply tool-specific overrides
+    if (skip_multi_query) use_multi_query = false;
+    if (skip_graph_search) use_graph = false;
+    if (skip_reranking) use_reranking = false;
+    if (force_graph_search) use_graph = true;
+    
+    // Use extended graph hops if requested
+    const effective_graph_hops = extended_graph_traversal ? Math.max(graph_hops, 3) : graph_hops;
 
     if (!query || typeof query !== "string") {
       return NextResponse.json(
@@ -427,7 +442,7 @@ export async function POST(request: NextRequest) {
             userId: user.id,
             limit: match_count,
             includeRelationships: true,
-            maxHops: graph_hops,
+            maxHops: effective_graph_hops,
             entitySimilarityThreshold: 0.5, // Lowered for better entity matching
           });
           

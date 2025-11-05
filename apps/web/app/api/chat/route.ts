@@ -3,6 +3,7 @@ import { streamText, convertToModelMessages, createIdGenerator, stepCountIs, typ
 import { getModelForDepth, type ModelDepth } from '@/lib/ai/gateway';
 import { getPrompt } from '@/lib/ai/prompts';
 import { searchTools } from "@/lib/ai/tools-fixed";
+import { addProgress } from './[id]/progress/route';
 
 // Progress event type
 export type ProgressEvent = {
@@ -110,20 +111,8 @@ export async function POST(request: Request) {
 
     console.log(`[Chat] Processing query: "${query}"`);
 
-    // Track progress events (now handled by tools)
-    const progressEvents: ProgressEvent[] = [];
-    const addProgress = (message: string, status: 'in-progress' | 'completed' = 'in-progress') => {
-      const event: ProgressEvent = {
-        message,
-        status,
-        timestamp: new Date().toISOString(),
-      };
-      progressEvents.push(event);
-      console.log(`[Progress] ${message} (${status})`);
-    };
-
-    // Add initial progress
-    addProgress('Analyzing your question', 'completed');
+    // Add initial progress to SSE stream
+    addProgress(chatId, 'Analyzing your question', 'completed');
 
     // Get chat prompt (now includes tool guidance)
     const systemPrompt = await getPrompt('chat', { 
@@ -133,6 +122,9 @@ export async function POST(request: Request) {
     // Use provided model or default to standard
     const selectedModel = model || 'standard';
     
+    // Store session ID globally for tool access
+    (global as typeof global & { currentChatSessionId?: string }).currentChatSessionId = chatId;
+
     // Stream response using AI SDK with tools
     const result = streamText({
       model: await getModelForDepth(selectedModel as ModelDepth),
@@ -146,7 +138,7 @@ export async function POST(request: Request) {
     // Consume stream to ensure completion even if client disconnects
     result.consumeStream();
 
-    addProgress('Generating response', 'completed');
+    addProgress(chatId, 'Generating response', 'completed');
 
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
@@ -156,6 +148,10 @@ export async function POST(request: Request) {
         size: 16,
       }),
       onFinish: async ({ messages: allMessages, responseMessage }) => {
+        // Mark session as complete to close SSE stream (after all tools are done)
+        const { markSessionComplete } = await import('./[id]/progress/route');
+        markSessionComplete(chatId);
+
         // Save all messages to database
         try {
           // Delete existing messages for this session
@@ -230,7 +226,6 @@ export async function POST(request: Request) {
               .join(''),
             metadata: msg.role === 'assistant' ? {
               sources, // Include full source metadata for inline citations
-              progress: progressEvents, // Include progress events for UI display
             } : {},
           }));
 

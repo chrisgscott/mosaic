@@ -2,6 +2,7 @@
 
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, type UIMessage } from 'ai';
+import { useProgressStream } from '@/hooks/use-progress-stream';
 import {
   Conversation,
   ConversationContent,
@@ -91,6 +92,9 @@ export function EnhancedChatClient({
   initialMessages?: UIMessage[];
 }) {
   const [selectedModel, setSelectedModel] = useState('standard'); // Default to standard model
+  
+  // SSE progress stream for real-time updates
+  const { progress } = useProgressStream(id);
   
   // useChat hook with session persistence
   const { messages, sendMessage, status, error, setMessages } = useChat({
@@ -258,29 +262,6 @@ export function EnhancedChatClient({
         <ConversationContent className="space-y-4">
           {enhancedMessages.map((message) => (
             <div key={message.id} className="space-y-3">
-              {/* Real-time Tool Invocations Display */}
-              {message.role === 'assistant' && message.toolInvocations && message.toolInvocations.length > 0 && (
-                <Task defaultOpen={true}>
-                  <TaskTrigger title="Search Process" />
-                  <TaskContent>
-                    {message.toolInvocations.map((tool, idx) => {
-                      const toolName = tool.toolName === 'search_documents' ? 'Searching documents' :
-                                      tool.toolName === 'quick_search' ? 'Quick search' :
-                                      tool.toolName === 'deep_graph_search' ? 'Deep graph search' :
-                                      tool.toolName;
-                      
-                      return (
-                        <TaskItem key={idx}>
-                          {toolName}
-                          {tool.state === 'result' && ' ✓'}
-                          {tool.state === 'call' && '...'}
-                        </TaskItem>
-                      );
-                    })}
-                  </TaskContent>
-                </Task>
-              )}
-
               <Message from={message.role}>
                 <MessageContent>
                   {(() => {
@@ -298,9 +279,25 @@ export function EnhancedChatClient({
                     
                     if (message.isStreaming && textContent === '') {
                       return (
-                        <div className="flex items-center gap-2">
-                          <Loader size={14} />
-                          <span className="text-muted-foreground text-sm">Thinking...</span>
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <Loader size={14} />
+                            <span className="text-muted-foreground text-sm">Thinking...</span>
+                          </div>
+                          
+                          {/* Real-time Progress Display */}
+                          {progress && progress.length > 0 && (
+                            <Task defaultOpen={true}>
+                              <TaskTrigger title="Search Process" />
+                              <TaskContent>
+                                {progress.map((progressEvent, idx) => (
+                                  <TaskItem key={idx}>
+                                    {progressEvent.message} {progressEvent.status === 'completed' ? '✓' : '...'}
+                                  </TaskItem>
+                                ))}
+                              </TaskContent>
+                            </Task>
+                          )}
                         </div>
                       );
                     }
@@ -308,41 +305,57 @@ export function EnhancedChatClient({
                     // Render clean markdown for assistant messages
                     if (message.role === 'assistant') {
                       return (
-                        <div className="prose prose-sm dark:prose-invert max-w-none">
-                          <ReactMarkdown
-                            components={{
-                              // Custom rendering for better styling
-                              p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,
-                              ul: ({ children }) => <ul className="mb-4 ml-6 list-disc">{children}</ul>,
-                              ol: ({ children }) => <ol className="mb-4 ml-6 list-decimal">{children}</ol>,
-                              li: ({ children }) => <li className="mb-1">{children}</li>,
-                              code: ({ inline, children, ...props }: { inline?: boolean; children?: React.ReactNode }) =>
-                                inline ? (
-                                  <code className="px-1 py-0.5 rounded bg-muted font-mono text-sm" {...props}>
-                                    {children}
-                                  </code>
-                                ) : (
-                                  <pre className="mb-4 rounded-lg bg-muted p-3 overflow-x-auto">
-                                    <code className="font-mono text-sm" {...props}>
+                        <div className="space-y-3">
+                          {/* Progress for completed messages */}
+                          {!message.isStreaming && progress && progress.length > 0 && (
+                            <Task defaultOpen={false}>
+                              <TaskTrigger title="Search Process" />
+                              <TaskContent>
+                                {progress.map((progressEvent, idx) => (
+                                  <TaskItem key={idx}>
+                                    {progressEvent.message} ✓
+                                  </TaskItem>
+                                ))}
+                              </TaskContent>
+                            </Task>
+                          )}
+                          
+                          <div className="prose prose-sm dark:prose-invert max-w-none">
+                            <ReactMarkdown
+                              components={{
+                                // Custom rendering for better styling
+                                p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,
+                                ul: ({ children }) => <ul className="mb-4 ml-6 list-disc">{children}</ul>,
+                                ol: ({ children }) => <ol className="mb-4 ml-6 list-decimal">{children}</ol>,
+                                li: ({ children }) => <li className="mb-1">{children}</li>,
+                                code: ({ inline, children, ...props }: { inline?: boolean; children?: React.ReactNode }) =>
+                                  inline ? (
+                                    <code className="px-1 py-0.5 rounded bg-muted font-mono text-sm" {...props}>
                                       {children}
                                     </code>
-                                  </pre>
+                                  ) : (
+                                    <pre className="mb-4 rounded-lg bg-muted p-3 overflow-x-auto">
+                                      <code className="font-mono text-sm" {...props}>
+                                        {children}
+                                      </code>
+                                    </pre>
+                                  ),
+                                strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                                em: ({ children }) => <em className="italic">{children}</em>,
+                                blockquote: ({ children }) => (
+                                  <blockquote className="mb-4 border-l-4 border-muted-foreground/20 pl-4 italic">
+                                    {children}
+                                  </blockquote>
                                 ),
-                              strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-                              em: ({ children }) => <em className="italic">{children}</em>,
-                              blockquote: ({ children }) => (
-                                <blockquote className="mb-4 border-l-4 border-muted-foreground/20 pl-4 italic">
-                                  {children}
-                                </blockquote>
-                              ),
-                              h1: ({ children }) => <h1 className="mb-4 text-2xl font-bold">{children}</h1>,
-                              h2: ({ children }) => <h2 className="mb-3 text-xl font-semibold">{children}</h2>,
-                              h3: ({ children }) => <h3 className="mb-2 text-lg font-semibold">{children}</h3>,
-                              h4: ({ children }) => <h4 className="mb-2 text-base font-semibold">{children}</h4>,
-                            }}
-                          >
-                            {textContent}
-                          </ReactMarkdown>
+                                h1: ({ children }) => <h1 className="mb-4 text-2xl font-bold">{children}</h1>,
+                                h2: ({ children }) => <h2 className="mb-3 text-xl font-semibold">{children}</h2>,
+                                h3: ({ children }) => <h3 className="mb-2 text-lg font-semibold">{children}</h3>,
+                                h4: ({ children }) => <h4 className="mb-2 text-base font-semibold">{children}</h4>,
+                              }}
+                            >
+                              {textContent}
+                            </ReactMarkdown>
+                          </div>
                         </div>
                       );
                     }

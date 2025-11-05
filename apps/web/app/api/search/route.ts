@@ -6,6 +6,7 @@ import { generateText } from 'ai';
 import { getModelForDepth, type ModelDepth } from '@/lib/ai/gateway';
 import { getPrompt } from '@/lib/ai/prompts';
 import { createProgressEvent, type ProgressCallback } from "@/lib/search-progress";
+import { addProgress } from '../chat/[id]/progress/route';
 import { graphEnhancedSearch, isRelationshipQuery } from "@/lib/graph/graph-search";
 import { logSearchSignal } from "@/lib/graph/search-signals";
 
@@ -291,6 +292,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       query,
+      session_id,  // Optional session ID for SSE progress streaming
       match_threshold = 0.5,  // Lowered from 0.7 - semantic search typically gets 0.5-0.8 scores
       match_count = 10,
       graph_hops = 1,    // Number of hops for graph traversal
@@ -324,10 +326,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Progress tracking helper (logs for now, will stream to frontend later)
+    // Progress tracking helper with SSE streaming
     const onProgress: ProgressCallback = (event) => {
       console.log(`[Progress] ${event.message} (${event.status})`);
-      // TODO: Stream to frontend via SSE when we add streaming support
+      
+      // Stream to frontend via SSE if session_id is provided
+      if (session_id) {
+        addProgress(session_id, event.message, event.status as 'in-progress' | 'completed');
+      }
     };
 
     // Detect if this is a relationship query that would benefit from graph search

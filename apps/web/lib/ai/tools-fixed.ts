@@ -33,9 +33,13 @@ export const searchDocumentsTool = tool({
   execute: async ({ query }) => {
     console.log(`[Tool] search_documents called with query: "${query}"`);
     
+    // Get session ID from global context
+    const sessionId = (global as typeof global & { currentChatSessionId?: string }).currentChatSessionId;
+    
     try {
       const searchBody = JSON.stringify({
         query,
+        session_id: sessionId,
         match_threshold: 0.5,
         match_count: 10,
         graph_hops: 1,
@@ -90,9 +94,13 @@ export const quickSearchTool = tool({
   execute: async ({ query }) => {
     console.log(`[Tool] quick_search called with query: "${query}"`);
     
+    // Get session ID from global context
+    const sessionId = (global as typeof global & { currentChatSessionId?: string }).currentChatSessionId;
+    
     try {
       const searchBody = JSON.stringify({
         query,
+        session_id: sessionId,
         match_threshold: 0.5,
         match_count: 10,
         graph_hops: 1,
@@ -151,9 +159,13 @@ export const deepGraphSearchTool = tool({
   execute: async ({ query, max_hops = 3 }) => {
     console.log(`[Tool] deep_graph_search called with query: "${query}", max_hops: ${max_hops}`);
     
+    // Get session ID from global context
+    const sessionId = (global as typeof global & { currentChatSessionId?: string }).currentChatSessionId;
+    
     try {
       const searchBody = JSON.stringify({
         query,
+        session_id: sessionId,
         match_threshold: 0.5,
         match_count: 10,
         graph_hops: max_hops,

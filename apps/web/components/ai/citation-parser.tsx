@@ -41,7 +41,10 @@ export function CitationParser({ content, citations, className, isStreaming }: C
         components={{
           // Custom rendering for better styling
           p: ({ children }) => {
-            const childrenStr = Array.isArray(children) ? children.join('') : String(children);
+            // Check if children contains citation markers
+            const childrenStr = Array.isArray(children) 
+              ? children.filter(c => typeof c === 'string').join('') 
+              : (typeof children === 'string' ? children : '');
             const hasCitations = /\[\d+\]/.test(childrenStr);
             
             // Use div instead of p when citations are present to avoid HTML validation errors
@@ -55,8 +58,9 @@ export function CitationParser({ content, citations, className, isStreaming }: C
                   if (typeof child === 'string') {
                     return parseCitations(child, citations, idx);
                   }
-                  return child;
-                }) : parseCitations(String(children), citations, 0)}
+                  // Return non-string children (React elements) as-is with a key
+                  return <span key={`child-${idx}`}>{child}</span>;
+                }) : (typeof children === 'string' ? parseCitations(children, citations, 0) : children)}
               </Container>
             );
           },
@@ -101,6 +105,11 @@ function parseCitations(text: string, citations: Citation[], baseKey: number): R
     if (citationMatch) {
       const citationNumber = citationMatch[1];
       const citation = citations.find(c => c.number === citationNumber);
+      
+      // Debug: log when citation is not found
+      if (!citation) {
+        console.warn(`[CitationParser] Citation [${citationNumber}] not found. Available:`, citations.map(c => c.number));
+      }
       
       if (citation) {
         return (

@@ -103,8 +103,29 @@ export function EnhancedChatClient({
         };
       },
     }),
-    // Sources are automatically included in the streamed response via toUIMessageStreamResponse
-    // No need to reload - the useChat hook handles everything
+    // After streaming completes and sources are saved to DB, reload messages
+    async onFinish({ message }) {
+      // Only reload if this is an assistant message (not user message echo)
+      if (message.role !== 'assistant') return;
+      
+      console.log('[EnhancedChat] Stream finished, reloading messages from DB...');
+      
+      // Small delay to ensure backend onFinish has completed saving to DB
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      try {
+        // Fetch updated messages from DB (includes sources)
+        const response = await fetch(`/api/chat/${id}/messages`);
+        if (response.ok) {
+          const { messages: updatedMessages } = await response.json();
+          // Update the chat with messages that include sources
+          setMessages(updatedMessages);
+          console.log('[EnhancedChat] Messages reloaded with sources');
+        }
+      } catch (error) {
+        console.error('[EnhancedChat] Failed to reload messages:', error);
+      }
+    },
   });
 
   // Enhanced message state with reasoning and sources
@@ -253,7 +274,13 @@ export function EnhancedChatClient({
                     // Extract text content from message parts
                     const textContent = message.parts
                       ?.filter(part => part.type === 'text')
-                      .map(part => part.text)
+                      .map(part => {
+                        // Debug: log if text is not a string
+                        if (typeof part.text !== 'string') {
+                          console.error('[EnhancedChat] Non-string text in part:', part);
+                        }
+                        return part.text;
+                      })
                       .join('') || '';
                     
                     if (message.isStreaming && textContent === '') {
@@ -267,6 +294,10 @@ export function EnhancedChatClient({
                     
                     // Render markdown with inline citations for assistant messages
                     if (message.role === 'assistant') {
+                      // Debug: log citations to see what numbers we have
+                      if (message.sources && message.sources.length > 0) {
+                        console.log('[EnhancedChat] Citations:', message.sources.map(s => ({ number: s.number, title: s.title })));
+                      }
                       return (
                         <CitationParser 
                           content={textContent} 

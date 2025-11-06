@@ -132,9 +132,18 @@ export async function POST(request: Request) {
     // Store session ID globally for tool access
     (global as typeof global & { currentChatSessionId?: string }).currentChatSessionId = chatId;
 
-    // Select tools based on web search toggle
-    const selectedTools = webSearchEnabled ? searchToolsWithWeb : searchTools;
-    console.log(`[Chat] Using tools: ${Object.keys(selectedTools).join(', ')}`);
+    // Deep research models require OpenAI's native tools (web_search_preview, mcp, file_search)
+    // Our custom tools aren't compatible, so disable them for deep research
+    const isDeepResearch = selectedModel === 'deepResearch';
+    
+    // Select tools based on web search toggle (unless deep research)
+    const selectedTools = isDeepResearch ? undefined : (webSearchEnabled ? searchToolsWithWeb : searchTools);
+    
+    if (isDeepResearch) {
+      console.log('[Chat] Deep research model - tools disabled (uses internal reasoning)');
+    } else {
+      console.log(`[Chat] Using tools: ${Object.keys(selectedTools || {}).join(', ')}`);
+    }
 
     // Stream response using AI SDK with tools
     const result = streamText({
@@ -143,7 +152,7 @@ export async function POST(request: Request) {
       messages: convertToModelMessages(messages),
       tools: selectedTools,
       temperature: 0.3,
-      stopWhen: stepCountIs(5), // Enable multi-step: AI can call tools then generate text response
+      stopWhen: isDeepResearch ? undefined : stepCountIs(5), // Deep research doesn't need multi-step
     });
 
     // Consume stream to ensure completion even if client disconnects

@@ -87,11 +87,11 @@ type EnhancedChatMessage = UIMessage & {
 
 // Available models - using our semantic model keys
 const models = [
-  { id: 'quick', name: 'Quick (GPT-4.1 Nano)' },
-  { id: 'standard', name: 'Standard (GPT-4o Mini)' },
-  { id: 'detailed', name: 'Detailed (GPT-4.1)' },
-  { id: 'deepResearch', name: 'Deep Research (o4 Mini)' },
-  { id: 'summary', name: 'Summary (GPT-4.1 Mini)' },
+  { id: 'quick', name: 'Quick (GPT-4.1 Nano)', disabled: false },
+  { id: 'standard', name: 'Standard (GPT-4o Mini)', disabled: false },
+  { id: 'detailed', name: 'Detailed (GPT-4.1)', disabled: false },
+  { id: 'deepResearch', name: 'Deep Research (o4 Mini)', disabled: true, tooltip: 'Coming soon with multi-agent research system' },
+  { id: 'summary', name: 'Summary (GPT-4.1 Mini)', disabled: false },
 ];
 
 /**
@@ -502,8 +502,18 @@ export function EnhancedChatClient({
                 </PromptInputModelSelectTrigger>
                 <PromptInputModelSelectContent>
                   {models.map((model) => (
-                    <PromptInputModelSelectItem key={model.id} value={model.id}>
+                    <PromptInputModelSelectItem 
+                      key={model.id} 
+                      value={model.id}
+                      disabled={model.disabled}
+                      title={model.tooltip}
+                    >
                       {model.name}
+                      {model.disabled && model.tooltip && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          ({model.tooltip})
+                        </span>
+                      )}
                     </PromptInputModelSelectItem>
                   ))}
                 </PromptInputModelSelectContent>

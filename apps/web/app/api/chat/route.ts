@@ -198,24 +198,52 @@ export async function POST(request: Request) {
                 const searchResults = toolPart.output.results;
                 searchResults.slice(0, 10).forEach((result: unknown) => {
                   const r = result as {
+                    // Document search fields
                     document_name?: string;
                     document_id?: string;
                     chunk_id?: string;
                     chunk_index?: number;
                     content?: string;
                     rerank_score?: number;
+                    // Web search fields
+                    title?: string;
+                    url?: string;
+                    description?: string;
+                    quote?: string;
+                    score?: number;
+                    source?: string;
                   };
-                  sources.push({
-                    number: (sources.length + 1).toString(),
-                    title: r.document_name || 'Unknown',
-                    url: `/admin/documents/${r.document_id}#chunk-${r.chunk_id}`,
-                    description: `Chunk ${r.chunk_index || 0}`,
-                    quote: r.content?.substring(0, 200) + (r.content && r.content.length > 200 ? '...' : '') || '',
-                    score: r.rerank_score,
-                    chunk_id: r.chunk_id || '',
-                    document_id: r.document_id || '',
-                    chunk_index: r.chunk_index || 0,
-                  });
+                  
+                  // Check if this is a web search result (has 'source' field or external URL)
+                  const isWebResult = r.source === 'web' || (r.url && !r.url.startsWith('/'));
+                  
+                  if (isWebResult) {
+                    // Web search result
+                    sources.push({
+                      number: (sources.length + 1).toString(),
+                      title: r.title || 'Web Result',
+                      url: r.url || '#',
+                      description: r.description || '',
+                      quote: r.quote || r.description?.substring(0, 200) || '',
+                      score: r.score,
+                      chunk_id: 'web',
+                      document_id: 'web',
+                      chunk_index: 0,
+                    });
+                  } else {
+                    // Document search result
+                    sources.push({
+                      number: (sources.length + 1).toString(),
+                      title: r.document_name || 'Unknown',
+                      url: `/admin/documents/${r.document_id}#chunk-${r.chunk_id}`,
+                      description: `Chunk ${r.chunk_index || 0}`,
+                      quote: r.content?.substring(0, 200) + (r.content && r.content.length > 200 ? '...' : '') || '',
+                      score: r.rerank_score,
+                      chunk_id: r.chunk_id || '',
+                      document_id: r.document_id || '',
+                      chunk_index: r.chunk_index || 0,
+                    });
+                  }
                 });
               }
             });

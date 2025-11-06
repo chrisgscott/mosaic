@@ -224,15 +224,36 @@ export const webSearchTool = tool({
     console.log(`[Tool] web_search called with query: "${query}"`);
     
     try {
-      // Note: This will be called via MCP in the chat route
-      // For now, return a placeholder that will be replaced with actual MCP call
-      return {
-        results: [],
+      const searchBody = JSON.stringify({
         query,
-        count: 0,
-        processing_time_ms: 0,
+        max_results,
+      });
+      
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const searchRequest = new NextRequest(`${baseUrl}/api/web-search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: searchBody,
+      });
+
+      const searchResponse = await fetch(searchRequest.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: searchBody,
+      });
+
+      if (!searchResponse.ok) {
+        const error = await searchResponse.json();
+        throw new Error(`Web search failed: ${error.error || 'Unknown error'}`);
+      }
+
+      const searchData = await searchResponse.json();
+      
+      console.log(`[Tool] web_search completed: ${searchData.count} results`);
+      
+      return {
+        ...searchData,
         tool_used: 'web_search',
-        error: 'Web search not yet implemented - requires MCP integration',
       };
     } catch (error) {
       console.error(`[Tool] web_search error:`, error);

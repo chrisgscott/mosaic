@@ -216,14 +216,26 @@ export async function POST(request: Request) {
           
           console.log(`[Chat] Extracted ${sources.length} sources from tool results`);
 
-          // Insert all messages (including new response)
-          const messagesToSave = allMessages.map((msg) => ({
+          // Get the current max message_index for this session
+          const { data: lastMessage } = await supabase
+            .from('chat_messages')
+            .select('message_index')
+            .eq('session_id', chatId)
+            .order('message_index', { ascending: false })
+            .limit(1)
+            .single();
+
+          const startIndex = (lastMessage?.message_index ?? -1) + 1;
+
+          // Insert all messages (including new response) with sequential indices
+          const messagesToSave = allMessages.map((msg, idx) => ({
             session_id: chatId,
             role: msg.role,
             content: msg.parts
               .filter(p => p.type === 'text')
               .map(p => p.text)
               .join(''),
+            message_index: startIndex + idx,
             metadata: msg.role === 'assistant' ? {
               sources, // Include full source metadata for inline citations
             } : {},

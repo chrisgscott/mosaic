@@ -13,12 +13,12 @@ export async function GET(
     const supabase = await createClient();
     const { id: chatId } = await params;
 
-    // Fetch messages from database
+    // Fetch messages from database ordered by message_index
     const { data: messages, error } = await supabase
       .from('chat_messages')
       .select('*')
       .eq('session_id', chatId)
-      .order('created_at', { ascending: true });
+      .order('message_index', { ascending: true });
 
     if (error) {
       console.error('[Messages API] Error fetching messages:', error);

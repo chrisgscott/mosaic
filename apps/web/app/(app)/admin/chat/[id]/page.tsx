@@ -44,12 +44,12 @@ export default async function ChatSessionPage({
     notFound();
   }
 
-  // Load messages for this session
+  // Load messages for this session ordered by message_index
   const { data: messages, error: messagesError } = await supabase
     .from('chat_messages')
     .select('*')
     .eq('session_id', id)
-    .order('created_at', { ascending: true });
+    .order('message_index', { ascending: true });
 
   if (messagesError) {
     throw new Error('Failed to load messages');

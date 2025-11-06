@@ -29,8 +29,7 @@ import {
 } from '@/components/ui/shadcn-io/ai/reasoning';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ui/shadcn-io/ai/source';
 import { Button } from '@/components/ui/button';
-import { RotateCcwIcon } from 'lucide-react';
-import { nanoid } from 'nanoid';
+import { Trash2 } from 'lucide-react';
 import { type FormEventHandler, useCallback, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { ProgressEvent } from '@/app/api/chat/route';
@@ -224,21 +223,29 @@ export function EnhancedChatClient({
     setEnhancedMessages(realMessages);
   }, [messages, status]);
 
-  const handleReset = useCallback(() => {
-    setMessages([]);
-    setEnhancedMessages([{
-      id: nanoid(),
-      role: 'assistant',
-      parts: [{ 
-        type: 'text' as const, 
-        text: "Hello! I'm your AI assistant. I can help you with coding questions, explain concepts, and provide guidance on web development topics. What would you like to know?" 
-      }],
-      createdAt: new Date(),
-      reasoning: undefined,
-      sources: undefined, // No sources for welcome message
-      isStreaming: false,
-    }]);
-  }, [setMessages]);
+  const handleDelete = useCallback(async () => {
+    if (!confirm('Are you sure you want to delete this chat? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/chat/sessions/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        console.log('[EnhancedChat] Session deleted successfully');
+        // Redirect to new chat
+        window.location.href = '/admin/chat';
+      } else {
+        console.error('[EnhancedChat] Failed to delete session');
+        alert('Failed to delete chat session. Please try again.');
+      }
+    } catch (error) {
+      console.error('[EnhancedChat] Error deleting session:', error);
+      alert('An error occurred while deleting the chat.');
+    }
+  }, [id]);
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = useCallback((event) => {
     event.preventDefault();
@@ -288,11 +295,11 @@ export function EnhancedChatClient({
         <Button 
           variant="ghost" 
           size="sm"
-          onClick={handleReset}
-          className="h-8 px-2"
+          onClick={handleDelete}
+          className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
         >
-          <RotateCcwIcon className="size-4" />
-          <span className="ml-1">Reset</span>
+          <Trash2 className="size-4" />
+          <span className="sr-only">Delete chat</span>
         </Button>
       </div>
 

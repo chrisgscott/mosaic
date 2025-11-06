@@ -37,7 +37,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Globe, MoreVertical, Trash2 } from 'lucide-react';
-import { type FormEventHandler, useCallback, useEffect, useState } from 'react';
+import { type FormEventHandler, useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { ProgressEvent } from '@/app/api/chat/route';
 
@@ -122,8 +122,14 @@ export function EnhancedChatClient({
 }) {
   const [selectedModel, setSelectedModel] = useState('standard'); // Default to standard model
   const [webSearchEnabled, setWebSearchEnabled] = useState(false); // Web search toggle
+  const webSearchEnabledRef = useRef(webSearchEnabled); // Ref to always have current value
   const [currentTitle, setCurrentTitle] = useState(sessionTitle);
   const [currentUpdatedAt, setCurrentUpdatedAt] = useState(updatedAt);
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    webSearchEnabledRef.current = webSearchEnabled;
+  }, [webSearchEnabled]);
   
   // SSE progress stream for real-time updates
   const { currentStep } = useProgressStream(id);
@@ -141,7 +147,7 @@ export function EnhancedChatClient({
             message: messages[messages.length - 1],
             chatId: id,
             model: selectedModel,
-            webSearchEnabled,
+            webSearchEnabled: webSearchEnabledRef.current,
           },
         };
       },

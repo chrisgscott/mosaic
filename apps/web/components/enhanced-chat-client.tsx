@@ -115,6 +115,8 @@ export function EnhancedChatClient({
   updatedAt?: string;
 }) {
   const [selectedModel, setSelectedModel] = useState('standard'); // Default to standard model
+  const [currentTitle, setCurrentTitle] = useState(sessionTitle);
+  const [currentUpdatedAt, setCurrentUpdatedAt] = useState(updatedAt);
   
   // SSE progress stream for real-time updates
   const { currentStep } = useProgressStream(id);
@@ -148,12 +150,25 @@ export function EnhancedChatClient({
       
       try {
         // Fetch updated messages from DB (includes sources)
-        const response = await fetch(`/api/chat/${id}/messages`);
-        if (response.ok) {
-          const { messages: updatedMessages } = await response.json();
+        const messagesResponse = await fetch(`/api/chat/${id}/messages`);
+        if (messagesResponse.ok) {
+          const { messages: updatedMessages } = await messagesResponse.json();
           // Update the chat with messages that include sources
           setMessages(updatedMessages);
           console.log('[EnhancedChat] Messages reloaded with sources');
+        }
+
+        // Fetch updated session metadata (title, updatedAt)
+        const sessionResponse = await fetch(`/api/chat/sessions/${id}`);
+        if (sessionResponse.ok) {
+          const { session } = await sessionResponse.json();
+          if (session.title) {
+            setCurrentTitle(session.title);
+            console.log('[EnhancedChat] Title updated:', session.title);
+          }
+          if (session.updated_at) {
+            setCurrentUpdatedAt(session.updated_at);
+          }
         }
       } catch (error) {
         console.error('[EnhancedChat] Failed to reload messages:', error);
@@ -259,13 +274,13 @@ export function EnhancedChatClient({
       <div className="flex items-center justify-between border-b bg-muted/50 px-4 py-3 shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-sm">{sessionTitle}</span>
+            <span className="font-medium text-sm">{currentTitle}</span>
           </div>
-          {updatedAt && (
+          {currentUpdatedAt && (
             <>
               <div className="h-4 w-px bg-border" />
               <span className="text-muted-foreground text-xs">
-                Updated {formatRelativeTime(updatedAt)}
+                Updated {formatRelativeTime(currentUpdatedAt)}
               </span>
             </>
           )}

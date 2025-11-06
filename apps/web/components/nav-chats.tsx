@@ -27,7 +27,7 @@ export function NavChats() {
 
   useEffect(() => {
     fetchSessions()
-  }, [])
+  }, [pathname]) // Refresh when navigating between chats
 
   async function fetchSessions() {
     try {

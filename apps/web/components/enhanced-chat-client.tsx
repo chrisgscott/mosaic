@@ -530,6 +530,35 @@ export function EnhancedChatClient({
           />
           <PromptInputToolbar>
             <PromptInputTools>
+              <PromptInputModelSelect 
+                value={selectedModel} 
+                onValueChange={setSelectedModel}
+                disabled={status === 'streaming'}
+              >
+                <PromptInputModelSelectTrigger>
+                  <PromptInputModelSelectValue />
+                </PromptInputModelSelectTrigger>
+                <PromptInputModelSelectContent>
+                  {models.map((model) => (
+                    <PromptInputModelSelectItem 
+                      key={model.id} 
+                      value={model.id}
+                      disabled={model.disabled}
+                      title={model.description}
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{model.name}</span>
+                          <span className="text-xs text-muted-foreground">{model.subtitle}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {model.description}
+                        </span>
+                      </div>
+                    </PromptInputModelSelectItem>
+                  ))}
+                </PromptInputModelSelectContent>
+              </PromptInputModelSelect>
               <PromptInputButton
                 type="button"
                 variant="ghost"
@@ -564,35 +593,6 @@ export function EnhancedChatClient({
               >
                 <Globe className="size-4" />
               </PromptInputButton>
-              <PromptInputModelSelect 
-                value={selectedModel} 
-                onValueChange={setSelectedModel}
-                disabled={status === 'streaming'}
-              >
-                <PromptInputModelSelectTrigger>
-                  <PromptInputModelSelectValue />
-                </PromptInputModelSelectTrigger>
-                <PromptInputModelSelectContent>
-                  {models.map((model) => (
-                    <PromptInputModelSelectItem 
-                      key={model.id} 
-                      value={model.id}
-                      disabled={model.disabled}
-                      title={model.description}
-                    >
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{model.name}</span>
-                          <span className="text-xs text-muted-foreground">{model.subtitle}</span>
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          {model.description}
-                        </span>
-                      </div>
-                    </PromptInputModelSelectItem>
-                  ))}
-                </PromptInputModelSelectContent>
-              </PromptInputModelSelect>
             </PromptInputTools>
             <PromptInputSubmit 
               disabled={status === 'streaming'}

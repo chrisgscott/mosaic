@@ -121,12 +121,17 @@ export function EnhancedChatClient({
   updatedAt?: string;
 }) {
   const [selectedModel, setSelectedModel] = useState('standard'); // Default to standard model
+  const selectedModelRef = useRef(selectedModel); // Ref to always have current value
   const [webSearchEnabled, setWebSearchEnabled] = useState(false); // Web search toggle
   const webSearchEnabledRef = useRef(webSearchEnabled); // Ref to always have current value
   const [currentTitle, setCurrentTitle] = useState(sessionTitle);
   const [currentUpdatedAt, setCurrentUpdatedAt] = useState(updatedAt);
   
-  // Keep ref in sync with state
+  // Keep refs in sync with state
+  useEffect(() => {
+    selectedModelRef.current = selectedModel;
+  }, [selectedModel]);
+  
   useEffect(() => {
     webSearchEnabledRef.current = webSearchEnabled;
   }, [webSearchEnabled]);
@@ -146,7 +151,7 @@ export function EnhancedChatClient({
           body: {
             message: messages[messages.length - 1],
             chatId: id,
-            model: selectedModel,
+            model: selectedModelRef.current,
             webSearchEnabled: webSearchEnabledRef.current,
           },
         };

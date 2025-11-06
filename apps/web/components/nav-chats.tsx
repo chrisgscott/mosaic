@@ -50,7 +50,7 @@ export function NavChats() {
       <SidebarMenu>
         {/* New Chat Button */}
         <div className="px-2 pb-2">
-          <Button asChild variant="secondary" className="w-full justify-start" size="sm">
+          <Button asChild variant="ghost" className="w-full justify-start" size="sm">
             <Link href="/admin/chat">
               <Plus className="h-4 w-4 mr-2" />
               New Chat

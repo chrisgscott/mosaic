@@ -28,7 +28,6 @@ import {
   ReasoningTrigger,
 } from '@/components/ui/shadcn-io/ai/reasoning';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ui/shadcn-io/ai/source';
-import { Task, TaskTrigger, TaskContent, TaskItem } from '@/components/ui/shadcn-io/ai/task';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { RotateCcwIcon } from 'lucide-react';
@@ -94,7 +93,7 @@ export function EnhancedChatClient({
   const [selectedModel, setSelectedModel] = useState('standard'); // Default to standard model
   
   // SSE progress stream for real-time updates
-  const { progress } = useProgressStream(id);
+  const { currentStep } = useProgressStream(id);
   
   // useChat hook with session persistence
   const { messages, sendMessage, status, error, setMessages } = useChat({
@@ -282,22 +281,10 @@ export function EnhancedChatClient({
                         <div className="space-y-3">
                           <div className="flex items-center gap-2">
                             <Loader size={14} />
-                            <span className="text-muted-foreground text-sm">Thinking...</span>
+                            <span className="text-muted-foreground text-sm">{currentStep || 'Thinking...'}</span>
                           </div>
                           
-                          {/* Real-time Progress Display */}
-                          {progress && progress.length > 0 && (
-                            <Task defaultOpen={true}>
-                              <TaskTrigger title="Search Process" />
-                              <TaskContent>
-                                {progress.map((progressEvent, idx) => (
-                                  <TaskItem key={idx}>
-                                    {progressEvent.message} {progressEvent.status === 'completed' ? '✓' : '...'}
-                                  </TaskItem>
-                                ))}
-                              </TaskContent>
-                            </Task>
-                          )}
+                          {/* Real-time Progress Display - now using simple currentStep above */}
                         </div>
                       );
                     }
@@ -306,19 +293,7 @@ export function EnhancedChatClient({
                     if (message.role === 'assistant') {
                       return (
                         <div className="space-y-3">
-                          {/* Progress for completed messages */}
-                          {!message.isStreaming && progress && progress.length > 0 && (
-                            <Task defaultOpen={false}>
-                              <TaskTrigger title="Search Process" />
-                              <TaskContent>
-                                {progress.map((progressEvent, idx) => (
-                                  <TaskItem key={idx}>
-                                    {progressEvent.message} ✓
-                                  </TaskItem>
-                                ))}
-                              </TaskContent>
-                            </Task>
-                          )}
+                          {/* Progress for completed messages - not shown with simple display */}
                           
                           <div className="prose prose-sm dark:prose-invert max-w-none">
                             <ReactMarkdown

@@ -3,6 +3,7 @@ import type { ProgressEvent } from '@/app/api/chat/route';
 
 export function useProgressStream(sessionId: string | null) {
   const [progress, setProgress] = useState<ProgressEvent[]>([]);
+  const [currentStep, setCurrentStep] = useState<string>('');
   const [isConnected, setIsConnected] = useState(false);
 
   const connect = useCallback(() => {
@@ -29,10 +30,15 @@ export function useProgressStream(sessionId: string | null) {
           setIsConnected(false);
           eventSource.close();
         } else {
-          // Try to parse as progress JSON
+          // Try to parse as progress JSON array
           const progress = JSON.parse(message);
-          setProgress(progress);
-          console.log('[Progress SSE] Received progress:', progress);
+          if (Array.isArray(progress) && progress.length > 0) {
+            setProgress(progress);
+            // Track the latest progress step for simple display
+            const latestStep = progress[progress.length - 1];
+            setCurrentStep(latestStep?.message || '');
+            console.log('[Progress SSE] Received progress:', progress);
+          }
         }
       } catch (error) {
         console.error('[Progress SSE] Error parsing message:', error);
@@ -72,10 +78,12 @@ export function useProgressStream(sessionId: string | null) {
 
   const clearProgress = useCallback(() => {
     setProgress([]);
+    setCurrentStep('');
   }, []);
 
   return {
     progress,
+    currentStep,
     isConnected,
     clearProgress,
   };

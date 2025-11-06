@@ -36,7 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Globe, MoreVertical, Trash2 } from 'lucide-react';
+import { Globe, MoreVertical, Paperclip, Trash2 } from 'lucide-react';
 import { type FormEventHandler, useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -155,6 +155,8 @@ export function EnhancedChatClient({
   const selectedModelRef = useRef(selectedModel); // Ref to always have current value
   const [webSearchEnabled, setWebSearchEnabled] = useState(false); // Web search toggle
   const webSearchEnabledRef = useRef(webSearchEnabled); // Ref to always have current value
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; id: string }>>([]); // Session files
+  const fileInputRef = useRef<HTMLInputElement>(null); // File input ref
   const [currentTitle, setCurrentTitle] = useState(sessionTitle);
   const [currentUpdatedAt, setCurrentUpdatedAt] = useState(updatedAt);
   
@@ -528,7 +530,30 @@ export function EnhancedChatClient({
           />
           <PromptInputToolbar>
             <PromptInputTools>
-              {/* Web Search Toggle */}
+              <PromptInputButton
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={status === 'streaming'}
+                title="Upload files for this session"
+              >
+                <Paperclip className="size-4" />
+              </PromptInputButton>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.txt,.md,.doc,.docx"
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  if (files.length > 0) {
+                    // TODO: Handle file upload
+                    console.log('Files selected:', files);
+                  }
+                }}
+              />
               <PromptInputButton
                 type="button"
                 variant={webSearchEnabled ? 'default' : 'ghost'}

@@ -32,12 +32,18 @@ export function useProgressStream(sessionId: string | null) {
         } else {
           // Try to parse as progress JSON array
           const progress = JSON.parse(message);
-          if (Array.isArray(progress) && progress.length > 0) {
+          if (Array.isArray(progress)) {
             setProgress(progress);
             // Track the latest progress step for simple display
-            const latestStep = progress[progress.length - 1];
-            setCurrentStep(latestStep?.message || '');
-            console.log('[Progress SSE] Received progress:', progress);
+            if (progress.length > 0) {
+              const latestStep = progress[progress.length - 1];
+              setCurrentStep(latestStep?.message || '');
+              console.log('[Progress SSE] Received progress:', progress);
+            } else {
+              // Empty array means reset
+              setCurrentStep('');
+              console.log('[Progress SSE] Progress reset (empty array)');
+            }
           }
         }
       } catch (error) {

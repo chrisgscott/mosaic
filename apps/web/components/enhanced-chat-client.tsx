@@ -149,8 +149,17 @@ export function EnhancedChatClient({
 
   // Update enhanced messages when chat messages change
   useEffect(() => {
+    // Sort messages by createdAt to ensure correct order
+    const sortedMessages = [...messages].sort((a, b) => {
+      const aMsg = a as EnhancedChatMessage;
+      const bMsg = b as EnhancedChatMessage;
+      const aTime = aMsg.createdAt ? new Date(aMsg.createdAt).getTime() : 0;
+      const bTime = bMsg.createdAt ? new Date(bMsg.createdAt).getTime() : 0;
+      return aTime - bTime;
+    });
+    
     // Map real messages with enhanced data
-    const realMessages = messages.map(msg => {
+    const realMessages = sortedMessages.map(msg => {
       // Check both metadata (streaming) and data (DB load) for sources
       const metadata = (msg as { metadata?: { sources?: Citation[]; progress?: ProgressEvent[] } }).metadata;
       const data = (msg as { data?: { sources?: Citation[]; progress?: ProgressEvent[] } }).data;

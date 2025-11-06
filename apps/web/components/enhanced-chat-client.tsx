@@ -452,10 +452,10 @@ export function EnhancedChatClient({
                                     {children}
                                   </blockquote>
                                 ),
-                                h1: ({ children }) => <h1 className="mb-4 text-2xl font-bold">{children}</h1>,
-                                h2: ({ children }) => <h2 className="mb-3 text-xl font-semibold">{children}</h2>,
-                                h3: ({ children }) => <h3 className="mb-2 text-lg font-semibold">{children}</h3>,
-                                h4: ({ children }) => <h4 className="mb-2 text-base font-semibold">{children}</h4>,
+                                h1: ({ children }) => <h1 className="mt-6 mb-4 text-2xl font-bold first:mt-0">{children}</h1>,
+                                h2: ({ children }) => <h2 className="mt-5 mb-3 text-xl font-semibold first:mt-0">{children}</h2>,
+                                h3: ({ children }) => <h3 className="mt-4 mb-2 text-lg font-semibold first:mt-0">{children}</h3>,
+                                h4: ({ children }) => <h4 className="mt-3 mb-2 text-base font-semibold first:mt-0">{children}</h4>,
                                 // Table components for proper rendering
                                 table: ({ children }) => (
                                   <div className="mb-4 overflow-x-auto">

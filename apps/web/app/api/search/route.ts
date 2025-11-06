@@ -570,6 +570,9 @@ export async function POST(request: NextRequest) {
     } else {
       // Simple query: skip HyDE, use direct embedding
       console.log(`[Search] Simple query, skipping HyDE`);
+      onProgress(createProgressEvent('analyzing', 'completed'));
+      
+      onProgress(createProgressEvent('creating-embeddings', 'in-progress'));
       const embeddingResponse = await openai.embeddings.create({
         model: "text-embedding-3-small",
         input: query,
@@ -578,8 +581,10 @@ export async function POST(request: NextRequest) {
       
       const queryEmbedding = embeddingResponse.data[0].embedding;
       console.log(`[Search] Generated embedding (${queryEmbedding.length} dimensions)`);
+      onProgress(createProgressEvent('creating-embeddings', 'completed'));
       
       // Perform hybrid search
+      onProgress(createProgressEvent('searching', 'in-progress'));
       const candidateCount = match_count * 2;
       console.log(`[Search] Hybrid search with threshold=${match_threshold}, candidates=${candidateCount}, user=${user.id}`);
       const { data, error } = await supabase.rpc("search_chunks_hybrid", {
@@ -600,14 +605,17 @@ export async function POST(request: NextRequest) {
       }
 
       console.log(`[Search] Found ${data?.length || 0} hybrid search candidates`);
+      onProgress(createProgressEvent('searching', 'completed'));
       
       let finalResults: SearchResult[] = data || [];
       
       // Rerank the candidates to get best final results (if enabled)
       if (finalResults.length > 0 && use_reranking) {
+        onProgress(createProgressEvent('reranking', 'in-progress'));
         finalResults = await rerankResults(query, finalResults);
         // Limit to requested count after reranking
         finalResults = finalResults.slice(0, match_count);
+        onProgress(createProgressEvent('reranking', 'completed'));
       } else if (finalResults.length > 0) {
         // Just limit to match_count if reranking is disabled
         finalResults = finalResults.slice(0, match_count);
@@ -625,6 +633,7 @@ export async function POST(request: NextRequest) {
       }
 
       const processingTime = Date.now() - startTime;
+      onProgress(createProgressEvent('complete', 'completed'));
 
       // Log search signal for graph learning
       // Note: We await this to ensure it completes in serverless environment

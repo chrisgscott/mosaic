@@ -181,3 +181,113 @@ Long filenames in the upload modal overflow their container instead of truncatin
 
 ### Priority
 Low - Cosmetic issue only. Filenames are still readable and the tooltip shows the full name on hover.
+
+---
+
+## Chat Sources Temporarily Disappear During Race Condition
+
+**Date:** November 6, 2025  
+**Component:** Chat interface (`/admin/chat/[id]`)  
+**Status:** 🟡 Low Priority
+
+### Problem
+When the LLM answers a follow-up question without calling any tools (using only conversation context), source citations from ALL previous messages in the session temporarily disappear from the UI. They reappear when the next message that calls a tool completes.
+
+### Context
+- **Trigger**: LLM decides it has enough context from previous messages to answer without searching
+- **Example**: User asks "How does that copper relate to use cases?" after already discussing copper specs
+- **LLM behavior**: Answers from conversation memory, no `search_documents` tool call
+- **Result**: Sources vanish briefly, then reappear on next tool-calling message
+
+### Root Cause
+The chat route uses a **DELETE + INSERT** pattern instead of UPDATE when saving messages:
+
+```typescript
+// Delete ALL messages for session
+await supabase.from('chat_messages').delete().eq('session_id', chatId);
+
+// Insert ALL messages fresh (including old ones with sources)
+await supabase.from('chat_messages').insert(messagesToSave);
+```
+
+**Race condition timeline:**
+1. Message 3 completes (no tool call, no sources)
+2. `onFinish` triggers → DELETE all messages
+3. Frontend `onFinish` (500ms delay) → Fetches messages from DB
+4. **Race**: Fetch happens during DELETE but before INSERT completes
+5. Frontend gets empty or incomplete message set
+6. Sources disappear from UI
+7. Message 4 completes (with tool call)
+8. `onFinish` triggers → DELETE + INSERT all 8 messages with sources
+9. Frontend reload → Gets complete data
+10. Sources reappear ✅
+
+### What We've Verified
+
+1. ✅ **Sources are saved correctly** - Backend logs confirm extraction and DB save
+2. ✅ **Data is never lost** - Sources persist in database
+3. ✅ **Self-correcting** - Next message reload fixes the display
+4. ✅ **Page refresh works** - Always shows correct data from DB
+5. ✅ **LLM behavior is correct** - Should use conversation context when available
+
+### Logs Evidence
+
+**Message 3 (no tool):**
+```
+[Chat] Extracted 0 sources from tool results
+[Chat] Saved 6 messages to session 7c5e32a4-9053-4cc7-b127-566d3493c2eb
+POST /api/chat 200 in 8872ms
+GET /api/chat/7c5e32a4-9053-4cc7-b127-566d3493c2eb/messages 200 in 408ms
+```
+
+**Message 4 (with tool):**
+```
+[Chat] Extracted 10 sources from tool results
+[Chat] Saved 8 messages to session 7c5e32a4-9053-4cc7-b127-566d3493c2eb
+POST /api/chat 200 in 8743ms
+GET /api/chat/7c5e32a4-9053-4cc7-b127-566d3493c2eb/messages 200 in 418ms
+```
+
+The messages GET happens ~400ms after POST completes, but frontend has 500ms delay, creating the race window.
+
+### Possible Solutions
+
+1. **Use UPSERT instead of DELETE+INSERT** (Recommended - 1 hour)
+   - Use `upsert()` with `onConflict` on message ID
+   - Atomic operation, no race condition
+   - More efficient (updates only changed rows)
+   ```typescript
+   await supabase.from('chat_messages')
+     .upsert(messagesToSave, { onConflict: 'id' });
+   ```
+
+2. **Add database transaction** (Medium - 1-2 hours)
+   - Wrap DELETE+INSERT in transaction
+   - Ensures atomic operation
+   - Prevents partial reads during save
+
+3. **Optimistic UI updates** (Complex - 2-3 hours)
+   - Don't reload from DB after every message
+   - Merge sources into existing message state
+   - Only reload on page load or explicit refresh
+   - More complex state management
+
+4. **Increase frontend delay** (Quick hack - 5 min)
+   - Change 500ms delay to 1000ms
+   - Reduces race window but doesn't eliminate it
+   - Not a real fix
+
+### Related Files
+- `/apps/web/app/api/chat/route.ts` - DELETE+INSERT logic in `onFinish`
+- `/apps/web/components/enhanced-chat-client.tsx` - Frontend reload logic
+- `/apps/web/app/api/chat/[id]/messages/route.ts` - Messages fetch endpoint
+
+### Priority
+**Low** - This is a minor UX quirk with acceptable workarounds:
+- Only happens when LLM doesn't call tools (rare)
+- Self-corrects on next message
+- No data loss
+- Page refresh always shows correct data
+- Doesn't affect core functionality
+
+**Recommendation:** Fix when doing broader chat persistence refactor, not urgent.

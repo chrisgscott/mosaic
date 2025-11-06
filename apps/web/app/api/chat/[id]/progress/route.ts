@@ -106,6 +106,20 @@ export function addProgress(sessionId: string, message: string, status: 'in-prog
   if (message === 'Analyzing your question') {
     progressStore.set(sessionId, []);
     console.log(`[Progress SSE] Reset progress for new message - session: ${sessionId}`);
+    
+    // Immediately push empty array to clear frontend
+    const controller = activeControllers.get(sessionId);
+    if (controller) {
+      try {
+        const encoder = new TextEncoder();
+        const progressData = `data: []\n\n`;
+        controller.enqueue(encoder.encode(progressData));
+        console.log(`[Progress SSE] Pushed reset (empty array) to session: ${sessionId}`);
+      } catch (error) {
+        console.error(`[Progress SSE] Error pushing reset:`, error);
+        activeControllers.delete(sessionId);
+      }
+    }
   }
   
   const progress = progressStore.get(sessionId) || [];

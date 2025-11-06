@@ -91,21 +91,28 @@ const models = [
     id: 'quick', 
     name: 'Quick', 
     subtitle: 'GPT-4.1 Nano',
-    description: 'Fast responses for simple questions',
+    description: 'Fastest - simple Q&A and basic tasks',
     disabled: false 
   },
   { 
     id: 'standard', 
     name: 'Standard', 
     subtitle: 'GPT-4o Mini',
-    description: 'Balanced speed and quality (default)',
+    description: 'Balanced speed and quality (recommended)',
     disabled: false 
   },
   { 
     id: 'detailed', 
     name: 'Detailed', 
     subtitle: 'GPT-4.1',
-    description: 'Best for complex analysis with document/web search',
+    description: 'Deep analysis with full document/web search',
+    disabled: false 
+  },
+  { 
+    id: 'summary', 
+    name: 'Summary', 
+    subtitle: 'GPT-4.1 Mini',
+    description: 'Specialized for condensing long content',
     disabled: false 
   },
   { 
@@ -114,13 +121,6 @@ const models = [
     subtitle: 'o4 Mini',
     description: 'Coming soon with multi-agent research system',
     disabled: true 
-  },
-  { 
-    id: 'summary', 
-    name: 'Summary', 
-    subtitle: 'GPT-4.1 Mini',
-    description: 'Concise summaries and quick overviews',
-    disabled: false 
   },
 ];
 

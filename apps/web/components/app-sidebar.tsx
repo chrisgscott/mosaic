@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import { NavMain } from "@/components/nav-main"
+import { NavChats } from "@/components/nav-chats"
 import { NavAdmin } from "@/components/nav-admin"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
@@ -37,11 +38,6 @@ const data = {
       title: "Search",
       url: "/admin/search",
       icon: "Search",
-    },
-    {
-      title: "Chat",
-      url: "/admin/chat",
-      icon: "MessageSquare",
     },
     {
       title: "Knowledge Graph",
@@ -128,6 +124,7 @@ export async function AppSidebar({ ...props }: React.ComponentProps<typeof Sideb
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
+        <NavChats />
         <NavSecondary items={data.navSecondary} className="mt-auto" />
         {isAdmin && <NavAdmin items={data.admin} />}
       </SidebarContent>

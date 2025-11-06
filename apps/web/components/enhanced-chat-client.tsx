@@ -87,11 +87,41 @@ type EnhancedChatMessage = UIMessage & {
 
 // Available models - using our semantic model keys
 const models = [
-  { id: 'quick', name: 'Quick (GPT-4.1 Nano)', disabled: false },
-  { id: 'standard', name: 'Standard (GPT-4o Mini)', disabled: false },
-  { id: 'detailed', name: 'Detailed (GPT-4.1)', disabled: false },
-  { id: 'deepResearch', name: 'Deep Research (o4 Mini)', disabled: true, tooltip: 'Coming soon with multi-agent research system' },
-  { id: 'summary', name: 'Summary (GPT-4.1 Mini)', disabled: false },
+  { 
+    id: 'quick', 
+    name: 'Quick', 
+    subtitle: 'GPT-4.1 Nano',
+    description: 'Fast responses for simple questions',
+    disabled: false 
+  },
+  { 
+    id: 'standard', 
+    name: 'Standard', 
+    subtitle: 'GPT-4o Mini',
+    description: 'Balanced speed and quality (default)',
+    disabled: false 
+  },
+  { 
+    id: 'detailed', 
+    name: 'Detailed', 
+    subtitle: 'GPT-4.1',
+    description: 'Best for complex analysis with document/web search',
+    disabled: false 
+  },
+  { 
+    id: 'deepResearch', 
+    name: 'Deep Research', 
+    subtitle: 'o4 Mini',
+    description: 'Coming soon with multi-agent research system',
+    disabled: true 
+  },
+  { 
+    id: 'summary', 
+    name: 'Summary', 
+    subtitle: 'GPT-4.1 Mini',
+    description: 'Concise summaries and quick overviews',
+    disabled: false 
+  },
 ];
 
 /**
@@ -506,14 +536,17 @@ export function EnhancedChatClient({
                       key={model.id} 
                       value={model.id}
                       disabled={model.disabled}
-                      title={model.tooltip}
+                      title={model.description}
                     >
-                      {model.name}
-                      {model.disabled && model.tooltip && (
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          ({model.tooltip})
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{model.name}</span>
+                          <span className="text-xs text-muted-foreground">{model.subtitle}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {model.description}
                         </span>
-                      )}
+                      </div>
                     </PromptInputModelSelectItem>
                   ))}
                 </PromptInputModelSelectContent>

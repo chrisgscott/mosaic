@@ -87,7 +87,7 @@ export async function POST(
             file_path: uploadData.path,
             file_size: file.size,
             file_type: file.type || 'application/octet-stream',
-            status: 'pending',
+            status: 'uploaded', // Must match documents_status_check constraint
             session_id: sessionId, // Link to session
           })
           .select()
@@ -126,7 +126,7 @@ export async function POST(
           id: document.id,
           fileName: file.name,
           fileSize: file.size,
-          status: 'pending',
+          status: 'uploaded',
         });
       } catch (error) {
         console.error(`[Upload] Unexpected error for ${file.name}:`, error);

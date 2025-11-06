@@ -223,7 +223,16 @@ export const webSearchTool = tool({
   execute: async ({ query, max_results = 5 }) => {
     console.log(`[Tool] web_search called with query: "${query}"`);
     
+    // Get session ID from global context
+    const sessionId = (global as typeof global & { currentChatSessionId?: string }).currentChatSessionId;
+    
     try {
+      // Add progress message
+      if (sessionId) {
+        const { addProgress } = await import('@/app/api/chat/[id]/progress/route');
+        addProgress(sessionId, 'Searching the web', 'in-progress');
+      }
+      
       // Call the web search API directly (internal call, no auth needed)
       const { POST: webSearchAPI } = await import('@/app/api/web-search/route');
       
@@ -250,12 +259,25 @@ export const webSearchTool = tool({
       
       console.log(`[Tool] web_search completed: ${searchData.count} results`);
       
+      // Update progress with results count
+      if (sessionId) {
+        const { addProgress } = await import('@/app/api/chat/[id]/progress/route');
+        addProgress(sessionId, `Found ${searchData.count} web sources`, 'completed');
+      }
+      
       return {
         ...searchData,
         tool_used: 'web_search',
       };
     } catch (error) {
       console.error(`[Tool] web_search error:`, error);
+      
+      // Update progress with error
+      if (sessionId) {
+        const { addProgress } = await import('@/app/api/chat/[id]/progress/route');
+        addProgress(sessionId, 'Web search failed', 'completed');
+      }
+      
       return {
         results: [],
         query,

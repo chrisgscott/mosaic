@@ -70,7 +70,13 @@ export default async function ChatSessionPage({
 
   return (
     <div className="h-screen flex flex-col p-4">
-      <EnhancedChatClient id={id} initialMessages={initialMessages} />
+      <EnhancedChatClient 
+        id={id} 
+        initialMessages={initialMessages}
+        sessionTitle={session.title}
+        createdAt={session.created_at}
+        updatedAt={session.updated_at}
+      />
     </div>
   );
 }

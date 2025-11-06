@@ -29,7 +29,6 @@ import {
 } from '@/components/ui/shadcn-io/ai/reasoning';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ui/shadcn-io/ai/source';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import { RotateCcwIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { type FormEventHandler, useCallback, useEffect, useState } from 'react';
@@ -86,9 +85,15 @@ const models = [
 export function EnhancedChatClient({
   id,
   initialMessages = [],
+  sessionTitle = 'New Chat',
+  createdAt,
+  updatedAt,
 }: {
   id: string;
   initialMessages?: UIMessage[];
+  sessionTitle?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }) {
   const [selectedModel, setSelectedModel] = useState('standard'); // Default to standard model
   
@@ -235,15 +240,11 @@ export function EnhancedChatClient({
       <div className="flex items-center justify-between border-b bg-muted/50 px-4 py-3 shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <div className={cn(
-              "size-2 rounded-full",
-              status === 'streaming' ? "bg-green-500 animate-pulse" : "bg-green-500"
-            )} />
-            <span className="font-medium text-sm">AI Assistant</span>
+            <span className="font-medium text-sm">{sessionTitle}</span>
           </div>
           <div className="h-4 w-px bg-border" />
           <span className="text-muted-foreground text-xs">
-            {models.find(m => m.id === selectedModel)?.name}
+            {enhancedMessages.length} {enhancedMessages.length === 1 ? 'message' : 'messages'}
           </span>
         </div>
         <Button 

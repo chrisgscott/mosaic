@@ -35,7 +35,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreVertical, Trash2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Globe, MoreVertical, Trash2 } from 'lucide-react';
 import { type FormEventHandler, useCallback, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { ProgressEvent } from '@/app/api/chat/route';
@@ -120,6 +122,7 @@ export function EnhancedChatClient({
   updatedAt?: string;
 }) {
   const [selectedModel, setSelectedModel] = useState('standard'); // Default to standard model
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false); // Web search toggle
   const [currentTitle, setCurrentTitle] = useState(sessionTitle);
   const [currentUpdatedAt, setCurrentUpdatedAt] = useState(updatedAt);
   
@@ -139,6 +142,7 @@ export function EnhancedChatClient({
             message: messages[messages.length - 1],
             chatId: id,
             model: selectedModel,
+            webSearchEnabled,
           },
         };
       },
@@ -303,7 +307,7 @@ export function EnhancedChatClient({
   return (
     <div className="flex h-full w-full flex-col overflow-hidden rounded-xl bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between border-b bg-muted/50 px-4 py-3 shrink-0">
+      <div className="flex items-center justify-between border-b bg-muted/33 px-4 py-3 shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="font-medium text-sm">{currentTitle}</span>
@@ -317,27 +321,45 @@ export function EnhancedChatClient({
             </>
           )}
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button 
-              variant="ghost" 
-              size="sm"
-              className="h-8 w-8 p-0"
+        <div className="flex items-center gap-2">
+          {/* Web Search Toggle */}
+          <div className="flex items-center gap-2">
+            <Switch
+              id="web-search"
+              checked={webSearchEnabled}
+              onCheckedChange={setWebSearchEnabled}
+              className="data-[state=checked]:bg-blue-600"
+            />
+            <Label 
+              htmlFor="web-search" 
+              className="text-xs text-muted-foreground cursor-pointer flex items-center gap-1"
             >
-              <MoreVertical className="size-4" />
-              <span className="sr-only">Chat options</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem 
-              onClick={handleDelete}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="size-4 mr-2" />
-              Delete chat
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <Globe className="size-3" />
+              Web Search
+            </Label>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="h-8 w-8 p-0"
+              >
+                <MoreVertical className="size-4" />
+                <span className="sr-only">Chat options</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem 
+                onClick={handleDelete}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="size-4 mr-2" />
+                Delete chat
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Conversation Area - Scrollable */}

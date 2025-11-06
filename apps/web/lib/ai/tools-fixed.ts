@@ -210,10 +210,57 @@ export const deepGraphSearchTool = tool({
 });
 
 /**
+ * Web search tool using Tavily
+ */
+export const webSearchTool = tool({
+  description: `Search the web for current information, news, or content not available in the document library. Use when the user asks about recent events, external information, or when document search returns insufficient results.`,
+  
+  inputSchema: z.object({
+    query: z.string().describe('The search query for web search'),
+    max_results: z.number().optional().default(5).describe('Maximum number of results to return (default: 5)'),
+  }),
+  
+  execute: async ({ query, max_results = 5 }) => {
+    console.log(`[Tool] web_search called with query: "${query}"`);
+    
+    try {
+      // Note: This will be called via MCP in the chat route
+      // For now, return a placeholder that will be replaced with actual MCP call
+      return {
+        results: [],
+        query,
+        count: 0,
+        processing_time_ms: 0,
+        tool_used: 'web_search',
+        error: 'Web search not yet implemented - requires MCP integration',
+      };
+    } catch (error) {
+      console.error(`[Tool] web_search error:`, error);
+      return {
+        results: [],
+        query,
+        count: 0,
+        processing_time_ms: 0,
+        tool_used: 'web_search',
+        error: error instanceof Error ? error.message : 'Web search failed',
+      };
+    }
+  },
+});
+
+/**
  * Export all tools for registration with AI SDK
  */
 export const searchTools = {
   search_documents: searchDocumentsTool,
   quick_search: quickSearchTool,
   deep_graph_search: deepGraphSearchTool,
+} as const;
+
+/**
+ * Export tools with web search enabled
+ */
+export const searchToolsWithWeb = {
+  ...searchTools,
+  web_search: webSearchTool,
 } as const;

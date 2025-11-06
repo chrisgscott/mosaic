@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { streamText, convertToModelMessages, createIdGenerator, stepCountIs, type UIMessage, generateText } from 'ai';
 import { getModelForDepth, type ModelDepth } from '@/lib/ai/gateway';
 import { getPrompt } from '@/lib/ai/prompts';
-import { searchTools } from "@/lib/ai/tools-fixed";
+import { searchTools, searchToolsWithWeb } from "@/lib/ai/tools-fixed";
 import { addProgress } from './[id]/progress/route';
 
 // Progress event type
@@ -50,8 +50,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // Parse request body - client sends message, chatId, and optional model
-    const { message, chatId, model }: { message: UIMessage | { text: string }; chatId: string; model?: string } = await request.json();
+    // Parse request body - client sends message, chatId, optional model, and webSearchEnabled
+    const { message, chatId, model, webSearchEnabled }: { 
+      message: UIMessage | { text: string }; 
+      chatId: string; 
+      model?: string;
+      webSearchEnabled?: boolean;
+    } = await request.json();
 
     if (!message || !chatId) {
       return new Response(
@@ -125,12 +130,16 @@ export async function POST(request: Request) {
     // Store session ID globally for tool access
     (global as typeof global & { currentChatSessionId?: string }).currentChatSessionId = chatId;
 
+    // Select tools based on web search toggle
+    const selectedTools = webSearchEnabled ? searchToolsWithWeb : searchTools;
+    console.log(`[Chat] Using tools: ${Object.keys(selectedTools).join(', ')}`);
+
     // Stream response using AI SDK with tools
     const result = streamText({
       model: await getModelForDepth(selectedModel as ModelDepth),
       system: systemPrompt,
       messages: convertToModelMessages(messages),
-      tools: searchTools,
+      tools: selectedTools,
       temperature: 0.3,
       stopWhen: stepCountIs(5), // Enable multi-step: AI can call tools then generate text response
     });

@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { streamText, convertToModelMessages, createIdGenerator, stepCountIs, type UIMessage } from 'ai';
+import { streamText, convertToModelMessages, createIdGenerator, stepCountIs, type UIMessage, generateText } from 'ai';
 import { getModelForDepth, type ModelDepth } from '@/lib/ai/gateway';
 import { getPrompt } from '@/lib/ai/prompts';
 import { searchTools } from "@/lib/ai/tools-fixed";
@@ -240,6 +240,12 @@ export async function POST(request: Request) {
           await supabase.from('chat_messages').insert(messagesToSave);
 
           console.log(`[Chat] Saved ${messagesToSave.length} messages to session ${chatId}`);
+
+          // Generate session title after first user message (async, non-blocking)
+          if (startIndex === 0) {
+            generateSessionTitle(chatId, allMessages[0].parts.filter(p => p.type === 'text').map(p => p.text).join(''))
+              .catch(err => console.error('[Chat] Failed to generate title:', err));
+          }
         } catch (error) {
           console.error('[Chat] Failed to save messages:', error);
           // Don't fail the chat if saving fails
@@ -255,5 +261,38 @@ export async function POST(request: Request) {
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
+  }
+}
+
+/**
+ * Generate a concise title for a chat session based on the first user message
+ * Uses gpt-4.1-nano for fast, cheap title generation
+ */
+async function generateSessionTitle(sessionId: string, firstMessage: string): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const quickModel = await getModelForDepth('quick');
+
+    const { text: title } = await generateText({
+      model: quickModel,
+      prompt: `Generate a concise, descriptive title (3-6 words) for a chat conversation that starts with this user message. Return ONLY the title, no quotes or extra text.\n\nUser message: ${firstMessage.substring(0, 500)}`,
+    });
+
+    // Clean up title (remove quotes, trim, capitalize)
+    const cleanTitle = title
+      .replace(/^["']|["']$/g, '') // Remove surrounding quotes
+      .trim()
+      .substring(0, 100); // Max 100 chars
+
+    // Update session title
+    await supabase
+      .from('chat_sessions')
+      .update({ title: cleanTitle })
+      .eq('id', sessionId);
+
+    console.log(`[Chat] Generated title for session ${sessionId}: "${cleanTitle}"`);
+  } catch (error) {
+    console.error('[Chat] Error generating session title:', error);
+    // Don't throw - title generation is non-critical
   }
 }

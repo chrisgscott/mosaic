@@ -7,6 +7,9 @@ const progressStore = new Map<string, Array<{
   timestamp: string;
 }>>();
 
+// Track active SSE controllers per session for immediate push
+const activeControllers = new Map<string, ReadableStreamDefaultController>();
+
 // Track completed sessions to close SSE streams
 const completedSessions = new Set<string>();
 
@@ -33,27 +36,39 @@ export async function GET(
     start(controller) {
       console.log(`[Progress SSE] Stream started for session: ${id}`);
       
+      // Register this controller for immediate push
+      activeControllers.set(id, controller);
+      
       try {
         // Send simple ping message first
         const pingData = `data: ping\n\n`;
         controller.enqueue(encoder.encode(pingData));
         console.log(`[Progress SSE] Sent ping message for session: ${id}`);
+        
+        // Send current progress if any exists
+        const currentProgress = progressStore.get(id) || [];
+        if (currentProgress.length > 0) {
+          const progressJson = JSON.stringify(currentProgress);
+          const progressData = `data: ${progressJson}\n\n`;
+          controller.enqueue(encoder.encode(progressData));
+          console.log(`[Progress SSE] Sent initial progress: ${currentProgress.length} events`);
+        }
       } catch (error) {
-        console.error(`[Progress SSE] Error sending ping message:`, error);
+        console.error(`[Progress SSE] Error sending initial messages:`, error);
         controller.error(error);
         return;
       }
 
-      // Set up interval to send keep-alive messages
+      // Set up interval only for keep-alive and completion check
       const interval = setInterval(() => {
         try {
           if (controller.desiredSize === null) {
-            // Stream is closed, stop interval
             clearInterval(interval);
+            activeControllers.delete(id);
             return;
           }
 
-          // Check if session is completed - close stream if so
+          // Check if session is completed
           if (completedSessions.has(id)) {
             const completeData = `data: completed\n\n`;
             controller.enqueue(encoder.encode(completeData));
@@ -61,30 +76,23 @@ export async function GET(
             controller.close();
             clearInterval(interval);
             completedSessions.delete(id);
+            activeControllers.delete(id);
             return;
           }
 
-          const progress = progressStore.get(id) || [];
-          if (progress.length > 0) {
-            const progressJson = JSON.stringify(progress);
-            const progressData = `data: ${progressJson}\n\n`;
-            controller.enqueue(encoder.encode(progressData));
-            console.log(`[Progress SSE] Sent progress data for session: ${id}, events: ${progress.length}`);
-          } else {
-            // Send keep-alive
-            const keepAlive = `data: keepalive\n\n`;
-            controller.enqueue(encoder.encode(keepAlive));
-          }
+          // Send keep-alive ping
+          const keepAlive = `data: keepalive\n\n`;
+          controller.enqueue(encoder.encode(keepAlive));
         } catch (error) {
-          console.error(`[Progress SSE] Error in interval for session ${id}:`, error);
-          // Don't close the stream on error, just log it
+          console.error(`[Progress SSE] Error in keep-alive for session ${id}:`, error);
         }
-      }, 2000); // Check every 2 seconds
+      }, 10000); // Keep-alive every 10 seconds
 
       // Clean up on disconnect
       request.signal.addEventListener('abort', () => {
         console.log(`[Progress SSE] Client disconnected for session: ${id}`);
         clearInterval(interval);
+        activeControllers.delete(id);
       });
     },
   });
@@ -124,6 +132,22 @@ export function addProgress(sessionId: string, message: string, status: 'in-prog
   progressStore.set(sessionId, progress);
   
   console.log(`[Progress SSE] ${message} (${status}) - Total events: ${progress.length}`);
+  
+  // Immediately push to active SSE controller if connected
+  const controller = activeControllers.get(sessionId);
+  if (controller) {
+    try {
+      const encoder = new TextEncoder();
+      const progressJson = JSON.stringify(progress);
+      const progressData = `data: ${progressJson}\n\n`;
+      controller.enqueue(encoder.encode(progressData));
+      console.log(`[Progress SSE] Pushed update immediately to session: ${sessionId}`);
+    } catch (error) {
+      console.error(`[Progress SSE] Error pushing to controller:`, error);
+      // Controller might be closed, remove it
+      activeControllers.delete(sessionId);
+    }
+  }
 }
 
 // Clear progress events for a session

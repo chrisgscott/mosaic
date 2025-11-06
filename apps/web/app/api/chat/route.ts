@@ -58,6 +58,8 @@ export async function POST(request: Request) {
       webSearchEnabled?: boolean;
     } = await request.json();
 
+    console.log('[Chat] Request params:', { chatId, model, webSearchEnabled });
+
     if (!message || !chatId) {
       return new Response(
         JSON.stringify({ error: "Message and chatId are required" }),

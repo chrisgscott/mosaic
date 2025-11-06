@@ -148,10 +148,6 @@ export async function POST(request: Request) {
         size: 16,
       }),
       onFinish: async ({ messages: allMessages, responseMessage }) => {
-        // Mark session as complete to close SSE stream (after all tools are done)
-        const { markSessionComplete } = await import('./[id]/progress/route');
-        markSessionComplete(chatId);
-
         // Save all messages to database
         try {
           // Delete existing messages for this session

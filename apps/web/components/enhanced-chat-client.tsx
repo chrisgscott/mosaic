@@ -12,6 +12,7 @@ import { Loader } from '@/components/ui/shadcn-io/ai/loader';
 import { Message, MessageAvatar, MessageContent } from '@/components/ui/shadcn-io/ai/message';
 import {
   PromptInput,
+  PromptInputButton,
   PromptInputModelSelect,
   PromptInputModelSelectContent,
   PromptInputModelSelectItem,
@@ -35,8 +36,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import { Globe, MoreVertical, Trash2 } from 'lucide-react';
 import { type FormEventHandler, useCallback, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -321,24 +320,7 @@ export function EnhancedChatClient({
             </>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          {/* Web Search Toggle */}
-          <div className="flex items-center gap-2">
-            <Switch
-              id="web-search"
-              checked={webSearchEnabled}
-              onCheckedChange={setWebSearchEnabled}
-              className="data-[state=checked]:bg-blue-600"
-            />
-            <Label 
-              htmlFor="web-search" 
-              className="text-xs text-muted-foreground cursor-pointer flex items-center gap-1"
-            >
-              <Globe className="size-3" />
-              Web Search
-            </Label>
-          </div>
-          <DropdownMenu>
+        <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button 
                 variant="ghost" 
@@ -359,7 +341,6 @@ export function EnhancedChatClient({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
       </div>
 
       {/* Conversation Area - Scrollable */}
@@ -489,6 +470,17 @@ export function EnhancedChatClient({
           />
           <PromptInputToolbar>
             <PromptInputTools>
+              {/* Web Search Toggle */}
+              <PromptInputButton
+                type="button"
+                variant={webSearchEnabled ? 'default' : 'ghost'}
+                size="icon"
+                onClick={() => setWebSearchEnabled(!webSearchEnabled)}
+                disabled={status === 'streaming'}
+                title={webSearchEnabled ? 'Web search enabled' : 'Web search disabled'}
+              >
+                <Globe className="size-4" />
+              </PromptInputButton>
               <PromptInputModelSelect 
                 value={selectedModel} 
                 onValueChange={setSelectedModel}

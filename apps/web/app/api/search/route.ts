@@ -397,6 +397,21 @@ export async function POST(request: NextRequest) {
       const candidateCount = match_count * 2;
       console.log(`[Search] Running ${embeddings.length} parallel searches`);
       
+      // Check if this session has uploaded documents
+      let hasSessionDocs = false;
+      if (session_id) {
+        const { data: sessionDocs } = await supabase
+          .from('documents')
+          .select('id')
+          .eq('session_id', session_id)
+          .eq('status', 'ready')
+          .limit(1);
+        hasSessionDocs = (sessionDocs?.length || 0) > 0;
+        if (hasSessionDocs) {
+          console.log(`[Search] Session ${session_id} has uploaded documents - searching session docs`);
+        }
+      }
+
       const searchPromises = embeddings.map((embResp, idx) =>
         supabase.rpc("search_chunks_hybrid", {
           query_text: allQueries[idx],
@@ -404,6 +419,7 @@ export async function POST(request: NextRequest) {
           match_threshold,
           match_count: candidateCount,
           filter_user_id: user.id,
+          filter_session_id: hasSessionDocs ? session_id : null, // Only filter by session if it has docs
           rrf_k: 60,
         })
       );

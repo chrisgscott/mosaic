@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { MessageSquarePlus, MessageSquare } from "lucide-react"
+import { Plus, MessageSquare } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import {
@@ -12,6 +12,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
 
 type ChatSession = {
   id: string
@@ -48,14 +49,14 @@ export function NavChats() {
       <SidebarGroupLabel>Chats</SidebarGroupLabel>
       <SidebarMenu>
         {/* New Chat Button */}
-        <SidebarMenuItem>
-          <SidebarMenuButton asChild tooltip="New Chat">
+        <div className="px-2 pb-2">
+          <Button asChild className="w-full justify-start" size="sm">
             <Link href="/admin/chat">
-              <MessageSquarePlus className="h-4 w-4" />
-              <span>New Chat</span>
+              <Plus className="h-4 w-4 mr-2" />
+              New Chat
             </Link>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
+          </Button>
+        </div>
 
         {/* Loading State */}
         {loading && (

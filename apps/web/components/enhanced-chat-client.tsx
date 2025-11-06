@@ -575,11 +575,52 @@ export function EnhancedChatClient({
                 multiple
                 accept=".pdf,.txt,.md,.doc,.docx"
                 className="hidden"
-                onChange={(e) => {
+                onChange={async (e) => {
                   const files = Array.from(e.target.files || []);
-                  if (files.length > 0) {
-                    // TODO: Handle file upload
-                    console.log('Files selected:', files);
+                  if (files.length === 0) return;
+
+                  try {
+                    console.log(`[Upload] Uploading ${files.length} files...`);
+                    
+                    // Create form data
+                    const formData = new FormData();
+                    files.forEach(file => formData.append('files', file));
+
+                    // Upload to session endpoint
+                    const response = await fetch(`/api/chat/${id}/upload`, {
+                      method: 'POST',
+                      body: formData,
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                      throw new Error(result.error || 'Upload failed');
+                    }
+
+                    console.log('[Upload] Success:', result);
+                    
+                    // Update uploaded files state
+                    if (result.uploaded) {
+                      setUploadedFiles(prev => [
+                        ...prev,
+                        ...result.uploaded.map((f: { id: string; fileName: string }) => ({
+                          id: f.id,
+                          name: f.fileName,
+                        })),
+                      ]);
+                    }
+
+                    // Show success message
+                    alert(`Uploaded ${result.uploaded?.length || 0} files successfully!`);
+                  } catch (error) {
+                    console.error('[Upload] Error:', error);
+                    alert(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                  } finally {
+                    // Reset file input
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = '';
+                    }
                   }
                 }}
               />

@@ -69,7 +69,7 @@ export default async function ChatSessionPage({
   } as UIMessage));
 
   return (
-    <div className="h-screen flex flex-col p-4">
+    <div className="h-screen flex flex-col">
       <EnhancedChatClient 
         id={id} 
         initialMessages={initialMessages}

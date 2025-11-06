@@ -356,7 +356,6 @@ export async function POST(request: NextRequest) {
       if (useMultiQuery) techniques.push('Multi-Query');
       
       console.log(`[Search] Complex query detected - using ${techniques.join(' + ') || 'basic search'}`);
-      onProgress(createProgressEvent('analyzing', 'completed'));
       
       if (useMultiQuery) {
         onProgress(createProgressEvent('generating-variations', 'in-progress'));
@@ -570,7 +569,6 @@ export async function POST(request: NextRequest) {
     } else {
       // Simple query: skip HyDE, use direct embedding
       console.log(`[Search] Simple query, skipping HyDE`);
-      onProgress(createProgressEvent('analyzing', 'completed'));
       
       onProgress(createProgressEvent('creating-embeddings', 'in-progress'));
       const embeddingResponse = await openai.embeddings.create({

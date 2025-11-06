@@ -229,14 +229,33 @@ export function EnhancedChatClient({
     }
 
     try {
+      // First, fetch all sessions to find the next one
+      const sessionsResponse = await fetch('/api/chat/sessions');
+      let nextSessionId: string | null = null;
+      
+      if (sessionsResponse.ok) {
+        const { sessions } = await sessionsResponse.json();
+        // Find a session that's not the current one
+        const otherSessions = sessions.filter((s: { id: string }) => s.id !== id);
+        if (otherSessions.length > 0) {
+          // Use the most recent other session
+          nextSessionId = otherSessions[0].id;
+        }
+      }
+
+      // Delete the current session
       const response = await fetch(`/api/chat/sessions/${id}`, {
         method: 'DELETE',
       });
 
       if (response.ok) {
         console.log('[EnhancedChat] Session deleted successfully');
-        // Redirect to new chat
-        window.location.href = '/admin/chat';
+        // Redirect to next session or create new chat if none exist
+        if (nextSessionId) {
+          window.location.href = `/admin/chat/${nextSessionId}`;
+        } else {
+          window.location.href = '/admin/chat';
+        }
       } else {
         console.error('[EnhancedChat] Failed to delete session');
         alert('Failed to delete chat session. Please try again.');

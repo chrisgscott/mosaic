@@ -103,6 +103,25 @@ export async function POST(
 
         console.log(`[Upload] Successfully uploaded ${file.name} with ID ${document.id}`);
 
+        // Queue for quick processing (skips graph extraction and question generation)
+        try {
+          await supabase.rpc('queue_document', {
+            queue_name: 'document_processing',
+            msg: {
+              document_id: document.id,
+              user_id: user.id,
+              file_path: uploadData.path,
+              file_name: file.name,
+              file_type: file.type || 'application/octet-stream',
+              quick_mode: true, // Enable quick mode for session uploads
+            },
+          });
+          console.log(`[Upload] Queued ${file.name} for quick processing`);
+        } catch (queueError) {
+          console.error(`[Upload] Failed to queue ${file.name}:`, queueError);
+          // Don't fail the upload, document will be picked up by retry logic
+        }
+
         uploadResults.push({
           id: document.id,
           fileName: file.name,

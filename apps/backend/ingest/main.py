@@ -271,9 +271,11 @@ class DocumentWorker:
         """
         document_id = job["message"]["document_id"]
         file_path = job["message"]["file_path"]
+        quick_mode = job["message"].get("quick_mode", False)  # Session uploads use quick mode
         read_ct = job.get("read_ct", 0)  # pgmq tracks how many times message was read
         
-        logger.info(f"Processing document {document_id}: {file_path}")
+        mode_label = "QUICK MODE" if quick_mode else "FULL PIPELINE"
+        logger.info(f"Processing document {document_id} [{mode_label}]: {file_path}")
         
         # Check if we've exceeded max retries
         if read_ct >= MAX_RETRIES:
@@ -375,7 +377,14 @@ class DocumentWorker:
                 doc_for_chunking = docling_doc
             
             # Chunk using structure-aware chunker
-            chunks = self.chunker.chunk_document(doc_for_chunking, document_id)
+            # In quick mode, skip document augmentation (question generation)
+            if quick_mode:
+                logger.info("Quick mode: using base chunker only (skipping question generation)")
+                # Use base chunker directly from the wrapper if available
+                chunker_to_use = getattr(self.chunker, 'base_chunker', self.chunker)
+                chunks = chunker_to_use.chunk_document(doc_for_chunking, document_id)
+            else:
+                chunks = self.chunker.chunk_document(doc_for_chunking, document_id)
             
             # Add user_id and storage_path to chunks
             for chunk in chunks:
@@ -480,7 +489,8 @@ class DocumentWorker:
                 logger.warning(f"Could not clean up checkpoint chunks: {e}")
             
             # Extract graph (entities and relationships) if enabled
-            if self.graph_extractor:
+            # Skip graph extraction in quick mode (saves 30-60 seconds)
+            if self.graph_extractor and not quick_mode:
                 self.update_document_status(document_id, "extracting_graph")
                 logger.info("Extracting entities and relationships for knowledge graph")
                 try:
@@ -547,6 +557,8 @@ class DocumentWorker:
                 except Exception as e:
                     # Don't fail the whole job if graph extraction fails
                     logger.error(f"Graph extraction failed (non-fatal): {e}")
+            elif quick_mode:
+                logger.info("Quick mode: skipping graph extraction (saves 30-60s)")
             
             # Update document status to ready
             self.update_document_status(document_id, "ready")

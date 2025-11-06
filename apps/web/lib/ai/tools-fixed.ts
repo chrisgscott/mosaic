@@ -224,6 +224,9 @@ export const webSearchTool = tool({
     console.log(`[Tool] web_search called with query: "${query}"`);
     
     try {
+      // Call the web search API directly (internal call, no auth needed)
+      const { POST: webSearchAPI } = await import('@/app/api/web-search/route');
+      
       const searchBody = JSON.stringify({
         query,
         max_results,
@@ -236,11 +239,7 @@ export const webSearchTool = tool({
         body: searchBody,
       });
 
-      const searchResponse = await fetch(searchRequest.url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: searchBody,
-      });
+      const searchResponse = await webSearchAPI(searchRequest);
 
       if (!searchResponse.ok) {
         const error = await searchResponse.json();

@@ -150,10 +150,42 @@ Mosaic is a comprehensive RAG platform combining semantic search with graph-base
 **Estimated:** 3-4 days
 
 **Features:**
-- Conversation persistence in database
-- Thread management UI
+- Conversation persistence in database ✅ COMPLETED
+- Thread management UI ✅ COMPLETED
 - Conversation search
 - Export functionality
+
+##### 6.2.1 Chat Message Actions
+**Status:** Ready to start  
+**Priority:** High  
+**Estimated:** 2-3 days
+
+**Available AI SDK Components:**
+- ✅ Actions framework (components/ui/shadcn-io/ai/actions.tsx)
+- ✅ Branch system (components/ui/shadcn-io/ai/branch.tsx)
+- ✅ Message components (components/ui/shadcn-io/ai/message.tsx)
+
+**Message-Level Actions to Implement:**
+- Copy message content
+- Branch conversation from message
+- Regenerate response
+- Delete message
+- Rate response (helpful/not helpful)
+- Share message link
+- Citation explorer (for assistant messages)
+- Message details (timestamps, tokens, etc.)
+
+**Session-Level Actions to Implement:**
+- Export conversation (JSON, markdown)
+- Search within conversation
+- Rename conversation
+- Delete conversation
+- Share conversation
+
+**Implementation Phases:**
+- **Phase 1:** Basic message actions (copy, branch, regenerate) - 1 day
+- **Phase 2:** Session management (search, export, rename) - 1-2 days
+- **Phase 3:** Advanced actions (rating, sharing, analytics) - 1 day
 
 **Rationale:** Foundation for context management and better UX
 

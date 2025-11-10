@@ -41,6 +41,7 @@ import { type FormEventHandler, useCallback, useEffect, useRef, useState } from 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ProgressEvent } from '@/app/api/chat/route';
+import { toast } from 'sonner';
 
 // Helper to format relative time
 function formatRelativeTime(dateString: string): string {
@@ -612,10 +613,10 @@ export function EnhancedChatClient({
                     }
 
                     // Show success message
-                    alert(`Uploaded ${result.uploaded?.length || 0} files successfully!`);
+                    toast.success(`Uploaded ${result.uploaded?.length || 0} files successfully!`);
                   } catch (error) {
                     console.error('[Upload] Error:', error);
-                    alert(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                    toast.error(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
                   } finally {
                     // Reset file input
                     if (fileInputRef.current) {

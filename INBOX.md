@@ -29,6 +29,297 @@ This file contains new ideas and enhancements that haven't yet been prioritized 
 
 ## 💡 Enhancements & Ideas
 
+### Market Intelligence Analysis System
+**Priority:** Medium-High  
+**Effort:** 3-4 weeks (phased implementation)  
+**Context:** Transform Mosaic into a structured research and analysis platform that can extract, analyze, and store market intelligence in queryable Supabase tables. Inspired by the copper powder market analysis workflow currently being done in n8n.
+
+---
+
+#### **Core Concept**
+Enable users to define analysis templates (schemas), upload source documents, and let AI automatically extract structured insights (use cases, market data, technical specs) that are stored in Supabase tables for querying, tracking, and export.
+
+---
+
+#### **Real-World Use Case: Copper Powder Market Analysis**
+Currently processing in n8n:
+- **Input**: Market reports, technical specifications, research papers
+- **Output**: 117 structured use cases with:
+  - Variant metadata (id, category, name, description)
+  - Use case details (name, description)
+  - Market data (buyers, spec requirements, readiness levels, evidence)
+  - Placeholder fields for estimates and scores
+
+**Problem with Current Approach:**
+- Manual n8n workflow setup for each analysis type
+- Data not queryable (just JSON exports)
+- No version tracking or change detection
+- Can't collaborate on reviewing AI extractions
+- Hard to reuse for similar analyses
+
+**Vision with Mosaic:**
+- Define template once, reuse for all copper analyses
+- AI extracts data from uploaded documents + web search
+- Store in Supabase tables (SQL queries, filters, aggregations)
+- Team reviews and approves AI extractions
+- Track changes over time (Q1 2025 vs Q4 2025)
+- Export to any format (JSON, CSV, Excel)
+
+---
+
+#### **Architecture Overview**
+
+**New Database Tables:**
+
+1. **analysis_templates** - Reusable analysis frameworks
+   ```typescript
+   {
+     id: uuid,
+     name: "Market Use Case Analysis",
+     description: "Extract use cases and market data",
+     schema: {
+       // JSON Schema defining output structure
+       variant: { id, category, name, description },
+       use_case: { name, description },
+       markets: [{ name, buyers, specs, readiness }]
+     },
+     extraction_prompt: "...",
+     created_by: uuid
+   }
+   ```
+
+2. **analysis_projects** - Specific analysis instances
+   ```typescript
+   {
+     id: uuid,
+     template_id: uuid,
+     name: "Copper Powder Analysis Q4 2025",
+     source_documents: uuid[],
+     status: "draft" | "analyzing" | "complete",
+     results_count: number
+   }
+   ```
+
+3. **analysis_results** - Extracted structured data
+   ```typescript
+   {
+     id: uuid,
+     project_id: uuid,
+     data: {
+       // Flexible JSONB matching template schema
+       variant_id: "01",
+       use_case: "Semiconductor Manufacturing",
+       markets: [...],
+       // Any structure from template
+     },
+     source_chunks: uuid[], // Citation links
+     confidence_score: number,
+     ai_reasoning: text,
+     status: "extracted" | "verified" | "published",
+     reviewed_by: uuid
+   }
+   ```
+
+---
+
+#### **User Workflow**
+
+**Phase 1: Setup (One-time)**
+1. Create Analysis Template
+   - Visual schema builder (like Airtable/Notion)
+   - Define fields, types, validation rules
+   - Write extraction instructions
+   
+2. Create Project
+   - Name: "Copper Powder Analysis Q4 2025"
+   - Select template
+   - Upload source documents (or link existing)
+
+**Phase 2: AI Analysis (Automated)**
+```
+For each document:
+  1. RAG Search: Find relevant chunks
+  2. Web Search: Enrich with latest market data (optional)
+  3. Structured Extraction: AI fills template schema
+  4. Store Results: Save to analysis_results table
+  5. Link Evidence: Connect to source chunks for citations
+```
+
+**Phase 3: Review & Refine (Interactive)**
+- Review AI extractions in table/grid UI
+- Edit/approve individual items
+- Request re-analysis with different prompts
+- Add manual entries
+- Export to JSON/CSV/Excel
+
+---
+
+#### **Implementation Plan**
+
+**Phase 1: Foundation (1-2 weeks)**
+- Database schema (3 new tables)
+- Template builder UI (visual schema editor)
+- Project creation flow
+- Basic extraction engine
+
+**Phase 2: AI Analysis (1-2 weeks)**
+- RAG-powered extraction using existing search
+- Web search integration for enrichment
+- Structured output validation (JSON Schema)
+- Confidence scoring and citation linking
+
+**Phase 3: Review & Export (1 week)**
+- Results table/grid UI with filters/sort
+- Edit/approve workflow
+- Export formats (JSON, CSV, Excel)
+- Version tracking
+
+**Phase 4: Advanced Features (Future)**
+- Comparison across time periods
+- Automated monitoring (re-run monthly)
+- Collaborative review (team annotations)
+- Custom visualizations
+- API for external tools (like n8n)
+
+---
+
+#### **Key Technical Components**
+
+**Structured Extraction Agent:**
+```typescript
+export async function extractStructuredData(
+  template: AnalysisTemplate,
+  documents: Document[],
+  options: { useWebSearch: boolean }
+) {
+  // 1. RAG search for relevant content
+  const chunks = await searchDocuments(template.searchQueries);
+  
+  // 2. Web search for enrichment (optional)
+  const webData = options.useWebSearch 
+    ? await webSearch(template.enrichmentQueries)
+    : null;
+  
+  // 3. Structured extraction with AI
+  const results = await extractWithSchema({
+    chunks,
+    webData,
+    schema: template.schema,
+    prompt: template.extraction_prompt,
+    model: 'gpt-4o' // Detailed model
+  });
+  
+  // 4. Validate and score confidence
+  return validateAndScore(results, template.schema);
+}
+```
+
+**Template Builder UI:**
+- Visual schema builder (drag-drop fields)
+- Define types (text, number, array, object)
+- Set validation rules
+- Write extraction prompts with preview
+
+**Results Explorer:**
+- Interactive data grid
+- Filter/sort/group results
+- Inline editing
+- Confidence indicators
+- Source citations (click to see chunks)
+- Export options
+
+---
+
+#### **Integration with Existing Mosaic**
+
+**Leverages Current Infrastructure:**
+- ✅ Documents & Chunks: Source material already indexed
+- ✅ RAG Search: Finds relevant content automatically
+- ✅ Web Search: Enriches with latest data
+- ✅ AI Gateway: Structured extraction with GPT-4
+- ✅ Supabase: Stores everything in queryable tables
+
+**New Capabilities:**
+- 🆕 Structured Output: Beyond chat, create databases
+- 🆕 Batch Analysis: Process multiple documents at once
+- 🆕 Version Tracking: See how insights change over time
+- 🆕 Collaborative Review: Team can verify AI extractions
+- 🆕 Export & API: Use results in other tools
+
+---
+
+#### **Example Use Cases Beyond Copper**
+
+1. **Competitive Intelligence**: Extract competitor features, pricing, positioning
+2. **Patent Analysis**: Structure patent claims, inventors, applications
+3. **Customer Research**: Extract pain points, use cases, quotes from interviews
+4. **Market Sizing**: Pull TAM/SAM/SOM data from multiple reports
+5. **Technology Trends**: Track emerging tech mentions across papers
+6. **Regulatory Compliance**: Extract requirements from regulations
+
+---
+
+#### **Why This is Powerful**
+
+1. **Replaces Manual Work**: Hours in n8n → minutes in Mosaic
+2. **Queryable Results**: Supabase tables = SQL queries, filters, aggregations
+3. **Reproducible**: Save templates, re-run on new documents
+4. **Collaborative**: Team reviews AI extractions together
+5. **Integrated**: Uses existing document library
+6. **Flexible**: Any schema, any domain, any analysis type
+
+---
+
+#### **Directory Structure**
+
+```
+apps/web/
+├── app/(app)/analysis/          # New analysis section
+│   ├── templates/               # Template management
+│   ├── projects/                # Project management
+│   └── results/                 # Results explorer
+├── lib/analysis/                # Analysis engine
+│   ├── extraction-agent.ts      # Structured extraction
+│   ├── template-validator.ts   # Schema validation
+│   └── results-processor.ts    # Post-processing
+└── components/analysis/         # UI components
+    ├── template-builder.tsx
+    ├── results-grid.tsx
+    └── confidence-indicator.tsx
+
+supabase/migrations/
+└── 20251107_analysis_system.sql # New tables
+```
+
+**Navigation Update:**
+```typescript
+{
+  title: "Analysis",
+  icon: FlaskConical,
+  items: [
+    { title: "Projects", url: "/analysis/projects" },
+    { title: "Templates", url: "/analysis/templates" },
+    { title: "Results", url: "/analysis/results" }
+  ]
+}
+```
+
+---
+
+#### **Next Steps**
+
+**When Ready to Implement:**
+1. Review and validate architecture
+2. Design detailed database schema
+3. Create template builder wireframes
+4. Build extraction agent prototype
+5. Test with copper powder use case
+6. Iterate based on real usage
+
+**Potential Phase:** Could be Phase 11 in BUILD_PLAN
+
+---
+
 ### Entity Deduplication During Extraction
 **Priority:** Medium  
 **Effort:** 2-5 days (phased implementation)  

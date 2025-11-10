@@ -67,14 +67,31 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check for session documents
+    const { data: sessionDocs } = await supabase
+      .from('documents')
+      .select('file_name, status')
+      .eq('session_id', chatId)
+      .eq('status', 'ready'); // Only include processed documents
+    
+    const hasSessionDocs = sessionDocs && sessionDocs.length > 0;
+    
     // Convert message format if needed
     let uiMessage: UIMessage;
     if ('text' in message) {
+      let messageText = message.text;
+      
+      // Add context about attached documents if they exist
+      if (hasSessionDocs) {
+        const docList = sessionDocs.map(d => d.file_name).join(', ');
+        messageText = `[Context: The user has uploaded ${sessionDocs.length} document(s) to this conversation: ${docList}. These documents are available for search and reference.]\n\n${message.text}`;
+      }
+      
       // Convert { text: string } to UIMessage format
       uiMessage = {
         id: `msg-${Date.now()}`,
         role: 'user',
-        parts: [{ type: 'text' as const, text: message.text }],
+        parts: [{ type: 'text' as const, text: messageText }],
         // createdAt is not supported in UIMessage interface
       };
     } else {

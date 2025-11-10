@@ -606,16 +606,39 @@ export async function POST(request: NextRequest) {
       console.log(`[Search] Generated embedding (${queryEmbedding.length} dimensions)`);
       onProgress(createProgressEvent('creating-embeddings', 'completed'));
       
+      // Check if this session has uploaded documents
+      let hasSessionDocs = false;
+      if (session_id) {
+        const { data: sessionDocs } = await supabase
+          .from('documents')
+          .select('id, file_name, status')
+          .eq('session_id', session_id);
+        
+        console.log(`[Search] Session ${session_id} documents:`, sessionDocs);
+        
+        const readyDocs = sessionDocs?.filter(d => d.status === 'ready') || [];
+        hasSessionDocs = readyDocs.length > 0;
+        
+        if (hasSessionDocs) {
+          console.log(`[Search] Session ${session_id} has ${readyDocs.length} ready documents - searching session docs ONLY`);
+        } else if (sessionDocs && sessionDocs.length > 0) {
+          console.log(`[Search] Session ${session_id} has ${sessionDocs.length} documents but none are ready yet`);
+        } else {
+          console.log(`[Search] Session ${session_id} has no uploaded documents - searching all user docs`);
+        }
+      }
+      
       // Perform hybrid search
       onProgress(createProgressEvent('searching', 'in-progress'));
       const candidateCount = match_count * 2;
-      console.log(`[Search] Hybrid search with threshold=${match_threshold}, candidates=${candidateCount}, user=${user.id}`);
+      console.log(`[Search] Hybrid search with threshold=${match_threshold}, candidates=${candidateCount}, user=${user.id}, session_filter=${hasSessionDocs ? session_id : 'none'}`);
       const { data, error } = await supabase.rpc("search_chunks_hybrid", {
         query_text: query,
         query_embedding: queryEmbedding,
         match_threshold,
         match_count: candidateCount,
         filter_user_id: user.id,
+        filter_session_id: hasSessionDocs ? session_id : null,
         rrf_k: 60,
       });
 

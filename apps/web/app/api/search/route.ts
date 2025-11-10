@@ -402,13 +402,20 @@ export async function POST(request: NextRequest) {
       if (session_id) {
         const { data: sessionDocs } = await supabase
           .from('documents')
-          .select('id')
-          .eq('session_id', session_id)
-          .eq('status', 'ready')
-          .limit(1);
-        hasSessionDocs = (sessionDocs?.length || 0) > 0;
+          .select('id, file_name, status')
+          .eq('session_id', session_id);
+        
+        console.log(`[Search] Session ${session_id} documents:`, sessionDocs);
+        
+        const readyDocs = sessionDocs?.filter(d => d.status === 'ready') || [];
+        hasSessionDocs = readyDocs.length > 0;
+        
         if (hasSessionDocs) {
-          console.log(`[Search] Session ${session_id} has uploaded documents - searching session docs`);
+          console.log(`[Search] Session ${session_id} has ${readyDocs.length} ready documents - searching session docs ONLY`);
+        } else if (sessionDocs && sessionDocs.length > 0) {
+          console.log(`[Search] Session ${session_id} has ${sessionDocs.length} documents but none are ready yet`);
+        } else {
+          console.log(`[Search] Session ${session_id} has no uploaded documents - searching all user docs`);
         }
       }
 

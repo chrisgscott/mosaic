@@ -291,3 +291,96 @@ The messages GET happens ~400ms after POST completes, but frontend has 500ms del
 - Doesn't affect core functionality
 
 **Recommendation:** Fix when doing broader chat persistence refactor, not urgent.
+
+---
+
+## Extract Entities from Chunk Not Working
+
+**Date:** November 10, 2025  
+**Component:** Document details page - Extract Entities feature  
+**Status:** 🔴 Open
+
+### Problem
+The "Extract Entities" button on the document details page (`/admin/documents/[id]`) throws an error when trying to extract entities from a chunk.
+
+### Error Message
+```
+Extract entities from chunk error: Error: Models not initialized. Call initModels() first.
+    at Object.get (lib/ai/gateway.ts:99:13)
+    at extractEntitiesFromChunk (app/(app)/admin/graph/actions.ts:1120:21)
+   97 |   get(target, prop) {
+   98 |     if (!cachedModels) {
+>  99 |       throw new Error('Models not initialized. Call initModels() first.');
+      |             ^
+  100 |     }
+  101 |     return cachedModels[prop as keyof typeof cachedModels];
+  102 |   }
+```
+
+### Context
+- The AI gateway models are initialized in middleware for API routes
+- Server actions (like `extractEntitiesFromChunk`) run in a different context
+- The models proxy checks for `cachedModels` but it's not available in server action context
+- This is a server-side initialization issue, not a client-side problem
+
+### Root Cause
+Server actions don't go through the middleware that initializes the AI models. The `models` proxy in `lib/ai/gateway.ts` expects `cachedModels` to be set by `initModels()`, but this never happens for server actions.
+
+### What We've Tried
+Nothing yet - bug just discovered.
+
+### Possible Solutions
+
+1. **Call initModels() in server action** (Quick - 30 min)
+   - Add `await initModels()` at the start of `extractEntitiesFromChunk`
+   - Ensures models are available before use
+   - May have performance impact if called repeatedly
+   ```typescript
+   export async function extractEntitiesFromChunk(...) {
+     await initModels();
+     // ... rest of function
+   }
+   ```
+
+2. **Create a wrapper for server actions** (Medium - 1 hour)
+   - Create `withModels()` HOF that initializes models
+   - Wrap all server actions that need AI models
+   - Centralizes initialization logic
+   ```typescript
+   export const withModels = (action) => async (...args) => {
+     await initModels();
+     return action(...args);
+   };
+   ```
+
+3. **Lazy initialize in models proxy** (Proper - 1-2 hours)
+   - Modify the proxy getter to auto-initialize if not cached
+   - Makes models "just work" everywhere
+   - Need to handle async initialization in getter
+   ```typescript
+   get(target, prop) {
+     if (!cachedModels) {
+       await initModels(); // Problem: getters can't be async
+     }
+     return cachedModels[prop];
+   }
+   ```
+
+4. **Use direct model creation** (Alternative - 30 min)
+   - Don't use the cached models in server actions
+   - Create models directly using `getModelForDepth()` or similar
+   - Bypasses the caching system entirely
+   - May be less efficient but more reliable
+
+### Related Files
+- `/apps/web/lib/ai/gateway.ts` - Models proxy and initialization
+- `/apps/web/app/(app)/admin/graph/actions.ts` - `extractEntitiesFromChunk` function
+- `/apps/web/middleware.ts` - Where models are initialized for API routes
+
+### Priority
+Medium - Feature is broken but has workaround (extract entities during document processing instead of on-demand)
+
+### Recommended Fix
+**Option 1** (Quick fix): Add `await initModels()` to `extractEntitiesFromChunk` and any other server actions that use AI models. This is the fastest path to working functionality.
+
+**Option 4** (Better long-term): Refactor server actions to use direct model creation instead of relying on the cached proxy. This makes the code more explicit and avoids initialization issues.

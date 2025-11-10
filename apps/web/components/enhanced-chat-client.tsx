@@ -42,6 +42,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ProgressEvent } from '@/app/api/chat/route';
 import { toast } from 'sonner';
+import { FileAttachmentBadge } from '@/components/file-attachment-badge';
 
 // Helper to format relative time
 function formatRelativeTime(dateString: string): string {
@@ -78,6 +79,7 @@ type EnhancedChatMessage = UIMessage & {
   progress?: ProgressEvent[];
   isStreaming?: boolean;
   createdAt?: Date;
+  attachedFiles?: Array<{ id: string; name: string }>;
   toolInvocations?: Array<{
     toolCallId: string;
     toolName: string;
@@ -369,6 +371,9 @@ export function EnhancedChatClient({
     
     if (!input.trim() || status === 'streaming') return;
     
+    // Capture current uploaded files for this message
+    const filesForThisMessage = [...uploadedFiles];
+    
     // Immediately add a "thinking" assistant message for instant feedback
     const thinkingMessage: EnhancedChatMessage = {
       id: `thinking-${Date.now()}`,
@@ -380,14 +385,25 @@ export function EnhancedChatClient({
       isStreaming: true,
     };
     
-    setEnhancedMessages(prev => [...prev, thinkingMessage]);
+    setEnhancedMessages(prev => {
+      // Add attached files to the last user message
+      const updated = [...prev];
+      if (updated.length > 0 && updated[updated.length - 1].role === 'user' && filesForThisMessage.length > 0) {
+        updated[updated.length - 1] = {
+          ...updated[updated.length - 1],
+          attachedFiles: filesForThisMessage,
+        };
+      }
+      return [...updated, thinkingMessage];
+    });
     
     // Append the message to the chat using correct format
     sendMessage({ text: input.trim() });
     
-    // Clear the input field
+    // Clear the input field and uploaded files
     form.reset();
-  }, [sendMessage, status, setEnhancedMessages]);
+    setUploadedFiles([]);
+  }, [sendMessage, status, setEnhancedMessages, uploadedFiles]);
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden rounded-xl bg-background">
@@ -524,7 +540,22 @@ export function EnhancedChatClient({
                       );
                     }
                     
-                    return <div className="whitespace-pre-wrap">{textContent}</div>;
+                    return (
+                      <div className="space-y-2">
+                        <div className="whitespace-pre-wrap">{textContent}</div>
+                        {/* Show attached files for user messages */}
+                        {message.role === 'user' && (message as EnhancedChatMessage).attachedFiles && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {(message as EnhancedChatMessage).attachedFiles?.map((file) => (
+                              <FileAttachmentBadge
+                                key={file.id}
+                                fileName={file.name}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
                   })()}
                 </MessageContent>
                 <MessageAvatar 
@@ -565,6 +596,20 @@ export function EnhancedChatClient({
       {/* Input Area - Fixed at bottom */}
       <div className="border-t p-4 shrink-0">
         <PromptInput onSubmit={handleSubmit}>
+          {/* Show uploaded files */}
+          {uploadedFiles.length > 0 && (
+            <div className="p-3 flex flex-wrap gap-2 border-b">
+              {uploadedFiles.map((file) => (
+                <FileAttachmentBadge
+                  key={file.id}
+                  fileName={file.name}
+                  onRemove={() => {
+                    setUploadedFiles(prev => prev.filter(f => f.id !== file.id));
+                  }}
+                />
+              ))}
+            </div>
+          )}
           <PromptInputTextarea
             name="message"
             placeholder="Ask me anything about development, coding, or technology..."

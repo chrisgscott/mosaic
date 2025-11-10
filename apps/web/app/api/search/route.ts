@@ -304,6 +304,8 @@ export async function POST(request: NextRequest) {
       extended_graph_traversal = false,
     } = body;
     
+    console.log('[Search API] Received request - session_id:', session_id, 'query:', query);
+    
     // System settings take precedence over request body
     const use_hyde = systemSettings["search.useHyDE"] ?? true;
     let use_multi_query = systemSettings["search.useMultiQuery"] ?? true;

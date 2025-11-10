@@ -173,6 +173,47 @@ export function EnhancedChatClient({
   // SSE progress stream for real-time updates
   const { currentStep } = useProgressStream(id);
   
+  // Poll document status until processing is complete
+  const pollDocumentStatus = useCallback(async (documentIds: string[]) => {
+    const maxAttempts = 60; // 60 attempts = 1 minute max
+    let attempts = 0;
+    
+    const checkStatus = async () => {
+      try {
+        const response = await fetch('/api/documents/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ documentIds }),
+        });
+        
+        const { documents } = await response.json();
+        const allReady = documents.every((doc: { status: string }) => doc.status === 'ready' || doc.status === 'error');
+        
+        if (allReady) {
+          const readyCount = documents.filter((doc: { status: string }) => doc.status === 'ready').length;
+          const errorCount = documents.filter((doc: { status: string }) => doc.status === 'error').length;
+          
+          if (readyCount > 0) {
+            toast.success(`${readyCount} document${readyCount > 1 ? 's' : ''} processed and ready to search!`);
+          }
+          if (errorCount > 0) {
+            toast.error(`${errorCount} document${errorCount > 1 ? 's' : ''} failed to process`);
+          }
+          return;
+        }
+        
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(checkStatus, 1000); // Check every second
+        }
+      } catch (error) {
+        console.error('[Upload] Failed to check document status:', error);
+      }
+    };
+    
+    checkStatus();
+  }, []);
+  
   // useChat hook with session persistence
   const { messages, sendMessage, status, error, setMessages } = useChat({
     id, // Session ID for persistence
@@ -613,7 +654,13 @@ export function EnhancedChatClient({
                     }
 
                     // Show success message
-                    toast.success(`Uploaded ${result.uploaded?.length || 0} files successfully!`);
+                    toast.success(`Uploaded ${result.uploaded?.length || 0} files successfully! Processing...`);
+                    
+                    // Poll for processing completion
+                    if (result.uploaded && result.uploaded.length > 0) {
+                      const documentIds = result.uploaded.map((f: { id: string }) => f.id);
+                      pollDocumentStatus(documentIds);
+                    }
                   } catch (error) {
                     console.error('[Upload] Error:', error);
                     toast.error(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);

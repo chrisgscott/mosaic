@@ -96,6 +96,7 @@ export async function getDocuments() {
     .from("documents")
     .select("*")
     .eq("user_id", user.id)
+    .is("session_id", null) // Exclude session-specific documents
     .order("created_at", { ascending: false });
 
   if (error) {

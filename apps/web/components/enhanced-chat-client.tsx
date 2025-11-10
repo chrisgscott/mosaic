@@ -161,6 +161,7 @@ export function EnhancedChatClient({
   const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; id: string; status?: 'processing' | 'ready' | 'error' }>>([]); // Session files
   const fileInputRef = useRef<HTMLInputElement>(null); // File input ref
   const [isProcessingFiles, setIsProcessingFiles] = useState(false); // Track if any files are processing
+  const pendingFilesRef = useRef<Array<{ name: string; id: string }>>([]);  // Files to attach to next user message
   const [currentTitle, setCurrentTitle] = useState(sessionTitle);
   const [currentUpdatedAt, setCurrentUpdatedAt] = useState(updatedAt);
   
@@ -303,12 +304,18 @@ export function EnhancedChatClient({
   useEffect(() => {
     // No sorting needed - database orders by message_index
     // Map real messages with enhanced data
-    const realMessages = messages.map(msg => {
+    const realMessages = messages.map((msg, index) => {
       // Check both metadata (streaming) and data (DB load) for sources
       const metadata = (msg as { metadata?: { sources?: Citation[]; progress?: ProgressEvent[] } }).metadata;
       const data = (msg as { data?: { sources?: Citation[]; progress?: ProgressEvent[] } }).data;
       const sources = metadata?.sources || data?.sources || (msg as EnhancedChatMessage).sources;
       const progress = metadata?.progress || data?.progress || (msg as EnhancedChatMessage).progress;
+      
+      // Attach pending files to the last user message
+      const isLastUserMessage = index === messages.length - 1 && msg.role === 'user';
+      const attachedFiles = isLastUserMessage && pendingFilesRef.current.length > 0 
+        ? pendingFilesRef.current 
+        : (msg as EnhancedChatMessage).attachedFiles;
       
       // Debug logging
       if (msg.role === 'assistant') {
@@ -330,9 +337,15 @@ export function EnhancedChatClient({
         // Extract sources and progress from message metadata/data
         sources,
         progress,
+        attachedFiles,
         isStreaming: status === 'streaming' && msg === messages[messages.length - 1],
       };
     });
+    
+    // Clear pending files after attaching them
+    if (pendingFilesRef.current.length > 0 && realMessages.some(m => m.role === 'user')) {
+      pendingFilesRef.current = [];
+    }
     
     setEnhancedMessages(realMessages);
   }, [messages, status]);
@@ -388,31 +401,8 @@ export function EnhancedChatClient({
     
     if (!input.trim() || status === 'streaming') return;
     
-    // Capture current uploaded files for this message
-    const filesForThisMessage = [...uploadedFiles];
-    
-    // Immediately add a "thinking" assistant message for instant feedback
-    const thinkingMessage: EnhancedChatMessage = {
-      id: `thinking-${Date.now()}`,
-      role: 'assistant',
-      parts: [{ type: 'text' as const, text: '' }],
-      createdAt: new Date(),
-      reasoning: undefined,
-      sources: undefined,
-      isStreaming: true,
-    };
-    
-    setEnhancedMessages(prev => {
-      // Add attached files to the last user message
-      const updated = [...prev];
-      if (updated.length > 0 && updated[updated.length - 1].role === 'user' && filesForThisMessage.length > 0) {
-        updated[updated.length - 1] = {
-          ...updated[updated.length - 1],
-          attachedFiles: filesForThisMessage,
-        };
-      }
-      return [...updated, thinkingMessage];
-    });
+    // Store files to attach to the next user message
+    pendingFilesRef.current = uploadedFiles.map(f => ({ name: f.name, id: f.id }));
     
     // Append the message to the chat using correct format
     sendMessage({ text: input.trim() });
@@ -420,7 +410,7 @@ export function EnhancedChatClient({
     // Clear the input field and uploaded files
     form.reset();
     setUploadedFiles([]);
-  }, [sendMessage, status, setEnhancedMessages, uploadedFiles]);
+  }, [sendMessage, status, uploadedFiles]);
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden rounded-xl bg-background">

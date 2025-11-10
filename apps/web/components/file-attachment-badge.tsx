@@ -1,16 +1,20 @@
 'use client';
 
-import { FileText, X } from 'lucide-react';
+import { FileText, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface FileAttachmentBadgeProps {
   fileName: string;
   onRemove?: () => void;
+  status?: 'processing' | 'ready' | 'error';
   className?: string;
 }
 
-export function FileAttachmentBadge({ fileName, onRemove, className }: FileAttachmentBadgeProps) {
+export function FileAttachmentBadge({ fileName, onRemove, status = 'ready', className }: FileAttachmentBadgeProps) {
+  const statusText = status === 'processing' ? 'Processing...' : status === 'error' ? 'Error' : 'Document';
+  const isProcessing = status === 'processing';
+  
   return (
     <div
       className={cn(
@@ -21,13 +25,17 @@ export function FileAttachmentBadge({ fileName, onRemove, className }: FileAttac
     >
       <div className="flex items-center gap-2 min-w-0">
         <div className="flex-shrink-0 rounded bg-blue-500 p-1.5">
-          <FileText className="size-4 text-white" />
+          {isProcessing ? (
+            <Loader2 className="size-4 text-white animate-spin" />
+          ) : (
+            <FileText className="size-4 text-white" />
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-blue-900 dark:text-blue-100 truncate">
             {fileName}
           </p>
-          <p className="text-xs text-blue-600 dark:text-blue-400">Document</p>
+          <p className="text-xs text-blue-600 dark:text-blue-400">{statusText}</p>
         </div>
       </div>
       {onRemove && (

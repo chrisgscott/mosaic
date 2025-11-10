@@ -158,8 +158,9 @@ export function EnhancedChatClient({
   const selectedModelRef = useRef(selectedModel); // Ref to always have current value
   const [webSearchEnabled, setWebSearchEnabled] = useState(false); // Web search toggle
   const webSearchEnabledRef = useRef(webSearchEnabled); // Ref to always have current value
-  const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; id: string }>>([]); // Session files
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; id: string; status?: 'processing' | 'ready' | 'error' }>>([]); // Session files
   const fileInputRef = useRef<HTMLInputElement>(null); // File input ref
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false); // Track if any files are processing
   const [currentTitle, setCurrentTitle] = useState(sessionTitle);
   const [currentUpdatedAt, setCurrentUpdatedAt] = useState(updatedAt);
   
@@ -180,6 +181,8 @@ export function EnhancedChatClient({
     const maxAttempts = 60; // 60 attempts = 1 minute max
     let attempts = 0;
     
+    setIsProcessingFiles(true);
+    
     const checkStatus = async () => {
       try {
         const response = await fetch('/api/documents/status', {
@@ -191,9 +194,20 @@ export function EnhancedChatClient({
         const { documents } = await response.json();
         const allReady = documents.every((doc: { status: string }) => doc.status === 'ready' || doc.status === 'error');
         
+        // Update file statuses in state
+        setUploadedFiles(prev => prev.map(file => {
+          const doc = documents.find((d: { id: string }) => d.id === file.id);
+          if (doc) {
+            return { ...file, status: doc.status === 'ready' ? 'ready' : doc.status === 'error' ? 'error' : 'processing' };
+          }
+          return file;
+        }));
+        
         if (allReady) {
           const readyCount = documents.filter((doc: { status: string }) => doc.status === 'ready').length;
           const errorCount = documents.filter((doc: { status: string }) => doc.status === 'error').length;
+          
+          setIsProcessingFiles(false);
           
           if (readyCount > 0) {
             toast.success(`${readyCount} document${readyCount > 1 ? 's' : ''} processed and ready to search!`);
@@ -207,9 +221,12 @@ export function EnhancedChatClient({
         attempts++;
         if (attempts < maxAttempts) {
           setTimeout(checkStatus, 1000); // Check every second
+        } else {
+          setIsProcessingFiles(false);
         }
       } catch (error) {
         console.error('[Upload] Failed to check document status:', error);
+        setIsProcessingFiles(false);
       }
     };
     
@@ -603,6 +620,7 @@ export function EnhancedChatClient({
                 <FileAttachmentBadge
                   key={file.id}
                   fileName={file.name}
+                  status={file.status}
                   onRemove={() => {
                     setUploadedFiles(prev => prev.filter(f => f.id !== file.id));
                   }}
@@ -687,13 +705,14 @@ export function EnhancedChatClient({
 
                     console.log('[Upload] Success:', result);
                     
-                    // Update uploaded files state
+                    // Update uploaded files state with processing status
                     if (result.uploaded) {
                       setUploadedFiles(prev => [
                         ...prev,
                         ...result.uploaded.map((f: { id: string; fileName: string }) => ({
                           id: f.id,
                           name: f.fileName,
+                          status: 'processing' as const,
                         })),
                       ]);
                     }
@@ -729,7 +748,7 @@ export function EnhancedChatClient({
               </PromptInputButton>
             </PromptInputTools>
             <PromptInputSubmit 
-              disabled={status === 'streaming'}
+              disabled={status === 'streaming' || isProcessingFiles}
               status={status as 'ready' | 'streaming' | 'submitted'}
             />
           </PromptInputToolbar>

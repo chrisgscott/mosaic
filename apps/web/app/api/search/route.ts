@@ -9,6 +9,7 @@ import { createProgressEvent, type ProgressCallback } from "@/lib/search-progres
 import { addProgress } from '../chat/[id]/progress/route';
 import { graphEnhancedSearch, isRelationshipQuery } from "@/lib/graph/graph-search";
 import { logSearchSignal } from "@/lib/graph/search-signals";
+import { authenticateRequest } from "@/lib/api-auth";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -273,17 +274,19 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-    const supabase = await createClient();
-
-    // Check authentication
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Authenticate user (supports both cookie and API key)
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated) {
+      console.error("[Search] Authentication failed:", auth.error);
+      return NextResponse.json(
+        { error: auth.error || "Unauthorized" },
+        { status: 401 }
+      );
     }
+
+    // Use service role client for API key auth (bypasses RLS), otherwise use regular client
+    const supabase = auth.supabase || await createClient();
+    const user = auth.user;
 
     // Fetch system settings
     const systemSettings = await getSystemSettings(supabase);
@@ -297,6 +300,7 @@ export async function POST(request: NextRequest) {
       match_count = 10,
       graph_hops = 1,    // Number of hops for graph traversal
       // Tool-specific overrides
+      skip_hyde = false,
       skip_multi_query = false,
       skip_graph_search = false,
       skip_reranking = false,
@@ -307,12 +311,13 @@ export async function POST(request: NextRequest) {
     console.log('[Search API] Received request - session_id:', session_id, 'query:', query);
     
     // System settings take precedence over request body
-    const use_hyde = systemSettings["search.useHyDE"] ?? true;
+    let use_hyde = systemSettings["search.useHyDE"] ?? true;
     let use_multi_query = systemSettings["search.useMultiQuery"] ?? true;
     let use_reranking = systemSettings["search.useReranking"] ?? true;
     let use_graph = systemSettings["search.useGraphSearch"] ?? true;
     
     // Apply tool-specific overrides
+    if (skip_hyde) use_hyde = false;
     if (skip_multi_query) use_multi_query = false;
     if (skip_graph_search) use_graph = false;
     if (skip_reranking) use_reranking = false;
@@ -427,7 +432,7 @@ export async function POST(request: NextRequest) {
           query_embedding: embResp.data[0].embedding,
           match_threshold,
           match_count: candidateCount,
-          filter_user_id: user.id,
+          filter_user_id: auth.useServiceRole ? null : user.id, // Skip user filter when using service role
           filter_session_id: hasSessionDocs ? session_id : null, // Only filter by session if it has docs
           rrf_k: 60,
         })
@@ -637,7 +642,7 @@ export async function POST(request: NextRequest) {
         query_embedding: queryEmbedding,
         match_threshold,
         match_count: candidateCount,
-        filter_user_id: user.id,
+        filter_user_id: auth.useServiceRole ? null : user.id, // Skip user filter when using service role
         filter_session_id: hasSessionDocs ? session_id : null,
         rrf_k: 60,
       });

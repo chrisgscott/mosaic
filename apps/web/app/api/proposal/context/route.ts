@@ -1,0 +1,239 @@
+import { createClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { authenticateRequest } from "@/lib/api-auth";
+import OpenAI from "openai";
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Rate limiting: Track last rerank call time
+let lastRerankTime = 0;
+const RERANK_DELAY_MS = 6500; // 6.5 seconds between calls = ~9 calls/minute (safe margin)
+
+// Rerank results using Cohere Rerank API
+async function rerankChunks(query: string, chunks: Array<{ content: string; similarity: number }>): Promise<Array<{ content: string; similarity: number; rerank_score?: number }>> {
+  if (!process.env.COHERE_API_KEY) {
+    console.warn("[Rerank] No COHERE_API_KEY found, skipping reranking");
+    return chunks;
+  }
+
+  if (chunks.length === 0) {
+    return chunks;
+  }
+
+  try {
+    // Rate limiting: Wait if needed to avoid hitting Cohere's 10 calls/minute limit
+    const now = Date.now();
+    const timeSinceLastCall = now - lastRerankTime;
+    if (timeSinceLastCall < RERANK_DELAY_MS) {
+      const waitTime = RERANK_DELAY_MS - timeSinceLastCall;
+      console.log(`[Rerank] Rate limiting: waiting ${waitTime}ms`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    lastRerankTime = Date.now();
+
+    const response = await fetch("https://api.cohere.com/v2/rerank", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.COHERE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "rerank-english-v3.0",
+        query: query,
+        documents: chunks.map(c => c.content),
+        top_n: chunks.length,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("[Rerank] API error:", await response.text());
+      return chunks;
+    }
+
+    const responseData = await response.json();
+    
+    // Map rerank scores back to chunks
+    const rerankedChunks = responseData.results.map((item: { index: number; relevance_score: number }) => ({
+      ...chunks[item.index],
+      rerank_score: item.relevance_score,
+    }));
+
+    return rerankedChunks;
+  } catch (error) {
+    console.error("[Rerank] Error:", error);
+    return chunks;
+  }
+}
+
+/**
+ * POST /api/proposal/context
+ * 
+ * Returns relevant chunks and graph entities/relationships for prompt enrichment.
+ * 
+ * Request body:
+ * {
+ *   "query": string,
+ *   "max_chunks"?: number (default: 10),
+ *   "max_entities"?: number (default: 5),
+ *   "session_id"?: string
+ * }
+ * 
+ * Response:
+ * {
+ *   "chunks": Array<{ content: string, similarity: number, metadata: object }>,
+ *   "entities": Array<{ name: string, type: string, description: string }>,
+ *   "relationships": Array<{ source: string, target: string, type: string }>
+ * }
+ */
+export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  
+  try {
+    // Authenticate user (supports both cookie and API key)
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated) {
+      console.error("[Context] Authentication failed:", auth.error);
+      return NextResponse.json(
+        { error: auth.error || "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // Use service role client for API key auth (bypasses RLS), otherwise use regular client
+    const supabase = auth.supabase || await createClient();
+
+    // Parse request body
+    const body = await request.json();
+    const { 
+      query, 
+      max_chunks = 10, 
+      max_entities = 5,
+      session_id 
+    } = body;
+
+    // Validate inputs
+    if (!query || typeof query !== 'string') {
+      return NextResponse.json(
+        { error: "Missing or invalid query" },
+        { status: 400 }
+      );
+    }
+
+    console.log(`[Context] Retrieving context for query: "${query.substring(0, 100)}..."`);
+
+    // Generate embedding for query
+    const embeddingStart = Date.now();
+    const embeddingResponse = await openai.embeddings.create({
+      model: "text-embedding-3-small",
+      input: query,
+    });
+    const queryEmbedding = embeddingResponse.data[0].embedding;
+    console.log(`[Context] Generated embedding in ${Date.now() - embeddingStart}ms`);
+
+    // Search for relevant chunks using hybrid search
+    const searchParams: Record<string, any> = {
+      query_text: query,
+      query_embedding: queryEmbedding,
+      match_count: max_chunks,
+      match_threshold: 0.5,
+    };
+
+    if (session_id) {
+      searchParams.filter_session_id = session_id;
+    }
+
+    const chunksStart = Date.now();
+    const { data: chunks, error: searchError } = await supabase
+      .rpc('search_chunks_hybrid', searchParams);
+
+    if (searchError) {
+      console.error("[Context] Chunk search error:", searchError);
+      return NextResponse.json(
+        { error: "Error searching chunks" },
+        { status: 500 }
+      );
+    }
+
+    console.log(`[Context] Retrieved ${chunks?.length || 0} chunks in ${Date.now() - chunksStart}ms`);
+
+    // Format chunks with metadata
+    let formattedChunks = (chunks || []).map((chunk: any) => ({
+      content: chunk.content,
+      similarity: chunk.similarity,
+      metadata: {
+        document_id: chunk.document_id,
+        chunk_index: chunk.chunk_index,
+      },
+    }));
+
+    // Rerank results for better accuracy
+    if (formattedChunks.length > 0) {
+      formattedChunks = await rerankChunks(query, formattedChunks);
+      console.log(`[Context] Reranked ${formattedChunks.length} chunks`);
+    }
+
+    // Search for relevant entities
+    const entitiesStart = Date.now();
+    let entityQuery = supabase
+      .from('entities')
+      .select('name, type, description')
+      .or(`name.ilike.%${query}%,description.ilike.%${query}%`)
+      .limit(max_entities);
+
+    if (session_id) {
+      entityQuery = entityQuery.eq('session_id', session_id);
+    }
+
+    const { data: entities, error: entityError } = await entityQuery;
+
+    if (entityError) {
+      console.error("[Context] Entity search error:", entityError);
+    }
+
+    console.log(`[Context] Retrieved ${entities?.length || 0} entities in ${Date.now() - entitiesStart}ms`);
+
+    // Get relationships for found entities
+    const relationshipsStart = Date.now();
+    const relationships: Array<{ source: string; target: string; type: string }> = [];
+    
+    if (entities && entities.length > 0) {
+      const entityNames = entities.map(e => e.name);
+      
+      const { data: rels, error: relError } = await supabase
+        .from('relationships')
+        .select('source_entity_name, target_entity_name, relationship_type')
+        .or(`source_entity_name.in.(${entityNames.join(',')}),target_entity_name.in.(${entityNames.join(',')})`)
+        .limit(20);
+
+      if (relError) {
+        console.error("[Context] Relationship search error:", relError);
+      } else if (rels) {
+        relationships.push(...rels.map(r => ({
+          source: r.source_entity_name,
+          target: r.target_entity_name,
+          type: r.relationship_type,
+        })));
+      }
+    }
+
+    console.log(`[Context] Retrieved ${relationships.length} relationships in ${Date.now() - relationshipsStart}ms`);
+
+    const totalTime = Date.now() - startTime;
+    console.log(`[Context] Completed in ${totalTime}ms`);
+
+    return NextResponse.json({
+      chunks: formattedChunks,
+      entities: entities || [],
+      relationships,
+    });
+
+  } catch (error) {
+    console.error("[Context] Unexpected error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

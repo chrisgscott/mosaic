@@ -430,7 +430,7 @@ export async function POST(request: NextRequest) {
           query_embedding: embResp.data[0].embedding,
           match_threshold,
           match_count: candidateCount,
-          filter_user_id: user.id,
+          filter_user_id: auth.useServiceRole ? null : user.id, // Skip user filter when using service role
           filter_session_id: hasSessionDocs ? session_id : null, // Only filter by session if it has docs
           rrf_k: 60,
         })
@@ -640,7 +640,7 @@ export async function POST(request: NextRequest) {
         query_embedding: queryEmbedding,
         match_threshold,
         match_count: candidateCount,
-        filter_user_id: user.id,
+        filter_user_id: auth.useServiceRole ? null : user.id, // Skip user filter when using service role
         filter_session_id: hasSessionDocs ? session_id : null,
         rrf_k: 60,
       });

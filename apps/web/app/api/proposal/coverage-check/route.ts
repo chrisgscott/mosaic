@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { authenticateRequest } from "@/lib/api-auth";
 import OpenAI from "openai";
 
 const openai = new OpenAI({
@@ -34,17 +35,17 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
   
   try {
-    // Authenticate user
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      console.error("[Coverage Check] Authentication failed:", authError);
+    // Authenticate user (supports both cookie and API key)
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated) {
+      console.error("[Coverage Check] Authentication failed:", auth.error);
       return NextResponse.json(
-        { error: "Unauthorized" },
+        { error: auth.error || "Unauthorized" },
         { status: 401 }
       );
     }
+
+    const supabase = await createClient();
 
     // Parse request body
     const body = await request.json();

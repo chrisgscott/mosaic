@@ -4,7 +4,22 @@ These endpoints support the TRANSCOM proposal evaluation tool by leveraging Mosa
 
 ## Authentication
 
-All endpoints require authentication via Supabase. Include a valid session token in your requests.
+All endpoints support two authentication methods:
+
+### 1. API Key (Recommended for External Integrations)
+Include the `X-API-Key` header with your requests:
+
+```bash
+curl -X POST https://mosaic.render.com/api/proposal/coverage-check \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{ ... }'
+```
+
+**Setup:** Set `MOSAIC_API_KEY` in your environment variables.
+
+### 2. Cookie-based Auth (For Web UI)
+Authenticate through the Mosaic web interface. Your session cookies will be used automatically.
 
 ## Endpoints
 
@@ -52,7 +67,7 @@ Analyzes semantic coverage of proposal text against PWS tasks using hybrid searc
 ```bash
 curl -X POST https://mosaic.render.com/api/proposal/coverage-check \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "X-API-Key: YOUR_API_KEY" \
   -d '{
     "proposal_text": "Our solution provides comprehensive logistics support...",
     "pws_tasks": [
@@ -113,7 +128,7 @@ Validates terminology usage and provides suggestions from the knowledge graph.
 ```bash
 curl -X POST https://mosaic.render.com/api/proposal/terminology \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "X-API-Key: YOUR_API_KEY" \
   -d '{
     "terms": [
       { "term": "TRANSCOM" },
@@ -174,7 +189,7 @@ Returns relevant chunks and graph entities/relationships for prompt enrichment.
 ```bash
 curl -X POST https://mosaic.render.com/api/proposal/context \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "X-API-Key: YOUR_API_KEY" \
   -d '{
     "query": "What are the requirements for logistics support?",
     "max_chunks": 5,
@@ -235,7 +250,7 @@ Traverses the knowledge graph to find related concepts and provide suggestions.
 ```bash
 curl -X POST https://mosaic.render.com/api/proposal/graph-suggest \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "X-API-Key: YOUR_API_KEY" \
   -d '{
     "entity_name": "TRANSCOM",
     "max_depth": 2

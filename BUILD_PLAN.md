@@ -144,6 +144,30 @@ Mosaic is a comprehensive RAG platform combining semantic search with graph-base
 - Better AI decision-making
 - Aligns with industry best practices
 
+#### 6.15 RAG Architecture Simplification & Contextual Retrieval
+**Status:** Ready to start  
+**Priority:** Very High (Core quality & cost)  
+**Estimated:** 3-5 days (Phase 1)
+
+**Reference:** See `docs/RAG_STRATEGY_AUDIT.md` for detailed analysis and rationale.
+
+**Goals:**
+- Improve answer quality and retrieval reliability
+- Reduce latency and cost for the common path
+- Make advanced strategies opt-in instead of always-on
+
+**Scope (Phase 1):**
+- Implement **Contextual Retrieval** during ingestion (Anthropic-style context prefixes)
+- Simplify **Agentic RAG** tools to a smaller, clearer set
+- Make **Multi-Query** and **HyDE** optional via `system_settings` (defaults OFF)
+- Add configuration to treat **Graph search** as opt-in per collection/use case
+
+**Expected Impact:**
+- 35-49% reduction in retrieval failures (per Anthropic study)
+- 40-60% faster average search latency for default path
+- 50-75% reduction in unnecessary LLM calls for search
+- Cleaner mental model for users: "simple by default, advanced when needed"
+
 #### 6.2 Conversation Features
 **Status:** Scheduled  
 **Priority:** High  
@@ -621,12 +645,13 @@ def process_csv(file_path, document_id):
 
 #### Short Term (Weeks 1-4): Core RAG Enhancement
 1. **Week 1-2:** Vercel AI SDK Tool-Based Architecture (Phase 2) - Daily QoL
-2. **Week 2-3:** Conversation Features & Grounding Controls
-3. **Week 4:** Context Management (builds on conversations)
-4. **Week 5:** Entity Deduplication During Extraction (Phase 1)
-5. **Week 6:** Intelligent Query Caching (Phase 1) - Quick win
-6. **Week 7:** Schema Analytics & Usage Tracking
-7. **Week 8:** DEG-RAG Planning & Setup
+2. **Week 2-3:** RAG Architecture Simplification & Contextual Retrieval (Phase 1)
+3. **Week 3-4:** Conversation Features & Grounding Controls
+4. **Week 4-5:** Context Management (builds on conversations)
+5. **Week 5-6:** Entity Deduplication During Extraction (Phase 1)
+6. **Week 6-7:** Intelligent Query Caching (Phase 1) - Quick win
+7. **Week 7-8:** Schema Analytics & Usage Tracking
+8. **Week 8:** DEG-RAG Planning & Setup
 
 #### Medium Term (Weeks 5-8): Knowledge Graph & Living Entities
 1. **Week 5-6:** DEG-RAG Implementation

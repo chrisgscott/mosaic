@@ -7,6 +7,52 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Rerank results using Cohere Rerank API
+async function rerankChunks(query: string, chunks: Array<{ text: string; similarity: number }>): Promise<Array<{ text: string; similarity: number; rerank_score?: number }>> {
+  if (!process.env.COHERE_API_KEY) {
+    console.warn("[Rerank] No COHERE_API_KEY found, skipping reranking");
+    return chunks;
+  }
+
+  if (chunks.length === 0) {
+    return chunks;
+  }
+
+  try {
+    const response = await fetch("https://api.cohere.com/v2/rerank", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.COHERE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "rerank-english-v3.0",
+        query: query,
+        documents: chunks.map(c => c.text),
+        top_n: chunks.length,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("[Rerank] API error:", await response.text());
+      return chunks;
+    }
+
+    const responseData = await response.json();
+    
+    // Map rerank scores back to chunks
+    const rerankedChunks = responseData.results.map((item: { index: number; relevance_score: number }) => ({
+      ...chunks[item.index],
+      rerank_score: item.relevance_score,
+    }));
+
+    return rerankedChunks;
+  } catch (error) {
+    console.error("[Rerank] Error:", error);
+    return chunks;
+  }
+}
+
 /**
  * POST /api/proposal/coverage-check
  * 
@@ -114,16 +160,22 @@ export async function POST(request: NextRequest) {
             };
           }
 
-          // Calculate coverage score based on top matches
-          const matchedChunks = (chunks || []).map((chunk: { content: string; similarity: number }) => ({
+          // Format chunks for reranking
+          let matchedChunks = (chunks || []).map((chunk: { content: string; similarity: number }) => ({
             text: chunk.content,
             similarity: chunk.similarity,
           }));
 
-          // Coverage score is the average of top 3 similarities (or fewer if less available)
+          // Rerank results for better accuracy
+          if (matchedChunks.length > 0) {
+            matchedChunks = await rerankChunks(task.text, matchedChunks);
+          }
+
+          // Coverage score is the average of top 3 rerank scores (or similarities if no rerank)
           const topMatches = matchedChunks.slice(0, 3);
           const coverageScore = topMatches.length > 0
-            ? topMatches.reduce((sum: number, m: { similarity: number }) => sum + m.similarity, 0) / topMatches.length
+            ? topMatches.reduce((sum: number, m: { rerank_score?: number; similarity: number }) => 
+                sum + (m.rerank_score ?? m.similarity), 0) / topMatches.length
             : 0;
 
           // Identify gaps if coverage is low

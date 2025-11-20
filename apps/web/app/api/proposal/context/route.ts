@@ -7,6 +7,52 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Rerank results using Cohere Rerank API
+async function rerankChunks(query: string, chunks: Array<{ content: string; similarity: number }>): Promise<Array<{ content: string; similarity: number; rerank_score?: number }>> {
+  if (!process.env.COHERE_API_KEY) {
+    console.warn("[Rerank] No COHERE_API_KEY found, skipping reranking");
+    return chunks;
+  }
+
+  if (chunks.length === 0) {
+    return chunks;
+  }
+
+  try {
+    const response = await fetch("https://api.cohere.com/v2/rerank", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.COHERE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "rerank-english-v3.0",
+        query: query,
+        documents: chunks.map(c => c.content),
+        top_n: chunks.length,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("[Rerank] API error:", await response.text());
+      return chunks;
+    }
+
+    const responseData = await response.json();
+    
+    // Map rerank scores back to chunks
+    const rerankedChunks = responseData.results.map((item: { index: number; relevance_score: number }) => ({
+      ...chunks[item.index],
+      rerank_score: item.relevance_score,
+    }));
+
+    return rerankedChunks;
+  } catch (error) {
+    console.error("[Rerank] Error:", error);
+    return chunks;
+  }
+}
+
 /**
  * POST /api/proposal/context
  * 
@@ -99,7 +145,7 @@ export async function POST(request: NextRequest) {
     console.log(`[Context] Retrieved ${chunks?.length || 0} chunks in ${Date.now() - chunksStart}ms`);
 
     // Format chunks with metadata
-    const formattedChunks = (chunks || []).map((chunk: any) => ({
+    let formattedChunks = (chunks || []).map((chunk: any) => ({
       content: chunk.content,
       similarity: chunk.similarity,
       metadata: {
@@ -107,6 +153,12 @@ export async function POST(request: NextRequest) {
         chunk_index: chunk.chunk_index,
       },
     }));
+
+    // Rerank results for better accuracy
+    if (formattedChunks.length > 0) {
+      formattedChunks = await rerankChunks(query, formattedChunks);
+      console.log(`[Context] Reranked ${formattedChunks.length} chunks`);
+    }
 
     // Search for relevant entities
     const entitiesStart = Date.now();

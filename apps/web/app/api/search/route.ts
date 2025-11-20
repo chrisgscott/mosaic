@@ -300,6 +300,7 @@ export async function POST(request: NextRequest) {
       match_count = 10,
       graph_hops = 1,    // Number of hops for graph traversal
       // Tool-specific overrides
+      skip_hyde = false,
       skip_multi_query = false,
       skip_graph_search = false,
       skip_reranking = false,
@@ -310,12 +311,13 @@ export async function POST(request: NextRequest) {
     console.log('[Search API] Received request - session_id:', session_id, 'query:', query);
     
     // System settings take precedence over request body
-    const use_hyde = systemSettings["search.useHyDE"] ?? true;
+    let use_hyde = systemSettings["search.useHyDE"] ?? true;
     let use_multi_query = systemSettings["search.useMultiQuery"] ?? true;
     let use_reranking = systemSettings["search.useReranking"] ?? true;
     let use_graph = systemSettings["search.useGraphSearch"] ?? true;
     
     // Apply tool-specific overrides
+    if (skip_hyde) use_hyde = false;
     if (skip_multi_query) use_multi_query = false;
     if (skip_graph_search) use_graph = false;
     if (skip_reranking) use_reranking = false;

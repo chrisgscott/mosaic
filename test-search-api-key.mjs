@@ -20,9 +20,10 @@ async function testSearch() {
       body: JSON.stringify({
         query: 'What are TRANSCOM strategic airlift requirements?',
         match_count: 5,
-        use_reranking: true,
-        use_hyde: false,
-        use_multi_query: false,
+        skip_hyde: true,
+        skip_multi_query: true,
+        skip_graph_search: true,
+        // skip_reranking: false (keep reranking for quality)
       }),
     });
 

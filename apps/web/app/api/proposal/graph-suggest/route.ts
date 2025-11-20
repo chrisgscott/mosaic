@@ -17,9 +17,9 @@ import { authenticateRequest } from "@/lib/api-auth";
  * 
  * Response:
  * {
- *   "entity": { name: string, type: string, summary: string },
+ *   "entity": { name: string, type: string, description: string },
  *   "related_entities": Array<{
- *     "entity": { name: string, type: string, summary: string },
+ *     "entity": { name: string, type: string, description: string },
  *     "relationship": { type: string, direction: "outgoing" | "incoming" },
  *     "depth": number
  *   }>,
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     // Get the starting entity
     let entityQuery = supabase
       .from('entities')
-      .select('name, type, summary')
+      .select('name, type, description')
       .eq('name', entity_name)
       .limit(1);
 
@@ -93,13 +93,13 @@ export async function POST(request: NextRequest) {
     const startEntity = {
       name: entities[0].name,
       type: entities[0].type,
-      summary: entities[0].summary,
+      summary: entities[0].description,
     };
 
     // Traverse the graph using BFS
     const visited = new Set<string>([entity_name]);
     const relatedEntities: Array<{
-      entity: { name: string; type: string; summary: string };
+      entity: { name: string; type: string; description: string };
       relationship: { type: string; direction: "outgoing" | "incoming" };
       depth: number;
     }> = [];
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
             // Get entity details
             let targetQuery = supabase
               .from('entities')
-              .select('name, type, summary')
+              .select('name, type, description')
               .eq('name', rel.target_entity_name)
               .limit(1);
 
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
                 entity: {
                   name: targetEntities[0].name,
                   type: targetEntities[0].type,
-                  summary: targetEntities[0].summary,
+                  summary: targetEntities[0].description,
                 },
                 relationship: {
                   type: rel.relationship_type,
@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
             // Get entity details
             let sourceQuery = supabase
               .from('entities')
-              .select('name, type, summary')
+              .select('name, type, description')
               .eq('name', rel.source_entity_name)
               .limit(1);
 
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
                 entity: {
                   name: sourceEntities[0].name,
                   type: sourceEntities[0].type,
-                  summary: sourceEntities[0].summary,
+                  summary: sourceEntities[0].description,
                 },
                 relationship: {
                   type: rel.relationship_type,

@@ -23,7 +23,7 @@ const openai = new OpenAI({
  * Response:
  * {
  *   "chunks": Array<{ content: string, similarity: number, metadata: object }>,
- *   "entities": Array<{ name: string, type: string, summary: string }>,
+ *   "entities": Array<{ name: string, type: string, description: string }>,
  *   "relationships": Array<{ source: string, target: string, type: string }>
  * }
  */
@@ -112,8 +112,8 @@ export async function POST(request: NextRequest) {
     const entitiesStart = Date.now();
     let entityQuery = supabase
       .from('entities')
-      .select('name, type, summary')
-      .or(`name.ilike.%${query}%,summary.ilike.%${query}%`)
+      .select('name, type, description')
+      .or(`name.ilike.%${query}%,description.ilike.%${query}%`)
       .limit(max_entities);
 
     if (session_id) {

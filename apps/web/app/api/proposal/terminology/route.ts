@@ -18,7 +18,7 @@ import { authenticateRequest } from "@/lib/api-auth";
  *   "results": Array<{
  *     "term": string,
  *     "is_valid": boolean,
- *     "entity_match"?: { name: string, type: string, summary: string },
+ *     "entity_match"?: { name: string, type: string, description: string },
  *     "suggestions": Array<{ term: string, reason: string }>,
  *     "related_concepts": Array<string>
  *   }>
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
           // Search for exact entity match
           let entityQuery = supabase
             .from('entities')
-            .select('name, type, summary')
+            .select('name, type, description')
             .ilike('name', `%${term}%`)
             .limit(1);
 
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
           let relatedQuery = supabase
             .from('entities')
             .select('name')
-            .or(`name.ilike.%${term}%,summary.ilike.%${term}%`)
+            .or(`name.ilike.%${term}%,description.ilike.%${term}%`)
             .neq('name', term)
             .limit(5);
 
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
             entity_match: entityMatch ? {
               name: entityMatch.name,
               type: entityMatch.type,
-              summary: entityMatch.summary,
+              summary: entityMatch.description,
             } : undefined,
             suggestions,
             related_concepts: [...new Set(relatedConcepts)].slice(0, 5),

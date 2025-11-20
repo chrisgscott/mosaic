@@ -7,6 +7,10 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Rate limiting: Track last rerank call time
+let lastRerankTime = 0;
+const RERANK_DELAY_MS = 6500; // 6.5 seconds between calls = ~9 calls/minute (safe margin)
+
 // Rerank results using Cohere Rerank API
 async function rerankChunks(query: string, chunks: Array<{ content: string; similarity: number }>): Promise<Array<{ content: string; similarity: number; rerank_score?: number }>> {
   if (!process.env.COHERE_API_KEY) {
@@ -19,6 +23,16 @@ async function rerankChunks(query: string, chunks: Array<{ content: string; simi
   }
 
   try {
+    // Rate limiting: Wait if needed to avoid hitting Cohere's 10 calls/minute limit
+    const now = Date.now();
+    const timeSinceLastCall = now - lastRerankTime;
+    if (timeSinceLastCall < RERANK_DELAY_MS) {
+      const waitTime = RERANK_DELAY_MS - timeSinceLastCall;
+      console.log(`[Rerank] Rate limiting: waiting ${waitTime}ms`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    lastRerankTime = Date.now();
+
     const response = await fetch("https://api.cohere.com/v2/rerank", {
       method: "POST",
       headers: {

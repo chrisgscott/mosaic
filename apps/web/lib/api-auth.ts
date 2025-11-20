@@ -44,7 +44,7 @@ export async function authenticateRequest(request: NextRequest): Promise<{
       
       return {
         authenticated: true,
-        user: { id: 'api-key-user', email: 'api@mosaic.local' },
+        user: { id: '00000000-0000-0000-0000-000000000000', email: 'api@mosaic.local' },
         supabase: serviceClient,
         useServiceRole: true,
       };

@@ -9,6 +9,7 @@ import { createProgressEvent, type ProgressCallback } from "@/lib/search-progres
 import { addProgress } from '../chat/[id]/progress/route';
 import { graphEnhancedSearch, isRelationshipQuery } from "@/lib/graph/graph-search";
 import { logSearchSignal } from "@/lib/graph/search-signals";
+import { authenticateRequest } from "@/lib/api-auth";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -273,17 +274,19 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-    const supabase = await createClient();
-
-    // Check authentication
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Authenticate user (supports both cookie and API key)
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated) {
+      console.error("[Search] Authentication failed:", auth.error);
+      return NextResponse.json(
+        { error: auth.error || "Unauthorized" },
+        { status: 401 }
+      );
     }
+
+    // Use service role client for API key auth (bypasses RLS), otherwise use regular client
+    const supabase = auth.supabase || await createClient();
+    const user = auth.user;
 
     // Fetch system settings
     const systemSettings = await getSystemSettings(supabase);

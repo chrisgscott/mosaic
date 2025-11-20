@@ -54,15 +54,15 @@ async function runTests() {
     'Coverage Check',
     '/api/proposal/coverage-check',
     {
-      proposal_text: 'We provide comprehensive logistics support with 24/7 coordination and real-time tracking capabilities for all transportation needs.',
+      proposal_text: 'Our solution provides strategic airlift capabilities and deployment readiness support for TRANSCOM operations, including joint logistics coordination and mobility operations.',
       pws_tasks: [
         {
           id: 'task-1',
-          text: 'Provide 24/7 logistics coordination'
+          text: 'Support strategic airlift operations'
         },
         {
           id: 'task-2',
-          text: 'Implement real-time tracking system'
+          text: 'Provide deployment and distribution support'
         }
       ]
     }
@@ -74,9 +74,9 @@ async function runTests() {
     '/api/proposal/terminology',
     {
       terms: [
-        { term: 'logistics' },
         { term: 'TRANSCOM' },
-        { term: 'coordination' }
+        { term: 'strategic airlift' },
+        { term: 'deployment' }
       ]
     }
   ));
@@ -86,7 +86,7 @@ async function runTests() {
     'Context Retrieval',
     '/api/proposal/context',
     {
-      query: 'What are the requirements for logistics support?',
+      query: 'What are TRANSCOM strategic airlift requirements?',
       max_chunks: 5,
       max_entities: 3
     }
@@ -97,7 +97,7 @@ async function runTests() {
     'Graph Suggest',
     '/api/proposal/graph-suggest',
     {
-      entity_name: 'logistics',
+      entity_name: 'TRANSCOM',
       max_depth: 2
     }
   ));

@@ -38,7 +38,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    // Use service role client for API key auth (bypasses RLS), otherwise use regular client
+    const supabase = auth.supabase || await createClient();
 
     // Parse request body
     const body = await request.json();
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
           // Search for exact entity match
           let entityQuery = supabase
             .from('entities')
-            .select('name, entity_type, summary')
+            .select('name, type, summary')
             .ilike('name', `%${term}%`)
             .limit(1);
 
@@ -137,7 +138,7 @@ export async function POST(request: NextRequest) {
             is_valid: !!entityMatch,
             entity_match: entityMatch ? {
               name: entityMatch.name,
-              type: entityMatch.entity_type,
+              type: entityMatch.type,
               summary: entityMatch.summary,
             } : undefined,
             suggestions,

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 
 /**
@@ -6,13 +7,17 @@ import { NextRequest } from "next/server";
  * 1. Cookie-based Supabase auth (for web UI)
  * 2. API key in X-API-Key header (for external integrations)
  * 
- * Returns { authenticated: true, user } on success
+ * Returns { authenticated: true, user, supabase } on success
  * Returns { authenticated: false, error } on failure
+ * 
+ * When using API key auth, returns a service role client to bypass RLS
  */
 export async function authenticateRequest(request: NextRequest): Promise<{
   authenticated: boolean;
   user?: any;
   error?: string;
+  supabase?: any;
+  useServiceRole?: boolean;
 }> {
   // Check for API key first
   const apiKey = request.headers.get('x-api-key');
@@ -31,9 +36,17 @@ export async function authenticateRequest(request: NextRequest): Promise<{
     
     if (apiKey === validApiKey) {
       console.log('[API Auth] Authenticated via API key');
+      
+      // Create service role client to bypass RLS
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+      const serviceClient = createServiceClient(supabaseUrl, supabaseServiceKey);
+      
       return {
         authenticated: true,
         user: { id: 'api-key-user', email: 'api@mosaic.local' },
+        supabase: serviceClient,
+        useServiceRole: true,
       };
     } else {
       console.warn('[API Auth] Invalid API key provided');

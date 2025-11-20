@@ -45,7 +45,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    // Use service role client for API key auth (bypasses RLS), otherwise use regular client
+    const supabase = auth.supabase || await createClient();
 
     // Parse request body
     const body = await request.json();

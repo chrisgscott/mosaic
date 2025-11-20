@@ -41,7 +41,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    // Use service role client for API key auth (bypasses RLS), otherwise use regular client
+    const supabase = auth.supabase || await createClient();
 
     // Parse request body
     const body = await request.json();
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
     const entitiesStart = Date.now();
     let entityQuery = supabase
       .from('entities')
-      .select('name, entity_type, summary')
+      .select('name, type, summary')
       .or(`name.ilike.%${query}%,summary.ilike.%${query}%`)
       .limit(max_entities);
 

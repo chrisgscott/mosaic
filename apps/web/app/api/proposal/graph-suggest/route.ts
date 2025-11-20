@@ -40,7 +40,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    // Use service role client for API key auth (bypasses RLS), otherwise use regular client
+    const supabase = auth.supabase || await createClient();
 
     // Parse request body
     const body = await request.json();
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
     // Get the starting entity
     let entityQuery = supabase
       .from('entities')
-      .select('name, entity_type, summary')
+      .select('name, type, summary')
       .eq('name', entity_name)
       .limit(1);
 
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
 
     const startEntity = {
       name: entities[0].name,
-      type: entities[0].entity_type,
+      type: entities[0].type,
       summary: entities[0].summary,
     };
 
@@ -134,7 +135,7 @@ export async function POST(request: NextRequest) {
             // Get entity details
             let targetQuery = supabase
               .from('entities')
-              .select('name, entity_type, summary')
+              .select('name, type, summary')
               .eq('name', rel.target_entity_name)
               .limit(1);
 
@@ -148,7 +149,7 @@ export async function POST(request: NextRequest) {
               relatedEntities.push({
                 entity: {
                   name: targetEntities[0].name,
-                  type: targetEntities[0].entity_type,
+                  type: targetEntities[0].type,
                   summary: targetEntities[0].summary,
                 },
                 relationship: {
@@ -183,7 +184,7 @@ export async function POST(request: NextRequest) {
             // Get entity details
             let sourceQuery = supabase
               .from('entities')
-              .select('name, entity_type, summary')
+              .select('name, type, summary')
               .eq('name', rel.source_entity_name)
               .limit(1);
 
@@ -197,7 +198,7 @@ export async function POST(request: NextRequest) {
               relatedEntities.push({
                 entity: {
                   name: sourceEntities[0].name,
-                  type: sourceEntities[0].entity_type,
+                  type: sourceEntities[0].type,
                   summary: sourceEntities[0].summary,
                 },
                 relationship: {

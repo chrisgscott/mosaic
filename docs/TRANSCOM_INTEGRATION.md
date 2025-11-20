@@ -74,9 +74,13 @@ Your Mosaic API key is stored in the environment:
 
 ```bash
 # In your TRANSCOM project .env file
-MOSAIC_API_KEY=92fe319d3b739aa7904e9659534e8cf0f3afd9286650ba53abb470a0d652a87c
+MOSAIC_API_KEY=your-api-key-here
 MOSAIC_BASE_URL=http://localhost:3000
 ```
+
+**Get your API key from:**
+- Local dev: Check `/apps/web/.env` in Mosaic project
+- Production: Contact your Mosaic administrator
 
 ### 2. Install HTTP Client
 

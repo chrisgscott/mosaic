@@ -53,10 +53,12 @@ settings_service = SettingsService(supabase)
 # Read configuration from settings (with ENV fallbacks)
 USE_API_VLM = settings_service.get_bool('processing.useApiVlm', True, 'USE_API_VLM')
 DOCLING_MAX_WORKERS = settings_service.get_int('processing.pdfWorkers', 10, 'DOCLING_MAX_WORKERS')
-ENABLE_GRAPH_EXTRACTION = settings_service.get_bool('search.useGraphSearch', True, 'ENABLE_GRAPH_EXTRACTION')
+# Graph extraction and document augmentation are OFF by default
+# Enable via admin settings if needed for specific use cases
+ENABLE_GRAPH_EXTRACTION = settings_service.get_bool('search.useGraphSearch', False, 'ENABLE_GRAPH_EXTRACTION')
 CHUNK_SUMMARY_NEIGHBORS = settings_service.get_int('processing.summaryNeighbors', 2, 'CHUNK_SUMMARY_NEIGHBORS')
 CHUNK_MAX_TOKENS = settings_service.get_int('processing.chunkMaxTokens', 256, 'CHUNK_MAX_TOKENS')
-ENABLE_DOCUMENT_AUGMENTATION = settings_service.get_bool('processing.enableDocumentAugmentation', True, 'ENABLE_DOCUMENT_AUGMENTATION')
+ENABLE_DOCUMENT_AUGMENTATION = settings_service.get_bool('processing.enableDocumentAugmentation', False, 'ENABLE_DOCUMENT_AUGMENTATION')
 QUESTIONS_PER_CHUNK = settings_service.get_int('processing.questionsPerChunk', 5, 'QUESTIONS_PER_CHUNK')
 
 # Get model settings for logging

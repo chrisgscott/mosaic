@@ -1,7 +1,11 @@
 /**
- * Search Tools for Vercel AI SDK - Fixed Version
+ * Search Tools for Vercel AI SDK
  * 
- * Using inputSchema (AI SDK v5) instead of parameters
+ * Two tools for agentic RAG:
+ * 1. search_documents - Full search with reranking (default)
+ * 2. quick_search - Fast search without reranking
+ * 
+ * Graph search is available but off by default (enable via settings).
  */
 
 import { tool } from 'ai';
@@ -17,56 +21,53 @@ export interface SearchToolResult {
   count: number;
   processing_time_ms: number;
   tool_used: string;
-  error?: string; // Optional error message for graceful degradation
+  error?: string;
+}
+
+// Helper to get session ID from global context
+function getSessionId(): string | undefined {
+  return (global as typeof global & { currentChatSessionId?: string }).currentChatSessionId;
+}
+
+// Helper to call search API
+async function callSearchAPI(body: Record<string, unknown>): Promise<SearchResponse> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const searchRequest = new NextRequest(`${baseUrl}/api/search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const response = await searchAPI(searchRequest);
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Search failed');
+  }
+  return response.json();
 }
 
 /**
- * Main comprehensive search tool
+ * Main search tool - hybrid search with reranking
  */
 export const searchDocumentsTool = tool({
-  description: `Comprehensive search through documents using multiple advanced techniques. Use for most questions about document content.`,
+  description: `Search through documents using semantic + keyword hybrid search with reranking. Use for most questions about document content.`,
   
   inputSchema: z.object({
-    query: z.string().describe('The search query to find relevant documents'),
+    query: z.string().describe('The search query'),
   }),
   
   execute: async ({ query }) => {
-    console.log(`[Tool] search_documents called with query: "${query}"`);
-    
-    // Get session ID from global context
-    const sessionId = (global as typeof global & { currentChatSessionId?: string }).currentChatSessionId;
+    console.log(`[Tool] search_documents: "${query}"`);
     
     try {
-      const searchBody = JSON.stringify({
+      const data = await callSearchAPI({
         query,
-        session_id: sessionId,
-        match_threshold: 0.5,
+        session_id: getSessionId(),
         match_count: 10,
-        graph_hops: 1,
       });
       
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      const searchRequest = new NextRequest(`${baseUrl}/api/search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: searchBody,
-      });
-
-      const searchResponse = await searchAPI(searchRequest);
-
-      if (!searchResponse.ok) {
-        const error = await searchResponse.json();
-        throw new Error(`Search failed: ${error.message}`);
-      }
-
-      const searchData: SearchResponse = await searchResponse.json();
-      
-      console.log(`[Tool] search_documents completed: ${searchData.count} results`);
-      
-      return {
-        ...searchData,
-        tool_used: 'search_documents',
-      };
+      console.log(`[Tool] search_documents: ${data.count} results`);
+      return { ...data, tool_used: 'search_documents' };
     } catch (error) {
       console.error(`[Tool] search_documents error:`, error);
       return {
@@ -82,55 +83,29 @@ export const searchDocumentsTool = tool({
 });
 
 /**
- * Quick search tool
+ * Quick search tool - fast search without reranking
  */
 export const quickSearchTool = tool({
-  description: `Fast semantic search for quick factual lookups. Use for simple questions and definitions.`,
+  description: `Fast semantic search for quick factual lookups. Skips reranking for speed.`,
   
   inputSchema: z.object({
-    query: z.string().describe('The search query for quick lookup'),
+    query: z.string().describe('The search query'),
   }),
   
   execute: async ({ query }) => {
-    console.log(`[Tool] quick_search called with query: "${query}"`);
-    
-    // Get session ID from global context
-    const sessionId = (global as typeof global & { currentChatSessionId?: string }).currentChatSessionId;
+    console.log(`[Tool] quick_search: "${query}"`);
     
     try {
-      const searchBody = JSON.stringify({
+      const data = await callSearchAPI({
         query,
-        session_id: sessionId,
-        match_threshold: 0.5,
-        match_count: 10,
-        graph_hops: 1,
-        skip_multi_query: true,
-        skip_graph_search: true,
+        session_id: getSessionId(),
+        match_count: 5,
         skip_reranking: true,
+        skip_graph_search: true,
       });
       
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      const searchRequest = new NextRequest(`${baseUrl}/api/search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: searchBody,
-      });
-
-      const searchResponse = await searchAPI(searchRequest);
-
-      if (!searchResponse.ok) {
-        const error = await searchResponse.json();
-        throw new Error(`Quick search failed: ${error.message}`);
-      }
-
-      const searchData: SearchResponse = await searchResponse.json();
-      
-      console.log(`[Tool] quick_search completed: ${searchData.count} results`);
-      
-      return {
-        ...searchData,
-        tool_used: 'quick_search',
-      };
+      console.log(`[Tool] quick_search: ${data.count} results`);
+      return { ...data, tool_used: 'quick_search' };
     } catch (error) {
       console.error(`[Tool] quick_search error:`, error);
       return {
@@ -146,64 +121,38 @@ export const quickSearchTool = tool({
 });
 
 /**
- * Deep graph search tool
+ * Graph search tool - for relationship queries (optional, off by default)
  */
-export const deepGraphSearchTool = tool({
-  description: `Deep graph search for complex relationship queries. Use for questions about how entities are related.`,
+export const graphSearchTool = tool({
+  description: `Search for relationships between entities using knowledge graph. Use for questions about how concepts are connected.`,
   
   inputSchema: z.object({
-    query: z.string().describe('The relationship query to explore'),
-    max_hops: z.number().optional().default(3).describe('Maximum graph hops to explore (default: 3)'),
+    query: z.string().describe('The relationship query'),
   }),
   
-  execute: async ({ query, max_hops = 3 }) => {
-    console.log(`[Tool] deep_graph_search called with query: "${query}", max_hops: ${max_hops}`);
-    
-    // Get session ID from global context
-    const sessionId = (global as typeof global & { currentChatSessionId?: string }).currentChatSessionId;
+  execute: async ({ query }) => {
+    console.log(`[Tool] graph_search: "${query}"`);
     
     try {
-      const searchBody = JSON.stringify({
+      const data = await callSearchAPI({
         query,
-        session_id: sessionId,
-        match_threshold: 0.5,
+        session_id: getSessionId(),
         match_count: 10,
-        graph_hops: max_hops,
         force_graph_search: true,
-        extended_graph_traversal: true,
+        graph_hops: 2,
       });
       
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      const searchRequest = new NextRequest(`${baseUrl}/api/search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: searchBody,
-      });
-
-      const searchResponse = await searchAPI(searchRequest);
-
-      if (!searchResponse.ok) {
-        const error = await searchResponse.json();
-        throw new Error(`Deep graph search failed: ${error.message}`);
-      }
-
-      const searchData: SearchResponse = await searchResponse.json();
-      
-      console.log(`[Tool] deep_graph_search completed: ${searchData.count} results`);
-      
-      return {
-        ...searchData,
-        tool_used: 'deep_graph_search',
-      };
+      console.log(`[Tool] graph_search: ${data.count} results`);
+      return { ...data, tool_used: 'graph_search' };
     } catch (error) {
-      console.error(`[Tool] deep_graph_search error:`, error);
+      console.error(`[Tool] graph_search error:`, error);
       return {
         results: [],
         query,
         count: 0,
         processing_time_ms: 0,
-        tool_used: 'deep_graph_search',
-        error: error instanceof Error ? error.message : 'Deep graph search failed',
+        tool_used: 'graph_search',
+        error: error instanceof Error ? error.message : 'Graph search failed',
       };
     }
   },
@@ -291,18 +240,34 @@ export const webSearchTool = tool({
 });
 
 /**
- * Export all tools for registration with AI SDK
+ * Core search tools (default)
  */
 export const searchTools = {
   search_documents: searchDocumentsTool,
   quick_search: quickSearchTool,
-  deep_graph_search: deepGraphSearchTool,
 } as const;
 
 /**
- * Export tools with web search enabled
+ * Search tools with graph search enabled
+ */
+export const searchToolsWithGraph = {
+  ...searchTools,
+  graph_search: graphSearchTool,
+} as const;
+
+/**
+ * All search tools including web search
  */
 export const searchToolsWithWeb = {
   ...searchTools,
+  web_search: webSearchTool,
+} as const;
+
+/**
+ * Full toolset with all features
+ */
+export const allSearchTools = {
+  ...searchTools,
+  graph_search: graphSearchTool,
   web_search: webSearchTool,
 } as const;

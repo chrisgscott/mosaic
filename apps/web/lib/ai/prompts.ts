@@ -214,15 +214,15 @@ export const PROMPT_METADATA: Record<PromptKey, {
     usedIn: ['Entity consolidation', 'Description merging'],
   },
   hyde: {
-    title: 'HyDE Generation',
-    description: 'Creates hypothetical documents for improved search',
+    title: 'HyDE Generation (Deprecated)',
+    description: 'Creates hypothetical documents for improved search. DEPRECATED: Removed from core pipeline due to hallucination issues.',
     placeholders: ['{query}'],
-    usedIn: ['Search enhancement', 'RAG pipeline'],
+    usedIn: ['Not currently used'],
   },
   multiQuery: {
-    title: 'Multi-Query Generation',
-    description: 'Generates query variations for better search coverage',
+    title: 'Multi-Query Generation (Deprecated)',
+    description: 'Generates query variations for better search coverage. DEPRECATED: Removed from core pipeline for simplicity.',
     placeholders: ['{query}'],
-    usedIn: ['Search enhancement', 'RAG pipeline'],
+    usedIn: ['Not currently used'],
   },
 };

@@ -1,105 +1,62 @@
 # Mosaic Documentation
 
-**Welcome to the Mosaic RAG Platform documentation.** This hub provides access to all project documentation, organized by purpose and maintained as Single Sources of Truth (SSoT).
+**Welcome to the Mosaic Knowledge Platform documentation.** This hub provides access to core documentation for the universal knowledge platform.
 
 ---
 
 ## 🚀 Quick Start
 
-### New to Mosaic?
-1. **[Getting Started Guide](./guides/getting_started.md)** - Set up your development environment
-2. **[Architecture SSoT](./architecture/SSOT.md)** - Understand the system design
-3. **[Features SSoT](./features/SSOT.md)** - Explore implemented and planned features
-4. **[BUILD_PLAN.md](../BUILD_PLAN.md)** - View the development roadmap
-
 ### For Users
-- **[Getting Started Guide](./guides/getting_started.md)** - Setup and basic usage
-- **[Features SSoT](./features/SSOT.md)** - Learn about available features
+1. **[API Documentation](./API.md)** - Complete integration guide for external tools
+2. **[Getting Started Guide](./guides/getting_started.md)** - Set up your development environment
 
 ### For Developers
-- **[Getting Started Guide](./guides/getting_started.md)** - Development setup
-- **[Architecture SSoT](./architecture/SSOT.md)** - System architecture
-- **[Reference SSoT](./reference/SSOT.md)** - Technical references
+1. **[API Documentation](./API.md)** - REST API reference and examples
+2. **[Architecture Overview](./architecture/)** - System design and patterns
+3. **[Technical References](./reference/)** - Implementation details
 
 ---
 
-## 📚 Documentation Structure
+## 📚 Core Documentation
 
-### Single Sources of Truth (SSoT)
-These are the authoritative documents that synthesize information from multiple sources.
+### 🎯 [API Documentation](./API.md)
+**Essential for all users and developers**
+- Complete REST API reference
+- Authentication methods (API key + session)
+- Request/response formats
+- Feature control parameters
+- Examples in curl, JavaScript, and Python
+- Best practices and performance tips
 
-| SSoT | Purpose | Last Updated |
-|-----|---------|--------------|
-| **[Architecture SSoT](./architecture/SSOT.md)** | System design, principles, and technical architecture | Oct 30, 2025 |
-| **[Features SSoT](./features/SSOT.md)** | Complete feature documentation and implementation status | Oct 30, 2025 |
-| **[Guides SSoT](./guides/SSOT.md)** | User and developer guides (hub document) | Oct 30, 2025 |
-| **[Reference SSoT](./reference/SSOT.md)** | Technical references and implementation guides | Oct 30, 2025 |
-| **[Completed SSoT](./completed/SSOT.md)** | Archive of completed implementations | Oct 30, 2025 |
-
-### Core Documentation Areas
-
-#### 🏗️ [Architecture](./architecture/)
+### 🏗️ [Architecture](./architecture/)
 System design and technical architecture
-- **SSoT:** [Architecture SSoT](./architecture/SSOT.md) - Complete architecture reference
-- [Core Principles](./architecture/01_core_principles.md) - Multifloor model fundamentals
-- [Ingestion Pipeline](./architecture/02_ingestion_pipeline.md) - Document processing flow
+- **Core Principles** - Knowledge platform fundamentals
+- **Ingestion Pipeline** - Document processing flow
+- **Search Architecture** - Hybrid search implementation
+- **Database Schema** - Supabase and pgvector design
 
-#### ⚡ [Features](./features/)
-Implemented and planned features
-- **SSoT:** [Features SSoT](./features/SSOT.md) - All feature documentation
-- [Agentic Chunking](./features/agentic_chunking.md) - Advanced document chunking
-- [Graph RAG](./features/graph_rag.md) - Knowledge extraction and search
-- [Graph Learning](./features/graph-learning.md) - Search pattern analysis
-- [Reranking](./features/reranking.md) - Search precision improvement
-- [Structured Data](./features/structured-data-approch.md) - Table handling strategy
-
-#### 📖 [Guides](./guides/)
+### 📖 [Guides](./guides/)
 User and developer documentation
-- **SSoT:** [Guides SSoT](./guides/SSOT.md) - Guide hub and standards
-- [Getting Started](./guides/getting_started.md) - Development setup and onboarding
+- **Getting Started** - Development setup and onboarding
+- **Deployment Guide** - Production deployment instructions
 
-#### 📋 [Reference](./reference/)
+### 📋 [Reference](./reference/)
 Technical references and implementation guides
-- **SSoT:** [Reference SSoT](./reference/SSOT.md) - Technical reference library
-- [RAG Best Practices](./reference/RAG_BEST_PRACTICES.md) - Implementation status and roadmap
-- [AI SDK Patterns](./reference/ai-sdk-patterns.md) - Vercel AI SDK integration
-- [Chunk Metadata](./reference/chunk_metadata.md) - Chunk structure reference
-- [DEG-RAG](./reference/DEG-RAG.md) - Graph denoising techniques
-- [LLM Pricing](./reference/LLM_PRICING.md) - Cost optimization strategies
-- [Cognitive Cartography](./reference/COGNITIVE_CARTOGRAPHY.md) - Multi-floor architecture concepts
-- [RAG Comparison](./reference/rag-comparison.md) - vs Vercel RAG implementation
-- [Search Comparison](./reference/search-comparison.md) - Search implementation analysis
-- [Advanced Chunking](./reference/advanced-chunking.md) - External research on chunking
-- [Relationship Expansion](./reference/relationship_expansion.md) - Advanced graph techniques
+- **RAG Best Practices** - Implementation patterns
+- **AI SDK Patterns** - Vercel AI SDK integration
+- **Chunk Metadata** - Data structure reference
+- **LLM Pricing** - Cost optimization strategies
+- **Performance Tuning** - Optimization techniques
 
-#### ✅ [Completed](./completed/)
-Archive of completed implementations
-- **SSoT:** [Completed SSoT](./completed/SSOT.md) - Implementation archive
-- [Architecture Decision](./completed/ARCHITECTURE_DECISION.md) - Unified search pipeline
-- [Model Dropdown](./completed/MODEL_DROPDOWN_IMPLEMENTATION.md) - Model selection system
-- [Agentic Chunking Summary](./completed/AGENTIC_CHUNKING_SUMMARY.md) - Implementation details
-- [Graph Performance Fix](./completed/GRAPH_EXTRACTION_PERFORMANCE_FIX.md) - Optimization details
-- [Phase 6.5 Complete](./completed/PHASE_6.5_COMPLETE.md) - RAG chat implementation
-- [Prompt Management](./completed/PROMPT_MANAGEMENT_SYSTEM.md) - Centralized prompts
-- [And more...] - All completed features and fixes
-
-#### 📦 [Archive](./archive/)
-Obsolete documentation retained for historical reference
-- AI SDK Migration Tests
-- Hardcoded Models Cleanup
-- Original R2R project documents
-- Phase documents superseded by newer architecture
+### 📦 [Archive](./archive/)
+Historical documentation and project-specific files
+- Previous implementation details
+- Project-specific documentation
+- Superseded design documents
 
 ---
 
 ## 🎯 Key Concepts
-
-### The Multifloor Model
-Mosaic organizes knowledge across four floors:
-- **Floor A:** Text Semantics (embeddings)
-- **Floor B:** Symbolic/Relational (knowledge graph)
-- **Floor C:** Structure & Provenance (documents, chunks)
-- **Floor D:** Living Entities (curated knowledge pages)
 
 ### Core Technologies
 - **Supabase:** Postgres-native database with pgvector
@@ -109,91 +66,48 @@ Mosaic organizes knowledge across four floors:
 - **Cohere:** Search reranking for precision
 
 ### Key Features
+- **Universal API:** RESTful search with authentication
 - **Hybrid Search:** Semantic + BM25 + Graph + Reranking
-- **Advanced Chunking:** Structure-aware + Agentic + Planner-Executor
-- **Knowledge Graph:** Automatic extraction with deduplication
-- **RAG Chat:** Streaming responses with source citations
-- **Flexible Configuration:** Settings-driven operation
-
----
-
-## 🔄 Documentation Maintenance
-
-### How Documentation is Organized
-1. **SSoT Documents:** Authoritative synthesis of each area
-2. **Specific Documents:** Detailed implementation guides
-3. **Archive:** Historical reference only
-4. **Cross-References:** All documents link to relevant SSoTs
-
-### Contributing to Documentation
-1. **Update SSoT First:** Always update the relevant SSoT when making changes
-2. **Link from SSoT:** Reference specific documents from the SSoT
-3. **Keep Current:** Update dates and status when features change
-4. **Follow Standards:** Use established templates and styles
-
-### Review Schedule
-- **SSoT Documents:** Reviewed quarterly for accuracy
-- **Implementation Docs:** Updated with feature changes
-- **Archive:** Cleaned up annually
-- **Cross-References:** Checked during each review
+- **Smart Chunking:** Structure-aware with multiple strategies
+- **Knowledge Graph:** Entity extraction and relationship mapping
+- **Real-time Processing:** Async document processing
+- **Multi-tenant:** Row-level security and user isolation
 
 ---
 
 ## 🔍 Finding Information
 
 ### By Role
-- **Product Manager:** Architecture SSoT, Features SSoT, BUILD_PLAN.md
-- **Developer:** Architecture SSoT, Reference SSoT, Getting Started
-- **Designer:** Guides SSoT, Features SSoT
-- **DevOps:** Architecture SSoT, Reference SSoT, Completed SSoT
+- **API User:** API Documentation
+- **Developer:** API Documentation + Architecture + Reference
+- **System Administrator:** Architecture + Deployment Guide
 
 ### By Task
-- **Setup Development:** Getting Started Guide
-- **Understand Architecture:** Architecture SSoT
-- **Implement Feature:** Features SSoT → Reference SSoT
-- **Debug Issue:** Completed SSoT → Reference SSoT
-- **Plan Roadmap:** BUILD_PLAN.md → Features SSoT
+- **Integrate with API:** API Documentation
+- **Understand Architecture:** Architecture section
+- **Deploy System:** Deployment Guide
+- **Optimize Performance:** Reference section
 
 ### By Topic
-- **Search:** Features SSoT (Search section) → RAG Best Practices
-- **Chunking:** Features SSoT (Chunking section) → Advanced Chunking
-- **Graph:** Features SSoT (Graph section) → DEG-RAG
-- **Chat:** Features SSoT (Chat section) → RAG Best Practices
-- **Performance:** Reference SSoT → LLM Pricing
-
----
-
-## 📄 Project Documents
-
-### Planning & Management
-- **[BUILD_PLAN.md](../BUILD_PLAN.md)** - Master development roadmap
-- **[INBOX.md](../INBOX.md)** - Ideas and feature requests
-- **[TO_PROCESS.md](../TO_PROCESS.md)** - Items requiring decisions
-- **[BUGS.md](../BUGS.md)** - Known issues and bugs
-
-### Executive Overview
-- **[ORIENTATION.md](./executive/ORIENTATION.md)** - Project overview and status
-- **[SYNTHESIS.md](./executive/SYNTHESIS.md)** - Direction and priorities
+- **Search API:** API Documentation
+- **Document Processing:** Architecture → Ingestion Pipeline
+- **Database Design:** Architecture → Database Schema
+- **Performance Optimization:** Reference → Performance Tuning
 
 ---
 
 ## 🤝 Getting Help
 
 ### Documentation Issues
-- Found outdated information? Please update the relevant SSoT
-- Missing documentation? Create an issue in INBOX.md
-- Confusing structure? Suggest improvements in TO_PROCESS.md
+- Found outdated information? Please create a GitHub issue
+- Missing documentation? Please create a GitHub issue
+- API questions? Check API Documentation first
 
 ### Technical Questions
-- Check the Reference SSoT for technical details
-- Review Completed SSoT for implementation examples
-- Consult Architecture SSoT for design decisions
-
-### Feature Requests
-- Add to INBOX.md for new ideas
-- Move to TO_PROCESS.md for detailed planning
-- Include in BUILD_PLAN.md when approved
+- Check the API Documentation for integration questions
+- Review Architecture section for design questions
+- Consult Reference section for implementation details
 
 ---
 
-*This documentation is maintained as part of the Mosaic project. Last updated: October 30, 2025*
+*This documentation is maintained as part of the Mosaic project. Last updated: January 2025*

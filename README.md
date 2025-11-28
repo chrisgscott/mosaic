@@ -1,72 +1,83 @@
-# Mosaic - Living Knowledge Platform
+# Mosaic - Universal Knowledge Platform
 
-**Transform documents into living, structured knowledge.**
+**Transform documents into searchable, intelligent knowledge.**
 
-Mosaic is not just another RAG system - it's a **living knowledge platform** that transforms scattered documents into comprehensive, always-current, structured knowledge pages. Built on a multifloor architecture, it enables deep reasoning across text, entities, and curated knowledge.
+Mosaic is a production-ready knowledge platform that transforms scattered documents into a unified, searchable knowledge base. Built for flexibility and scale, it provides semantic search, graph-based exploration, and API-first access for any application or workflow.
 
-## 🎯 The Vision
+## 🎯 What It Does
 
-When a user asks: *"What do I need to know about Antimony for a 40-ton purchase?"*
+When you ask: *"What are the strategic airlift requirements?"*
 
-They don't get 50 scattered search results. They get:
-- **A comprehensive Living Entity page** with structured sections (supply chain, pricing, geopolitics, applications)
-- **Full traceability** via multifloor bridges (entity → chunks → documents)
-- **Always current** - auto-updated as new information arrives
-- **Explorable relationships** - navigate to suppliers, mines, technologies
+You get:
+- **Semantic search results** with relevance scores
+- **Context-aware responses** using advanced RAG techniques
+- **Graph-based exploration** of related concepts
+- **API access** for external tool integration
+- **Real-time processing** with progress tracking
 
-## 🏗️ Multifloor Architecture
+## 🏗️ Architecture
 
-Mosaic uses a **multifloor traversal framework** - a topic-agnostic system supporting multi-hop reasoning and layered data:
+Mosaic uses a **layered knowledge architecture** supporting multiple retrieval strategies:
 
 ```
 ┌─────────────────────────────────────────────────┐
-│ Floor D: Living Entities                        │
-│ Curated, structured knowledge pages             │
-│ (Materials, Suppliers, Technologies, etc.)      │
+│ API Layer                                       │
+│ Universal search endpoint for external tools    │
+│ (REST API, authentication, feature control)    │
 └──────────────┬──────────────────────────────────┘
-               ↕ bridges
+               ↕
 ┌─────────────────────────────────────────────────┐
-│ Floor B: Graph Entities                         │
-│ Auto-extracted entities & relationships         │
-│ (11 entity types, 12 relationship types)        │
+│ Search Layer                                    │
+│ Hybrid search + Reranking + Multi-Query         │
+│ (Semantic, BM25, Graph, HyDE)                  │
 └──────────────┬──────────────────────────────────┘
-               ↕ bridges
+               ↕
 ┌─────────────────────────────────────────────────┐
-│ Floor A: Chunks                                 │
-│ Text chunks with vector embeddings              │
-│ (Structure-aware, semantic search)              │
+│ Knowledge Layer                                 │
+│ Chunks + Entities + Relationships               │
+│ (Vector embeddings, graph search)               │
 └──────────────┬──────────────────────────────────┘
-               ↕ bridges
+               ↕
 ┌─────────────────────────────────────────────────┐
-│ Floor C: Documents                              │
-│ Original files with full provenance             │
-│ (Docling VLM processing, audit trail)           │
+│ Document Layer                                  │
+│ Original files with processing metadata         │
+│ (Docling VLM, chunking, provenance)            │
 └─────────────────────────────────────────────────┘
 ```
 
-**Trail Engine** enables multi-hop traversal across all floors for complex queries.
-
 ## ✨ Core Features
 
-### Production-Ready (Phases 1-8 Complete)
-- **Docling VLM Processing** - 20-40x faster than alternatives
-- **Smart Chunking** - Structure-aware (simple, fast, free) + Agentic options
-- **Graph RAG** - Selective entity extraction (3-7 per chunk, optimized)
-- **Hybrid Search** - Semantic + BM25 with RRF, Cohere reranking
-- **Vector Search** - pgvector with 0.85 similarity deduplication
-- **Graph Management** - Full CRUD UI, visualization, AI cleanup
-- **Settings System** - Database-driven models and prompts
-- **Real-time Updates** - Supabase Realtime for processing status
+### Production-Ready
+- **Universal API** - RESTful search with authentication and feature control
+- **Hybrid Search** - Semantic + BM25 with Cohere reranking
+- **Smart Chunking** - Structure-aware with multiple strategies
+- **Graph RAG** - Entity extraction and relationship mapping
+- **Real-time Processing** - Async document processing with progress tracking
+- **Settings System** - Database-driven configuration
+- **Multi-tenant** - Row-level security and user isolation
 
-### Next: The Killer Features
-- **Multifloor Architecture** (3-5 days) - Foundation for everything
-- **DEG-RAG** (1-2 weeks) - Graph denoising for quality
-- **Living Entities** (2-3 weeks) - Curated knowledge pages with CrewAI auto-updates
+### Advanced Features
+- **Multi-Query Expansion** - Generate query variations for comprehensive results
+- **HyDE** - Hypothetical document embeddings for complex queries
+- **Graph Search** - Navigate entity relationships and connections
+- **Feature Control** - External tools control search features (speed vs quality)
+
+## 🚀 Quick Start
+
+### For Web Users
+1. Upload documents via the web interface
+2. Search with natural language queries
+3. Explore results with semantic and graph-based navigation
+
+### For Developers
+1. Use the universal `/api/search` endpoint
+2. Control features via request parameters
+3. Build custom applications on top of Mosaic
+
+**[API Documentation](./docs/API.md)** - Complete integration guide
 
 ## 🚀 Quick Links
 
-- **[Master Plan](./PLAN.md)** - Current priorities and roadmap
-- **[Synthesis](./SYNTHESIS.md)** - Executive summary of vision and architecture
-- **[Orientation](./ORIENTATION.md)** - Complete project overview
-- **[Living Entities](./LIVING_ENTITIES_SUMMARY.md)** - The killer feature explained
+- **[API Documentation](./docs/API.md)** - Integration guide for external tools
 - **[Documentation](./docs)** - Technical details and guides
+- **[Architecture](./docs/architecture)** - System design and patterns

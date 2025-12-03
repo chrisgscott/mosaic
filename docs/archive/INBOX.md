@@ -205,6 +205,62 @@ schemas = ["public", "mosaic"]
 
 ---
 
+### Schema Separation: Move RAG Tables to Dedicated Schema
+**Added:** 2025-12-03
+**Status:** 💭 Someday/Maybe
+**Priority:** Low (Nice to have, not blocking)
+
+**Problem:**
+All tables (Mosaic core + app layer) live in `public` schema. This works fine but mixes infrastructure tables (`documents`, `chunks`, `embeddings`, `entities`, `relationships`) with app tables (`conversations`, `messages`, `users`).
+
+**Proposed Solution:**
+Move Mosaic core tables to a dedicated `rag` or `mosaic` schema:
+
+```
+public (app layer)
+├── users
+├── conversations
+├── messages
+├── system_settings
+└── [future app tables]
+
+rag (mosaic core)
+├── documents
+├── chunks
+├── embeddings
+├── entities
+├── relationships
+└── [future RAG tables]
+```
+
+**Benefits:**
+- Clear "don't touch" boundary for RAG infrastructure
+- Easier to version/migrate Mosaic independently
+- Cleaner `public` schema for app development
+- Better positioned if Mosaic becomes a reusable library
+
+**When This Becomes Worth It:**
+- Shipping Mosaic as a standalone product/library
+- Multiple apps sharing one Mosaic instance
+- Hiring devs who need clear boundaries
+
+**Why Not Now:**
+- Single app, single team, same codebase
+- ~4 hours of work for cosmetic benefit
+- No immediate ROI
+
+**Implementation (if needed later):**
+1. Create `rag` schema and move tables (~30 min)
+2. Update Python backend SQL queries (~30 min)
+3. Update TypeScript with `.schema('rag')` (~1 hour)
+4. Update RPC functions (~30 min)
+5. Update Edge functions (~30 min)
+6. Testing (~1 hour)
+
+**Estimated Effort:** 4 hours
+
+---
+
 ## Template for New Items
 
 ```markdown

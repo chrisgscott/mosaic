@@ -43,7 +43,7 @@ export async function GET(
       .from("chat_messages")
       .select("*")
       .eq("session_id", id)
-      .order("created_at", { ascending: true });
+      .order("message_index", { ascending: true });
 
     if (messagesError) {
       console.error("[Session] Error fetching messages:", messagesError);

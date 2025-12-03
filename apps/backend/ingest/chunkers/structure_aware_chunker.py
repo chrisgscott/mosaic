@@ -8,10 +8,11 @@ Philosophy:
 - Docling already parsed the document structure
 - Use sections, paragraphs, and tables as natural boundaries
 - Split large sections, merge small ones
+- Breadcrumb headers provide hierarchical context
 - Fast, deterministic, free
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
 import uuid
 import tiktoken
@@ -25,9 +26,10 @@ class StructureAwareChunker:
     
     Strategy:
     1. Iterate through Docling's structured elements
-    2. Group paragraphs into sections
-    3. Chunk when section reaches target size
-    4. Tables become their own chunks
+    2. Track heading hierarchy for breadcrumb context
+    3. Group paragraphs into sections
+    4. Chunk when section reaches target size
+    5. Prepend breadcrumb headers to each chunk for context
     """
     
     def __init__(self, target_size: int = 1000, min_size: int = 300, max_size: int = 2000):
@@ -43,7 +45,45 @@ class StructureAwareChunker:
         self.min_size = min_size
         self.max_size = max_size
         self.tokenizer = tiktoken.get_encoding("cl100k_base")  # For token counting
+        
+        # Track heading hierarchy for breadcrumbs (level -> title)
+        self.heading_stack: List[Dict[str, Any]] = []
+        
         logger.info(f"StructureAwareChunker initialized (target={target_size}, min={min_size}, max={max_size})")
+    
+    def _update_heading_stack(self, level: int, title: str) -> None:
+        """
+        Update the heading stack when a new heading is encountered.
+        
+        Maintains a stack of headings where each level replaces all deeper levels.
+        Example: If we see H2, we keep H1 but replace any existing H2+ headings.
+        
+        Args:
+            level: Heading level (1-6)
+            title: Heading text
+        """
+        # Remove all headings at this level or deeper
+        self.heading_stack = [h for h in self.heading_stack if h["level"] < level]
+        # Add the new heading
+        self.heading_stack.append({"level": level, "title": title})
+    
+    def _get_breadcrumb(self) -> str:
+        """
+        Generate breadcrumb header string from current heading stack.
+        
+        Returns:
+            Markdown-formatted breadcrumb headers, e.g.:
+            "# Chapter 1\n## Section 1.2\n### Subsection 1.2.1"
+        """
+        if not self.heading_stack:
+            return ""
+        
+        breadcrumb_lines = []
+        for heading in self.heading_stack:
+            prefix = "#" * heading["level"]
+            breadcrumb_lines.append(f"{prefix} {heading['title']}")
+        
+        return "\n".join(breadcrumb_lines)
     
     def chunk_document(self, docling_doc, document_id: str) -> List[Dict[str, Any]]:
         """
@@ -60,8 +100,12 @@ class StructureAwareChunker:
         current_section = {
             "title": "",
             "level": 0,
-            "paragraphs": []
+            "paragraphs": [],
+            "breadcrumb": ""
         }
+        
+        # Reset heading stack for this document
+        self.heading_stack = []
         
         # Export to markdown and process
         markdown = docling_doc.export_to_markdown()
@@ -83,13 +127,19 @@ class StructureAwareChunker:
                 if current_section["paragraphs"]:
                     chunks.extend(self._chunk_section(current_section, document_id, len(chunks)))
                 
-                # Start new section
+                # Parse new heading
                 level = len(line) - len(line.lstrip('#'))
                 title = line.lstrip('#').strip()
+                
+                # Update heading stack for breadcrumb tracking
+                self._update_heading_stack(level, title)
+                
+                # Start new section with current breadcrumb
                 current_section = {
                     "title": title,
                     "level": level,
-                    "paragraphs": []
+                    "paragraphs": [],
+                    "breadcrumb": self._get_breadcrumb()
                 }
             
             # Detect table markers
@@ -134,7 +184,7 @@ class StructureAwareChunker:
         Chunk a section based on size constraints.
         
         Args:
-            section: Section dictionary with title, level, paragraphs
+            section: Section dictionary with title, level, paragraphs, breadcrumb
             document_id: Document ID
             start_index: Starting chunk index
             
@@ -144,6 +194,7 @@ class StructureAwareChunker:
         chunks = []
         current_chunk_paras = []
         current_size = 0
+        breadcrumb = section.get("breadcrumb", "")
         
         for para in section["paragraphs"]:
             para_size = len(para)
@@ -155,7 +206,8 @@ class StructureAwareChunker:
                     section["level"],
                     current_chunk_paras,
                     document_id,
-                    start_index + len(chunks)
+                    start_index + len(chunks),
+                    breadcrumb
                 ))
                 current_chunk_paras = [para]
                 current_size = para_size
@@ -168,7 +220,8 @@ class StructureAwareChunker:
                     section["level"],
                     current_chunk_paras,
                     document_id,
-                    start_index + len(chunks)
+                    start_index + len(chunks),
+                    breadcrumb
                 ))
                 current_chunk_paras = []
                 current_size = 0
@@ -191,7 +244,8 @@ class StructureAwareChunker:
                     section["level"],
                     current_chunk_paras,
                     document_id,
-                    start_index + len(chunks)
+                    start_index + len(chunks),
+                    breadcrumb
                 ))
         
         return chunks
@@ -202,25 +256,31 @@ class StructureAwareChunker:
         section_level: int,
         paragraphs: List[str],
         document_id: str,
-        chunk_index: int
+        chunk_index: int,
+        breadcrumb: str = ""
     ) -> Dict[str, Any]:
         """
         Create a chunk dictionary from section data.
         
         Args:
-            section_title: Section heading
+            section_title: Section heading (immediate parent)
             section_level: Heading level (1-6)
             paragraphs: List of paragraph strings
             document_id: Document ID
             chunk_index: Chunk index in document
+            breadcrumb: Full heading hierarchy (e.g., "# Ch1\n## Sec1.2\n### Sub1.2.1")
             
         Returns:
             Chunk dictionary
         """
         content = "\n\n".join(paragraphs)
         
-        # Add section title as context if present
-        if section_title:
+        # Add breadcrumb headers for hierarchical context
+        # This gives the LLM full structural awareness
+        if breadcrumb:
+            content = f"{breadcrumb}\n\n{content}"
+        elif section_title:
+            # Fallback: just use section title if no breadcrumb
             content = f"# {section_title}\n\n{content}"
         
         # Calculate token count
@@ -235,6 +295,7 @@ class StructureAwareChunker:
             "metadata": {
                 "section_title": section_title,
                 "section_level": section_level,
+                "breadcrumb": breadcrumb,  # Store breadcrumb in metadata too
                 "chunk_type": "section",
                 "char_count": len(content),
                 "paragraph_count": len(paragraphs)

@@ -62,7 +62,7 @@ ENABLE_DOCUMENT_AUGMENTATION = settings_service.get_bool('processing.enableDocum
 QUESTIONS_PER_CHUNK = settings_service.get_int('processing.questionsPerChunk', 5, 'QUESTIONS_PER_CHUNK')
 
 # Get model settings for logging
-VLM_MODEL = settings_service.get_string('llm.vlmModel', 'gpt-4o')
+VLM_MODEL = settings_service.get_string('llm.vlmModel', 'gpt-4o-mini')
 SUMMARY_MODEL = settings_service.get_string('llm.summaryModel', 'gpt-4o-mini')
 GRAPH_MODEL = settings_service.get_string('llm.standardModel', 'gpt-4o-mini')
 EMBEDDING_MODEL = settings_service.get_string('llm.embeddingModel', 'text-embedding-3-small')

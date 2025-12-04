@@ -12,9 +12,8 @@ This guide will help you get all Mosaic services up and running for local develo
 
 ### Required API Keys
 - **Supabase** project URL and service role key
-- **OpenAI** API key (for embeddings and LLM features)
-- **Unstructured.io** API key (for document processing)
-- **Cohere** API key (optional, for reranking)
+- **OpenAI** API key (for embeddings, LLM features, and document processing)
+- **Cohere** API key (for reranking - free tier available)
 
 ## Initial Setup
 
@@ -62,25 +61,30 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 #### Backend (`apps/backend/ingest/.env`)
 
-Create `apps/backend/ingest/.env`:
+Create `apps/backend/ingest/.env` (copy from `.env.example`):
 
 ```env
 # Supabase
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-DATABASE_URL=postgresql://postgres:[password]@db.[project].supabase.co:5432/postgres
+DATABASE_URL=postgresql://postgres.your-project-ref:password@aws-0-us-east-1.pooler.supabase.com:6543/postgres
 
-# Unstructured.io
-UNSTRUCTURED_API_KEY=your-unstructured-api-key
-UNSTRUCTURED_API_URL=https://api.unstructured.io/general/v0/general
-
-# OpenAI
+# OpenAI (required for document processing and embeddings)
 OPENAI_API_KEY=your-openai-api-key
+
+# Docling Configuration
+USE_DOCLING=true
+USE_API_VLM=true
+DOCLING_MAX_WORKERS=15
 
 # Processing Configuration
 POLL_INTERVAL=5
 BATCH_SIZE=1
 MAX_RETRIES=3
+LOG_LEVEL=INFO
+
+# Graph RAG (optional)
+ENABLE_GRAPH_EXTRACTION=true
 ```
 
 ### 3. Set Up Supabase Database
@@ -186,7 +190,7 @@ supabase start
 ### Documents not processing
 - **Error**: Document stuck in "processing" status
   - **Fix**: Check backend terminal for errors
-  - **Fix**: Verify `UNSTRUCTURED_API_KEY` is valid
+  - **Fix**: Verify `OPENAI_API_KEY` is valid (used by Docling for VLM processing)
   - **Fix**: Check Supabase Storage permissions
 
 ### Admin section not visible
@@ -269,7 +273,7 @@ git push origin your-branch-name
 │              (apps/backend/ingest)                           │
 │  - Polls pgmq queue                                          │
 │  - Downloads from Storage                                    │
-│  - Extracts text (Unstructured.io)                           │
+│  - Extracts text (Docling VLM)                               │
 │  - Chunks documents                                          │
 │  - Generates embeddings (OpenAI)                             │
 │  - Stores in database                                        │

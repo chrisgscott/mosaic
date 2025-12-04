@@ -166,6 +166,25 @@ Tell the user:
    - Try a search query
    - Check the knowledge graph
 
+## Step 9: Clean Up Mosaic Core Files (Optional)
+
+Ask the user if they want to remove Mosaic development docs that aren't needed for their app:
+
+// turbo
+```bash
+./scripts/clean-for-new-project.sh
+```
+
+This removes:
+- `docs/archive/` - Old planning docs
+- `docs/reference/` - RAG research
+- `docs/architecture/` - Core architecture
+- `LEARNINGS/` - Development notes
+- `tests/` - Mosaic core tests
+- `apps/backend/ingest/examples/` - Chunking examples
+
+And optionally resets git history to start fresh.
+
 ## Done!
 
 The project is ready. Remind the user:

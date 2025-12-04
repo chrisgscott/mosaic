@@ -73,8 +73,15 @@ export async function getModels() {
     deepResearch: openai(modelSettings.deepResearch || DEFAULT_MODELS.deepResearch),
     summary: openai(modelSettings.summary || DEFAULT_MODELS.summary),
     vlm: openai(modelSettings.vlm || DEFAULT_MODELS.vlm),
-    embedding: openai(modelSettings.embedding || DEFAULT_MODELS.embedding),
   } as const;
+}
+
+/**
+ * Get embedding model (separate from language models)
+ */
+export async function getEmbeddingModel() {
+  const modelSettings = await getModelSettings();
+  return openai.embedding(modelSettings.embedding || DEFAULT_MODELS.embedding);
 }
 
 /**

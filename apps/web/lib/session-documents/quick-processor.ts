@@ -5,7 +5,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { getModelForDepth } from '@/lib/ai/gateway';
+import { getEmbeddingModel } from '@/lib/ai/gateway';
 import { embedMany } from 'ai';
 
 // Simple text chunking
@@ -67,7 +67,7 @@ export async function quickProcessFile(file: File): Promise<ProcessedChunk[]> {
   console.log(`[QuickProcess] Created ${chunks.length} chunks`);
   
   // 3. Generate embeddings for all chunks
-  const embeddingModel = await getModelForDepth('embedding');
+  const embeddingModel = await getEmbeddingModel();
   const { embeddings } = await embedMany({
     model: embeddingModel,
     values: chunks,

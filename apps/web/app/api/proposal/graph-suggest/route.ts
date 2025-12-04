@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
                 entity: {
                   name: targetEntities[0].name,
                   type: targetEntities[0].type,
-                  summary: targetEntities[0].description,
+                  description: targetEntities[0].description,
                 },
                 relationship: {
                   type: rel.relationship_type,
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
                 entity: {
                   name: sourceEntities[0].name,
                   type: sourceEntities[0].type,
-                  summary: sourceEntities[0].description,
+                  description: sourceEntities[0].description,
                 },
                 relationship: {
                   type: rel.relationship_type,

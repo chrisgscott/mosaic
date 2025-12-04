@@ -291,13 +291,14 @@ class DocumentWorker:
             return (False, True)  # Delete from queue, stop retrying
         
         try:
-            # Get document to find user_id and chunking_config
-            doc_result = supabase.table("documents").select("user_id, chunking_config").eq("id", document_id).execute()
+            # Get document to find user_id, tenant_id, and chunking_config
+            doc_result = supabase.table("documents").select("user_id, tenant_id, chunking_config").eq("id", document_id).execute()
             if not doc_result.data:
                 logger.warning(f"Document {document_id} not found - was likely deleted")
                 # Document was deleted, don't retry this job
                 return (False, True)
             user_id = doc_result.data[0]["user_id"]
+            tenant_id = doc_result.data[0].get("tenant_id")  # May be None for legacy docs
             chunking_config = doc_result.data[0].get("chunking_config")
             
             # Update status to processing
@@ -388,9 +389,11 @@ class DocumentWorker:
             else:
                 chunks = self.chunker.chunk_document(doc_for_chunking, document_id)
             
-            # Add user_id and storage_path to chunks
+            # Add user_id, tenant_id, and storage_path to chunks
             for chunk in chunks:
                 chunk["user_id"] = user_id
+                if tenant_id:
+                    chunk["tenant_id"] = tenant_id
                 chunk["metadata"]["storage_path"] = file_path
             
             logger.info(f"Created {len(chunks)} chunks")
@@ -444,16 +447,18 @@ class DocumentWorker:
                 
                 # Store embeddings in smaller batches (embeddings are large - 1536 floats each)
                 # Split into batches of 20 to avoid timeout
-                embedding_records = [
-                    {
+                embedding_records = []
+                for chunk, embedding in zip(batch, embeddings):
+                    record = {
                         "chunk_id": chunk["id"],
                         "document_id": document_id,
                         "user_id": user_id,
                         "embedding": embedding,
                         "model": "text-embedding-3-small"
                     }
-                    for chunk, embedding in zip(batch, embeddings)
-                ]
+                    if tenant_id:
+                        record["tenant_id"] = tenant_id
+                    embedding_records.append(record)
                 
                 # Insert embeddings in sub-batches of 20 with retry
                 for j in range(0, len(embedding_records), 20):

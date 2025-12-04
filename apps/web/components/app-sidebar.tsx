@@ -79,6 +79,10 @@ const data = {
           title: "Schema",
           url: "/admin/settings/schema",
         },
+        {
+          title: "API Keys",
+          url: "/admin/api-keys",
+        },
       ],
     },
   ],

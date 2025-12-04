@@ -221,7 +221,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[Search] Query: "${query.substring(0, 50)}..." | session: ${session_id || 'none'}`);
+    // Get tenant_id from auth (for multi-tenant API key access)
+    const tenantId = auth.tenantId;
+    
+    console.log(`[Search] Query: "${query.substring(0, 50)}..." | session: ${session_id || 'none'} | tenant: ${tenantId || 'none'}`);
 
     // Progress helper
     const onProgress: ProgressCallback = (event) => {
@@ -268,8 +271,9 @@ export async function POST(request: NextRequest) {
       query_embedding: queryEmbedding,
       match_threshold,
       match_count: candidateCount,
-      filter_user_id: auth.useServiceRole ? null : user.id,
+      filter_user_id: auth.useServiceRole ? null : user?.id,
       filter_session_id: filterSessionId,
+      filter_tenant_id: tenantId || null,  // Multi-tenant filtering
       rrf_k: 60,
     });
 
@@ -298,7 +302,7 @@ export async function POST(request: NextRequest) {
           
           const graphResults = await graphEnhancedSearch({
             query,
-            userId: user.id,
+            userId: user?.id || tenantId || '',
             limit: match_count,
             includeRelationships: true,
             maxHops: graph_hops,

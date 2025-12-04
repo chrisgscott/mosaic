@@ -56,6 +56,63 @@ rss_feeds → documents table → chunks → entities/relationships
 **Dependencies:**
 - ELLEN migration to Mosaic-based architecture
 - Mosaic ingest API working (✅ complete)
+- Text ingest endpoint (see below)
+
+---
+
+### Text/Content Ingest Endpoint
+**Added:** 2025-12-03
+**Status:** 🎯 Priority
+**Priority:** High (enables n8n/webhook integrations)
+
+**Problem:**
+Current ingest endpoint only accepts file uploads. For n8n workflows, webhooks, and programmatic content (RSS articles, scraped pages, API responses), we need a way to ingest raw text/content directly.
+
+**Proposed Solution:**
+Add `POST /api/ingest/text` endpoint:
+
+```typescript
+// Request
+POST /api/ingest/text
+{
+  "content": "Article text here...",
+  "title": "Article Title",
+  "metadata": {
+    "source_type": "rss",        // or "webhook", "scrape", etc.
+    "source_url": "https://...",
+    "source_name": "Reuters",
+    "published_at": "2025-12-03T...",
+    "feed_id": "critical-minerals"
+  }
+}
+
+// Response
+{
+  "document_id": "uuid",
+  "status": "processing",
+  "chunks_created": 0  // updates async
+}
+```
+
+**Implementation:**
+1. Create new API route `apps/web/app/api/ingest/text/route.ts`
+2. Accept JSON body with content + metadata
+3. Create document record in Supabase
+4. Queue for async processing (same pipeline as file uploads)
+5. Return document ID immediately
+
+**Use Cases:**
+- n8n RSS workflow → webhook → Mosaic
+- Zapier/Make integrations
+- Custom scrapers
+- API-to-API content transfer
+- Programmatic document creation
+
+**Estimated Effort:** 2 hours
+
+**Dependencies:**
+- Existing ingest pipeline (✅ complete)
+- API key authentication (✅ complete)
 
 ---
 

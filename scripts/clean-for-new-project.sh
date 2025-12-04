@@ -19,6 +19,10 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+print_step() {
+    echo -e "${GREEN}▶${NC} $1"
+}
+
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${BOLD}  Clean Mosaic for New Project${NC}"
@@ -36,7 +40,7 @@ echo "  • docs/technical_audit.md"
 echo "  • docs/README.md         - Mosaic docs index"
 echo "  • LEARNINGS/             - Development learnings"
 echo "  • tests/                 - Mosaic core tests"
-echo "  • .git history           - (optional) Start fresh"
+echo "  • backend examples/      - Chunking config examples"
 echo ""
 
 read -p "Continue? (y/N) " -n 1 -r
@@ -104,24 +108,12 @@ EOF
 
 echo -e "${GREEN}✓${NC} Created fresh docs/README.md"
 
-# Ask about git history
+# Commit the cleanup
 echo ""
-echo -e "${YELLOW}Optional: Reset git history?${NC}"
-echo "This will remove all Mosaic commit history and start fresh."
-echo "Your files will be preserved, but history will be gone."
-echo ""
-read -p "Reset git history? (y/N) " -n 1 -r
-echo ""
-
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    rm -rf .git
-    git init
-    git add -A
-    git commit -m "Initial commit - forked from Mosaic"
-    echo -e "${GREEN}✓${NC} Git history reset"
-else
-    echo -e "${GREEN}✓${NC} Kept existing git history"
-fi
+print_step "Committing cleanup..."
+git add -A
+git commit -m "Clean up Mosaic core development files" 2>/dev/null || true
+echo -e "${GREEN}✓${NC} Changes committed"
 
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"

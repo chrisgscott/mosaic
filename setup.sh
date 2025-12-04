@@ -281,7 +281,23 @@ cd ..
 # STEP 6: Final Instructions
 # =============================================================================
 
-print_header "Step 6: Final Steps (Manual)"
+print_header "Step 6: Initialize Fresh Git Repository"
+
+print_step "Removing Mosaic git history..."
+rm -rf .git
+
+print_step "Initializing new repository..."
+git init
+git add -A
+git commit -m "Initial commit - ${CONFIG[PROJECT_NAME]} (built on Mosaic)"
+
+print_success "Fresh git repository created"
+echo ""
+print_info "To push to GitHub:"
+echo "  git remote add origin https://github.com/you/${CONFIG[PROJECT_NAME]}.git"
+echo "  git push -u origin main"
+
+print_header "Step 7: Final Steps (Manual)"
 
 echo -e "${YELLOW}Almost done! Complete these steps in your Supabase Dashboard:${NC}"
 echo ""

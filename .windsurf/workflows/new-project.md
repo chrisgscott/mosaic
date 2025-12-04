@@ -183,7 +183,7 @@ This removes:
 - `tests/` - Mosaic core tests
 - `apps/backend/ingest/examples/` - Chunking examples
 
-And optionally resets git history to start fresh.
+Note: Git history is already reset by setup.sh, so each project starts with a fresh repo.
 
 ## Done!
 

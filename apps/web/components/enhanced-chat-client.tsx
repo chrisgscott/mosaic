@@ -588,7 +588,12 @@ export function EnhancedChatClient({
                     <SourcesTrigger count={message.sources.length} />
                     <SourcesContent>
                       {message.sources.map((source, index) => (
-                        <Source key={index} href={source.url} title={source.title} />
+                        <Source 
+                          key={index} 
+                          href={source.url} 
+                          title={source.title}
+                          description={source.description}
+                        />
                       ))}
                     </SourcesContent>
                   </Sources>

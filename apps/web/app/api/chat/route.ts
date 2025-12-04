@@ -142,7 +142,7 @@ export async function POST(request: Request) {
     const systemPrompt = await getPrompt('chat', { 
       context: '', // Context will be provided by tools
     });
-
+    
     // Use provided model or default to standard
     const selectedModel = model || 'standard';
     
@@ -184,14 +184,19 @@ export async function POST(request: Request) {
         prefix: 'msg',
         size: 16,
       }),
-      onFinish: async ({ messages: allMessages, responseMessage }) => {
-        // Save all messages to database
+      onFinish: async ({ responseMessage }) => {
+        // Save only the NEW messages (user message + assistant response) to database
         try {
-          // Delete existing messages for this session
-          await supabase
+          // Get the current max message_index for this session
+          const { data: lastMessage } = await supabase
             .from('chat_messages')
-            .delete()
-            .eq('session_id', chatId);
+            .select('message_index')
+            .eq('session_id', chatId)
+            .order('message_index', { ascending: false })
+            .limit(1)
+            .single();
+
+          const nextIndex = (lastMessage?.message_index ?? -1) + 1;
 
           // Extract sources from tool calls in the assistant message
           const sources: Array<{
@@ -277,38 +282,42 @@ export async function POST(request: Request) {
           
           console.log(`[Chat] Extracted ${sources.length} sources from tool results`);
 
-          // Get the current max message_index for this session
-          const { data: lastMessage } = await supabase
-            .from('chat_messages')
-            .select('message_index')
-            .eq('session_id', chatId)
-            .order('message_index', { ascending: false })
-            .limit(1)
-            .single();
+          // Insert only the NEW messages: user message + assistant response
+          // (Previous messages are already in the database)
+          const userMessageContent = uiMessage.parts
+            .filter(p => p.type === 'text')
+            .map(p => (p as { type: 'text'; text: string }).text)
+            .join('');
+          
+          const assistantContent = responseMessage?.parts
+            .filter(p => p.type === 'text')
+            .map(p => (p as { type: 'text'; text: string }).text)
+            .join('') || '';
 
-          const startIndex = (lastMessage?.message_index ?? -1) + 1;
-
-          // Insert all messages (including new response) with sequential indices
-          const messagesToSave = allMessages.map((msg, idx) => ({
-            session_id: chatId,
-            role: msg.role,
-            content: msg.parts
-              .filter(p => p.type === 'text')
-              .map(p => p.text)
-              .join(''),
-            message_index: startIndex + idx,
-            metadata: msg.role === 'assistant' ? {
-              sources, // Include full source metadata for inline citations
-            } : {},
-          }));
+          const messagesToSave = [
+            {
+              session_id: chatId,
+              role: 'user',
+              content: userMessageContent,
+              message_index: nextIndex,
+              metadata: {},
+            },
+            {
+              session_id: chatId,
+              role: 'assistant',
+              content: assistantContent,
+              message_index: nextIndex + 1,
+              metadata: { sources },
+            },
+          ];
 
           await supabase.from('chat_messages').insert(messagesToSave);
 
-          console.log(`[Chat] Saved ${messagesToSave.length} messages to session ${chatId}`);
+          console.log(`[Chat] Saved ${messagesToSave.length} new messages to session ${chatId}`);
 
           // Generate session title after first user message (async, non-blocking)
-          if (startIndex === 0) {
-            generateSessionTitle(chatId, allMessages[0].parts.filter(p => p.type === 'text').map(p => p.text).join(''))
+          if (nextIndex === 0) {
+            generateSessionTitle(chatId, userMessageContent)
               .catch(err => console.error('[Chat] Failed to generate title:', err));
           }
         } catch (error) {

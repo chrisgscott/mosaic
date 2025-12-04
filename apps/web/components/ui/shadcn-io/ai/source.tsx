@@ -54,11 +54,14 @@ export const SourcesContent = ({
   />
 );
 
-export type SourceProps = ComponentProps<'a'>;
+export type SourceProps = ComponentProps<'a'> & {
+  number?: number;
+  description?: string;
+};
 
-export const Source = ({ href, title, children, ...props }: SourceProps) => (
+export const Source = ({ href, title, number, description, children, ...props }: SourceProps) => (
   <a
-    className="flex items-center gap-2"
+    className="flex items-center gap-2 py-1"
     href={href}
     rel="noreferrer"
     target="_blank"
@@ -66,8 +69,16 @@ export const Source = ({ href, title, children, ...props }: SourceProps) => (
   >
     {children ?? (
       <>
-        <BookIcon className="h-4 w-4" />
-        <span className="block font-medium">{title}</span>
+        {number !== undefined && (
+          <span className="text-xs font-mono text-muted-foreground w-5">[{number}]</span>
+        )}
+        <BookIcon className="h-4 w-4 flex-shrink-0" />
+        <div className="flex flex-col">
+          <span className="block font-medium">{title}</span>
+          {description && (
+            <span className="text-xs text-muted-foreground">{description}</span>
+          )}
+        </div>
       </>
     )}
   </a>

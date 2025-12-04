@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
     const {
       query,
       session_id,
-      match_threshold = 0.5,
+      match_threshold = 0.3,  // Lowered from 0.5 - reranker handles quality filtering
       match_count = 10,
       graph_hops = 1,
       // Tool overrides (allow tools to disable features for speed)

@@ -28,8 +28,10 @@ const DEFAULT_PROMPTS: Record<PromptKey, string> = {
 {context}
 
 ## Instructions:
-- Answer using ONLY information from the provided context
-- If context is insufficient, say so clearly
+- Answer using information from the provided context
+- If context contains relevant information, USE IT to answer - don't say "no information available"
+- Look carefully at tables, summaries, and all text in the context
+- If context is truly insufficient or unrelated to the question, say so clearly
 - **CRITICAL**: Add inline citations [1], [2], etc. immediately after each claim or fact
 - Place citations right after the relevant sentence or phrase, before punctuation
 - Each [N] corresponds to the source number in the context above

@@ -89,7 +89,26 @@ ENABLE_GRAPH_EXTRACTION=true
 
 ### 3. Set Up Supabase Database
 
-Run the migrations to set up your database schema:
+#### Option A: Fresh Project (Recommended)
+
+For new Supabase projects, use the consolidated setup script:
+
+```bash
+cd supabase
+
+# Set your Supabase credentials
+export SUPABASE_URL=https://your-project.supabase.co
+export SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# Run the setup script
+./setup_new_project.sh
+```
+
+This applies the complete Mosaic schema in one step.
+
+#### Option B: Using Supabase CLI
+
+Alternatively, use the Supabase CLI:
 
 ```bash
 # Install Supabase CLI if you haven't
@@ -101,6 +120,11 @@ supabase link --project-ref your-project-ref
 # Run migrations
 supabase db push
 ```
+
+#### After Setup
+
+1. **Create Storage Bucket**: Go to Supabase Dashboard > Storage > New bucket > Name: `documents`
+2. **Set Storage Policies**: See the setup script output for policy SQL
 
 ### 4. Create Admin User
 
